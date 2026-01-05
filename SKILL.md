@@ -111,6 +111,27 @@ scripts/memory-test --verbose # Show all checks
 
 ---
 
+## Permissions & Confirmation
+
+**Always confirm your understanding.** When you build a mental model from code or queries, confirm it with the user before acting on it.
+
+**Ask before accessing new systems.** When you discover you need access to debug further:
+- A database → "I'd like to query the orders DB to check state. Do you have access? Can you run: `psql -h ... -c 'SELECT ...'`"
+- An API → "Can you give me access to the billing API, or run this curl and paste the output?"
+- A dashboard → "Can you check the Grafana CPU panel and tell me what you see?"
+- Logs in another system → "Can you query Datadog for the auth service logs?"
+
+**Never assume access.** If you need something you don't have:
+1. Explain what you need and why
+2. Ask if user can grant access, or
+3. Give user the exact command to run and paste back
+
+**Confirm observations.** After reading code or analyzing data:
+- "Based on the code, it looks like orders-api talks to Redis for caching. Is that correct?"
+- "The logs suggest the failure started at 14:30. Does that match what you're seeing?"
+
+---
+
 ## Before Any Investigation
 
 1. **Read memory** — Scan `kb/patterns.md`, `kb/queries.md`, `kb/facts.md` for relevant context
