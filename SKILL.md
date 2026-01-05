@@ -278,7 +278,9 @@ scripts/axiom-query dev "['logs'] | where _time between (ago(1h) .. now()) | tak
 scripts/axiom-api dev GET "/v1/datasets"
 ```
 
-Response: `jq '.tables[0].columns'` extracts column data.
+Output is compact key=value format, one row per line. Long strings truncated with `...[+N chars]`.
+- `--full` — No truncation
+- `--raw` — Original JSON
 
 ---
 

@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 # Axiom APL query helper
-# Usage: axiom-query <deployment> <apl-query>
+# Usage: axiom-query <deployment> <apl-query> [--raw]
 # Example: axiom-query dev "['http-logs'] | where _time between (ago(1h) .. now()) | take 5"
 
 set -euo pipefail
 
 DEPLOYMENT="${1:-}"
 APL="${2:-}"
+RAW="${3:-}"
 
 if [[ -z "$DEPLOYMENT" || -z "$APL" ]]; then
-  echo "Usage: axiom-query <deployment> <apl-query>" >&2
+  echo "Usage: axiom-query <deployment> <apl-query> [--raw]" >&2
   exit 1
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# Escape the APL for JSON
 APL_JSON=$(printf '%s' "$APL" | jq -Rs .)
 
-"$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" POST "/v1/datasets/_apl?format=tabular" "{\"apl\": $APL_JSON}"
+"$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" POST "/v1/datasets/_apl?format=tabular" "{\"apl\": $APL_JSON}" \
+  | "$SCRIPT_DIR/axiom-query-fmt" $RAW
