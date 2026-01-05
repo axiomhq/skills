@@ -58,18 +58,24 @@ It provides:
 
 ## Memory System
 
-The skill learns from every investigation. You don't need to manage it - the agent automatically:
+The skill learns from every debugging session. It automatically captures what works and what doesn't.
 
-- **Captures** observations and queries during incidents
-- **Remembers** what worked (and what didn't)
-- **Applies** past learnings to future investigations
-- **Consolidates** knowledge over time
+**Tell the agent to remember things:**
+- "Remember this for next time"
+- "Save this query, it worked"
+- "Add to memory: the orders team uses #orders-oncall"
+
+**The agent also learns automatically when:**
+- A query or approach finds the root cause
+- You correct it — it records what didn't work and what did
+- A debugging session completes successfully
 
 Memory persists at `~/.config/amp/memory/axiom-sre/` (global) or `.agents/memory/axiom-sre/` (project-local).
 
-**Optional:** You can seed the knowledge base with your own facts:
-- Edit `kb/facts.md` to add team contacts, Slack channels, etc.
-- Edit `kb/integrations.md` to add database connections, API endpoints
+**Seed with your own knowledge:**
+- Edit `kb/facts.md` — team contacts, Slack channels, conventions
+- Edit `kb/integrations.md` — database connections, API endpoints
+- Edit `kb/patterns.md` — failure patterns you've seen before
 
 ## License
 

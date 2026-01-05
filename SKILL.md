@@ -52,9 +52,20 @@ On first use, run setup (idempotent - skips if memory exists):
 scripts/setup
 ```
 
+### When to Record Memory
+
+**Always record when:**
+- User says "remember this", "save this", "add to memory"
+- A query or approach found the root cause
+- User corrects you — record what didn't work and what did
+- You discover a new failure pattern or useful query
+- Investigation/debugging session completes successfully
+
+**Be proactive:** Watch for learnings throughout any debugging session. If the user shows you something that works better, record it.
+
 ### During Investigations
 
-**Capture:** Append freely to `journal/journal-YYYY-MM.md`. No organizing during incidents.
+**Capture:** Append observations to `journal/journal-YYYY-MM.md`:
 
 ```markdown
 ## M-2025-01-05T14:32:10Z found-connection-leak
@@ -65,7 +76,7 @@ scripts/setup
 Connection pool exhausted. Found leak in payment handler.
 ```
 
-**End of incident:** Create summary in `kb/incidents.md` with key learnings.
+**End of session:** Create summary in `kb/incidents.md` with key learnings.
 
 ### Retrieval
 
