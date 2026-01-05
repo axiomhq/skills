@@ -1,24 +1,32 @@
-#!/usr/bin/env bash
-# List configured Axiom deployments WITHOUT exposing secrets
-# Usage: axiom-deployments
+#!/usr/bin/env python3
+"""List configured Axiom deployments WITHOUT exposing secrets."""
 
-set -uo pipefail
+import sys
+from pathlib import Path
 
-CONFIG_FILE="$HOME/.axiom.toml"
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib  # fallback for Python < 3.11
 
-if [[ ! -f "$CONFIG_FILE" ]]; then
-  echo "No Axiom config found at $CONFIG_FILE"
-  exit 1
-fi
+config_file = Path.home() / ".axiom.toml"
 
-deployments=$(grep -E '^\[deployments\.' "$CONFIG_FILE" 2>/dev/null | sed 's/\[deployments\.//; s/\]//' || true)
+if not config_file.exists():
+    print(f"No Axiom config found at {config_file}")
+    sys.exit(1)
 
-if [[ -z "$deployments" ]]; then
-  echo "No deployments configured in $CONFIG_FILE"
-  exit 0
-fi
+try:
+    config = tomllib.loads(config_file.read_text())
+except Exception as e:
+    print(f"Error parsing {config_file}: {e}")
+    sys.exit(1)
 
-echo "Configured deployments:"
-echo "$deployments" | while read -r name; do
-  echo "  - $name"
-done
+deployments = config.get("deployments", {})
+
+if not deployments:
+    print(f"No deployments configured in {config_file}")
+    sys.exit(0)
+
+print("Configured deployments:")
+for name in deployments.keys():
+    print(f"  - {name}")
