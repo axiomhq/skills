@@ -7,7 +7,7 @@ Expert SRE investigator skill for AI coding agents. Uses hypothesis-driven metho
 ### Amp
 
 ```bash
-amp skill add --global axiomhq/axiom-sre
+amp skill add --global axiomhq/axiom-sre --name axiom-sre --overwrite
 ```
 
 ### Claude Code
