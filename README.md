@@ -22,30 +22,18 @@ Clone or copy to your skills directory and reference in your agent config.
 
 ## Setup
 
-### 1. Memory System
+### Axiom Credentials (optional)
 
-Run the setup script to initialize the memory system:
-
-```bash
-scripts/setup           # Global memory (~/.config/amp/memory/axiom-sre)
-scripts/setup --project # Project-local memory (.agents/memory/axiom-sre)
-```
-
-### 2. Axiom Credentials (optional)
-
-Create `~/.axiom.toml` with your Axiom deployments:
+To enable Axiom queries, create `~/.axiom.toml`:
 
 ```toml
 [deployments.dev]
 url = "https://api.axiom.co"
 token = "xaat-your-token-here"
 org_id = "your-org-id"
-
-[deployments.prod]
-url = "https://api.axiom.co"
-token = "xaat-your-token-here"
-org_id = "your-org-id"
 ```
+
+The memory system is initialized automatically on first use.
 
 ## What's Included
 
@@ -67,19 +55,6 @@ It provides:
 - Systematic triage (Golden Signals, USE/RED methods)
 - APL query patterns for Axiom
 - Memory system to learn from past incidents
-
-## Scripts
-
-```bash
-# Query Axiom
-scripts/axiom-query dev "['logs'] | take 10"
-
-# Raw API calls
-scripts/axiom-api dev GET "/v1/datasets"
-
-# Verify memory system integrity
-scripts/memory-test
-```
 
 ## Memory System
 
