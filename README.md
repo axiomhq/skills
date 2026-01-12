@@ -37,10 +37,10 @@ The memory system is initialized automatically on first use.
 
 ## What's Included
 
-- **SKILL.md** — Main skill instructions (SRE methodology, APL patterns, memory system)
-- **scripts/** — Axiom API helpers and memory self-test
-- **templates/** — Memory system templates (journal, KB, archive)
-- **reference/** — APL operators, functions, failure modes, query patterns
+- **.agents/skills/axiom-sre/SKILL.md** — Main skill instructions (SRE methodology, APL patterns, memory system)
+- **.agents/skills/axiom-sre/scripts/** — Axiom API helpers and memory self-test
+- **.agents/skills/axiom-sre/templates/** — Memory system templates (journal, KB, archive)
+- **.agents/skills/axiom-sre/reference/** — APL operators, functions, failure modes, query patterns
 
 ## Usage
 
