@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Setup axiom-sre 3-tier memory system
+# Setup axiom-sre 2-tier memory system (personal + org)
 # Usage: scripts/setup [--force]
 #   --force    Overwrite existing memory without prompting
 #   default    Sets up personal memory + orgs config

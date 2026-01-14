@@ -1,27 +1,23 @@
 #!/usr/bin/env bash
-# Consolidate memory: review journal, prune stale, report stats
-# Usage: scripts/mem-digest [--tier personal|all] [--prune] [--days N]
+# Consolidate personal memory: review journal, prune stale, report stats
+# Usage: scripts/mem-digest [--prune] [--days N]
 #
 # This is the "sleep" cycle for memory consolidation.
+# Only processes personal tier (org memory is git-managed externally).
 #
 # Options:
-#   --tier    Which tier to process (default: personal)
 #   --prune   Actually archive stale entries (default: dry-run)
 #   --days    Stale threshold in days (default: 90)
 
 set -euo pipefail
 
-SKILL_NAME="axiom-sre"
-PERSONAL_DIR="$HOME/.config/amp/memory/personal/$SKILL_NAME"
-ORGS_DIR="$HOME/.config/amp/memory/orgs"
+PERSONAL_DIR="$HOME/.config/amp/memory/personal/axiom-sre"
 
-TIER="personal"
 PRUNE=false
 DAYS=90
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --tier) TIER="$2"; shift 2 ;;
     --prune) PRUNE=true; shift ;;
     --days) DAYS="$2"; shift 2 ;;
     *) shift ;;
@@ -36,31 +32,22 @@ else
 fi
 
 echo "=== Memory Digest ==="
-echo "Tier: $TIER"
 echo "Prune: $PRUNE (stale = unused $DAYS+ days, cutoff: $CUTOFF)"
 echo ""
 
-get_tier_dir() {
-  case "$1" in
-    personal) echo "$PERSONAL_DIR" ;;
-    *) echo "" ;;
-  esac
-}
+if [[ ! -d "$PERSONAL_DIR" ]]; then
+  echo "Personal memory not found at $PERSONAL_DIR"
+  echo "Run: scripts/setup"
+  exit 1
+fi
 
 # --- Promote journal entries ---
-promote_journal() {
-  local tier_dir="$1"
-  local journal_dir="$tier_dir/journal"
-
-  if [[ ! -d "$journal_dir" ]]; then
-    return
-  fi
-
-  local has_entries=false
+journal_dir="$PERSONAL_DIR/journal"
+if [[ -d "$journal_dir" ]]; then
+  has_entries=false
   for journal_file in "$journal_dir"/journal-*.md; do
     [[ -f "$journal_file" ]] || continue
     
-    local entry_count
     entry_count=$(grep -c "^## M-" "$journal_file" 2>/dev/null || true)
     entry_count=$(echo "$entry_count" | tr -d '[:space:]')
     [[ -z "$entry_count" || ! "$entry_count" =~ ^[0-9]+$ ]] && entry_count=0
@@ -81,31 +68,24 @@ promote_journal() {
     echo "No journal entries to review."
     echo ""
   fi
-}
+else
+  echo "No journal directory."
+  echo ""
+fi
 
 # --- Prune stale entries ---
-prune_stale() {
-  local tier_dir="$1"
-  local kb_dir="$tier_dir/kb"
-  local archive_dir="$tier_dir/archive"
-
-  if [[ ! -d "$kb_dir" ]]; then
-    return
-  fi
-
+kb_dir="$PERSONAL_DIR/kb"
+if [[ -d "$kb_dir" ]]; then
   echo "=== Stale Entries (last_used before $CUTOFF, not pinned) ==="
   echo ""
 
-  local stale_found=false
-
+  stale_found=false
   for kb_file in "$kb_dir"/*.md; do
     [[ -f "$kb_file" ]] || continue
     
-    # Find entries with last_used before cutoff and pinned: false
-    # This is simplified - checks entry dates as proxy
     while IFS= read -r line; do
       if [[ "$line" =~ ^##\ M-([0-9]{4}-[0-9]{2}-[0-9]{2}) ]]; then
-        local entry_date="${BASH_REMATCH[1]}"
+        entry_date="${BASH_REMATCH[1]}"
         if [[ "$entry_date" < "$CUTOFF" ]]; then
           stale_found=true
           echo "  $(basename "$kb_file"): $line"
@@ -125,54 +105,22 @@ prune_stale() {
     echo "  No stale entries found."
   fi
   echo ""
-}
+fi
 
 # --- Summary stats ---
-show_stats() {
-  local tier_dir="$1"
-  local kb_dir="$tier_dir/kb"
-
-  echo "=== Memory Stats ==="
-  echo ""
-
-  if [[ -d "$kb_dir" ]]; then
-    for kb_file in "$kb_dir"/*.md; do
-      [[ -f "$kb_file" ]] || continue
-      local name
-      name=$(basename "$kb_file" .md)
-      local count
-      count=$(grep -c "^## M-" "$kb_file" 2>/dev/null || true)
-      count=$(echo "$count" | tr -d '[:space:]')
-      [[ -z "$count" || ! "$count" =~ ^[0-9]+$ ]] && count=0
-      echo "  $name: $count entries"
-    done
-  fi
-  echo ""
-}
-
-# --- Main ---
-if [[ "$TIER" == "all" ]]; then
-  for dir in "$PERSONAL_DIR"; do
-    if [[ -d "$dir" ]]; then
-      echo ""
-      echo "════════════════════════════════════════"
-      echo "Tier: personal"
-      echo "════════════════════════════════════════"
-      promote_journal "$dir"
-      prune_stale "$dir"
-      show_stats "$dir"
-    fi
+echo "=== Memory Stats ==="
+echo ""
+if [[ -d "$kb_dir" ]]; then
+  for kb_file in "$kb_dir"/*.md; do
+    [[ -f "$kb_file" ]] || continue
+    name=$(basename "$kb_file" .md)
+    count=$(grep -c "^## M-" "$kb_file" 2>/dev/null || true)
+    count=$(echo "$count" | tr -d '[:space:]')
+    [[ -z "$count" || ! "$count" =~ ^[0-9]+$ ]] && count=0
+    echo "  $name: $count entries"
   done
-else
-  TIER_DIR=$(get_tier_dir "$TIER")
-  if [[ -z "$TIER_DIR" || ! -d "$TIER_DIR" ]]; then
-    echo "Tier directory not found: $TIER_DIR"
-    exit 1
-  fi
-  promote_journal "$TIER_DIR"
-  prune_stale "$TIER_DIR"
-  show_stats "$TIER_DIR"
 fi
+echo ""
 
 echo "=== Done ==="
 echo ""
