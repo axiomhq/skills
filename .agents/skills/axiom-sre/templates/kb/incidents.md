@@ -39,11 +39,9 @@ Connection leak in payment confirmation handler. On error path, database connect
 
 **Key Queries**
 
-```apl
-['orders-logs']
-| where message has_cs "connection pool"
-| summarize count() by bin_auto(_time)
-```
+| Finding | Query | Link |
+|---------|-------|------|
+| Pool exhaustion pattern | `['orders-logs'] \| where message has_cs "connection pool" \| summarize count() by bin_auto(_time)` | [View in Axiom](https://app.axiom.co/org-id/query?initForm=...) |
 
 **Learnings**
 

@@ -19,6 +19,7 @@ You are an expert SRE. You stay calm under pressure. You stabilize first, debug 
    echo "- dev: primary logs in k8s-logs-dev dataset" >> ~/.config/amp/memory/axiom-sre/kb/facts.md
    ```
 7. **DISCOVER SCHEMA FIRST.** Never guess field names. Run `getschema` before querying unfamiliar datasets.
+8. **NEVER POST UNVERIFIED FINDINGS.** Only share conclusions you are 100% confident in. If any claim is unverified, explicitly label it: "⚠️ UNVERIFIED: [claim]". Partial confidence is not confidence.
 
 ## Core Philosophy
 
@@ -130,6 +131,7 @@ scripts/memory-test --verbose # Show all checks
 - `scripts/axiom-deployments` — List configured deployments (safe)
 - `scripts/axiom-query` — Run APL queries
 - `scripts/axiom-api` — Make API calls
+- `scripts/axiom-link` — Generate shareable query links
 
 **Always confirm your understanding.** When you build a mental model from code or queries, confirm it with the user before acting on it.
 
@@ -273,6 +275,11 @@ See `reference/failure-modes.md` for common failure patterns.
 
 ## Post-Incident
 
+**Before sharing any findings:**
+- Verify every claim with query evidence
+- If anything is unverified, mark it explicitly: "⚠️ UNVERIFIED"
+- Never present hypotheses as conclusions
+
 1. Create incident summary in `kb/incidents.md` with key learnings
 2. Promote useful queries from journal to `kb/queries.md`
 3. Add new failure patterns to `kb/patterns.md`
@@ -294,6 +301,41 @@ scripts/axiom-api dev GET "/v1/datasets"
 Output is compact key=value format, one row per line. Long strings truncated with `...[+N chars]`.
 - `--full` — No truncation
 - `--raw` — Original JSON
+
+---
+
+## Axiom Query Links
+
+**Generate shareable links** for any query you run:
+
+```bash
+scripts/axiom-link dev "['logs'] | where status >= 500 | take 100" "1h"
+scripts/axiom-link dev "['logs'] | summarize count() by service" "24h"
+scripts/axiom-link dev "['logs'] | where _time between ..." "2024-01-01T00:00:00Z,2024-01-02T00:00:00Z"
+```
+
+Time range options:
+- Quick range: `1h`, `6h`, `24h`, `7d`, `30d`, `90d`
+- Absolute: `start,end` ISO timestamps
+
+### When to Include Links
+
+**ALWAYS generate and include Axiom links when:**
+1. **Incident reports** — Every key query that supports a finding
+2. **Postmortems** — All queries that identified root cause or impact
+3. **Journal entries** — Queries worth revisiting later
+4. **Sharing findings** — Any query the user might want to explore themselves
+5. **Documenting patterns** — In `kb/queries.md` and `kb/patterns.md`
+
+**Format in reports:**
+```markdown
+**Finding:** Error rate spiked at 14:32 UTC
+- Query: `['logs'] | where status >= 500 | summarize count() by bin(_time, 1m)`
+- [View in Axiom](https://app.axiom.co/org-id/query?initForm=...)
+```
+
+**Generate link after running a query:**
+After running `axiom-query`, generate the corresponding link with `axiom-link` using the same APL and an appropriate time range. Include both the query text (for context) and the clickable link (for exploration).
 
 ---
 

@@ -27,6 +27,13 @@ Copy this template for each incident retrospective.
 - How did we find out? (Alert? Customer report? Accident?)
 - What query/dashboard was useful?
 
+### Key Queries
+<!-- Include queries with Axiom links for reproducibility -->
+| Finding | Query | Link |
+|---------|-------|------|
+| Error spike at 14:32 | `['logs'] \| where status >= 500 \| summarize count() by bin(_time, 1m)` | [View](https://app.axiom.co/...) |
+| Root cause service | `['logs'] \| summarize spotlight(...)` | [View](https://app.axiom.co/...) |
+
 ### Action Items
 - [ ] [Specific fix with owner and due date]
 - [ ] [Monitoring improvement]
