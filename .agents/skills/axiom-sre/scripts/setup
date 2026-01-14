@@ -1,50 +1,103 @@
 #!/usr/bin/env bash
-# Setup axiom-sre memory system
-# Usage: scripts/setup [--project] [--force]
-#   --project  Use project-local memory (.agents/memory/axiom-sre)
+# Setup axiom-sre 3-tier memory system
+# Usage: scripts/setup [--force]
 #   --force    Overwrite existing memory without prompting
-#   default    Use global memory (~/.config/amp/memory/axiom-sre)
+#   default    Sets up personal memory + orgs config
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_DIR="$(dirname "$SCRIPT_DIR")"
 TEMPLATES_DIR="$SKILL_DIR/templates"
+SKILL_NAME="axiom-sre"
 
-PROJECT=false
+# Paths
+PERSONAL_DIR="$HOME/.config/amp/memory/personal/$SKILL_NAME"
+ORGS_DIR="$HOME/.config/amp/memory/orgs"
+ORGS_CONFIG="$HOME/.config/amp/orgs.yaml"
+
+# Legacy path (for migration)
+LEGACY_DIR="$HOME/.config/amp/memory/$SKILL_NAME"
+
 FORCE=false
 
 for arg in "$@"; do
   case $arg in
-    --project) PROJECT=true ;;
     --force) FORCE=true ;;
   esac
 done
 
-if [[ "$PROJECT" == true ]]; then
-  MEMORY_DIR=".agents/memory/axiom-sre"
-  echo "Setting up project-local memory at $MEMORY_DIR"
-else
-  MEMORY_DIR="$HOME/.config/amp/memory/axiom-sre"
-  echo "Setting up global memory at $MEMORY_DIR"
+echo "=== axiom-sre Memory Setup ==="
+echo ""
+
+# --- Migrate legacy personal memory ---
+if [[ -d "$LEGACY_DIR/kb" && ! -d "$PERSONAL_DIR" ]]; then
+  echo "Migrating legacy memory: $LEGACY_DIR → $PERSONAL_DIR"
+  mkdir -p "$(dirname "$PERSONAL_DIR")"
+  mv "$LEGACY_DIR" "$PERSONAL_DIR"
+  echo "✓ Migration complete"
+  echo ""
 fi
 
-if [[ -d "$MEMORY_DIR/kb" ]]; then
-  if [[ "$FORCE" != true ]]; then
-    echo "Memory already exists at $MEMORY_DIR"
-    exit 0
+# --- Personal tier ---
+if [[ -d "$PERSONAL_DIR/kb" ]]; then
+  if [[ "$FORCE" == true ]]; then
+    echo "Overwriting personal memory at $PERSONAL_DIR"
+    rm -rf "$PERSONAL_DIR"
+  else
+    echo "✓ Personal memory exists at $PERSONAL_DIR"
   fi
 fi
 
-mkdir -p "$MEMORY_DIR"
-cp -r "$TEMPLATES_DIR"/* "$MEMORY_DIR/"
+if [[ ! -d "$PERSONAL_DIR/kb" ]]; then
+  echo "Creating personal memory at $PERSONAL_DIR"
+  mkdir -p "$PERSONAL_DIR"
+  cp -r "$TEMPLATES_DIR"/* "$PERSONAL_DIR/"
+  echo "✓ Personal memory initialized"
+fi
 
-echo "Done. Memory system initialized at $MEMORY_DIR"
+# --- Orgs config ---
+mkdir -p "$ORGS_DIR"
+
+if [[ ! -f "$ORGS_CONFIG" ]]; then
+  echo "Creating orgs config at $ORGS_CONFIG"
+  cat > "$ORGS_CONFIG" << 'EOF'
+# Org memory configuration
+# Add orgs with: scripts/org-add <name> <git-repo-url>
+#
+# Example:
+#   default_org: mycompany
+#
+#   orgs:
+#     mycompany:
+#       repo: git@github.com:mycompany/sre-memory.git
+#       match:
+#         - "github.com/mycompany/*"
+
+default_org: null
+
+orgs: {}
+EOF
+  echo "✓ Orgs config created"
+else
+  echo "✓ Orgs config exists at $ORGS_CONFIG"
+fi
+
+echo ""
+echo "=== Setup Complete ==="
+echo ""
+echo "Memory tiers:"
+echo "  Personal: $PERSONAL_DIR"
+echo "  Org:      $ORGS_DIR/<org-name>/$SKILL_NAME"
+echo ""
+echo "Next steps:"
+echo "  1. Add an org: scripts/org-add <name> <git-repo-url>"
+echo "  2. Sync org:   scripts/mem-sync"
+echo ""
 
 # Check for Axiom config
 AXIOM_CONFIG="$HOME/.axiom.toml"
 if [[ ! -f "$AXIOM_CONFIG" ]]; then
-  echo ""
   echo "Optional: To enable Axiom queries, create $AXIOM_CONFIG:"
   echo ""
   echo '[deployments.dev]'

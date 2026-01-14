@@ -58,19 +58,33 @@ It provides:
 
 ## Memory System
 
-The skill learns from every debugging session. It automatically captures what works and what doesn't.
+Two-tier memory that learns from every debugging session:
+
+| Tier | Location | Purpose |
+|------|----------|---------|
+| Personal | `~/.config/amp/memory/personal/axiom-sre/` | Your preferences and scratch |
+| Org | `~/.config/amp/memory/orgs/{org}/axiom-sre/` | Shared team knowledge |
 
 **Tell the agent to remember things:**
-- "Remember this for next time"
-- "Save this query, it worked"
-- "Add to memory: the orders team uses #orders-oncall"
+- "Remember this" → saves to Personal
+- "Save for the team" → saves to Org (git-synced)
 
 **The agent also learns automatically when:**
 - A query or approach finds the root cause
 - You correct it — it records what didn't work and what did
 - A debugging session completes successfully
 
-Memory persists at `~/.config/amp/memory/axiom-sre/` (global) or `.agents/memory/axiom-sre/` (project-local).
+**Org memory setup:**
+```bash
+scripts/org-add myorg git@github.com:myorg/sre-memory.git
+scripts/mem-sync
+```
+
+**Consolidation ("digest"):**
+```bash
+scripts/mem-digest    # Review journal, prune stale entries
+scripts/mem-doctor    # Health check
+```
 
 **Seed with your own knowledge:**
 - Edit `kb/facts.md` — team contacts, Slack channels, conventions

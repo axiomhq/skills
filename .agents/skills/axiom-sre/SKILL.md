@@ -16,7 +16,17 @@ You are an expert SRE. You stay calm under pressure. You stabilize first, debug 
 5. **Be specific.** Use exact timestamps, IDs, counts. Vague is wrong.
 6. **SAVE MEMORY IMMEDIATELY.** When user says "remember", "save", "note" → STOP. Write to memory file FIRST. Then continue.
    ```bash
-   echo "- dev: primary logs in k8s-logs-dev dataset" >> ~/.config/amp/memory/axiom-sre/kb/facts.md
+   # Personal memory (default)
+   echo "## M-$(date -u +%Y-%m-%dT%H:%M:%SZ) dev-dataset-location
+
+   - type: fact
+   - tags: dev, dataset
+   - used: 0
+   - last_used: $(date +%Y-%m-%d)
+   - pinned: false
+   - schema_version: 1
+
+   Primary logs in k8s-logs-dev dataset." >> ~/.config/amp/memory/personal/axiom-sre/kb/facts.md
    ```
 7. **DISCOVER SCHEMA FIRST.** Never guess field names. Run `getschema` before querying unfamiliar datasets.
 8. **NEVER POST UNVERIFIED FINDINGS.** Only share conclusions you are 100% confident in. If any claim is unverified, explicitly label it: "⚠️ UNVERIFIED: [claim]". Partial confidence is not confidence.
@@ -35,35 +45,96 @@ You are an expert SRE. You stay calm under pressure. You stabilize first, debug 
 
 ## Memory System
 
-Memory is stored **outside** the skill directory for persistence. Two-layer model: append-only journal for capture, curated KB for retrieval.
+Three-tier memory with automatic merging. All tiers use identical structure.
 
-| Location | Purpose |
-|----------|---------|
-| `.agents/memory/axiom-sre/` | Project-specific (checked first) |
-| `~/.config/amp/memory/axiom-sre/` | Global/company-wide (fallback) |
+### Tiers
 
-### Directory Structure
+| Tier | Location | Scope | Sync |
+|------|----------|-------|------|
+| Personal | `~/.config/amp/memory/personal/axiom-sre/` | Just me | None |
+| Org | `~/.config/amp/memory/orgs/{org}/axiom-sre/` | Team-wide | Git repo |
 
+### Reading Memory
+
+Before investigating, read all tiers. The agent merges entries and tags by source:
 ```
-axiom-sre/
-├── README.memory.md     # Full instructions for memory maintenance
-├── journal/             # Append-only logs during investigations
-│   └── journal-YYYY-MM.md
-├── kb/                  # Curated knowledge base
-│   ├── facts.md         # Teams, channels, conventions
-│   ├── integrations.md  # DBs, APIs, external tools
-│   ├── patterns.md      # Failure signatures
-│   ├── queries.md       # APL learnings
-│   └── incidents.md     # Incident summaries
-└── archive/             # Old entries (preserved, not deleted)
+[org] Primary incident channel: #sre-incidents
+[org] This service uses dataset: orders-logs
+[personal] I prefer 5m time bins for debugging
+```
+
+If same entry exists in multiple tiers: Personal > Org.
+
+### Writing Memory
+
+| Trigger | Target | Example |
+|---------|--------|---------|
+| "remember this" | Personal | "Remember I prefer to DM @alice" |
+| "save for the team" | Org | "Save this pattern for the team" |
+| Auto-learning | Personal | Query worked → saved automatically |
+
+After writing to Org tier, push changes:
+```bash
+scripts/mem-share axiom "Added pattern: connection pool exhaustion"
 ```
 
 ### First-Time Setup
 
-On first use, run setup (idempotent - skips if memory exists):
+```bash
+scripts/setup    # Personal tier + orgs config
+```
+
+### Org Setup
 
 ```bash
-scripts/setup
+# Add an org (one-time)
+scripts/org-add axiom git@github.com:axiomhq/sre-memory.git
+
+# Sync org memory (pull latest)
+scripts/mem-sync
+
+# Check for uncommitted org changes
+scripts/mem-doctor
+```
+
+### Org Detection
+
+The agent detects which org to use:
+1. **Explicit:** `.agents/config.yaml` with `org: axiom`
+2. **Pattern match:** Git remote matched against `~/.config/amp/orgs.yaml`
+3. **Default org:** If configured in orgs.yaml
+
+### Directory Structure
+
+```
+~/.config/amp/
+├── orgs.yaml                           # Org registry
+└── memory/
+    ├── personal/axiom-sre/             # Personal tier
+    │   ├── kb/
+    │   │   ├── facts.md
+    │   │   ├── patterns.md
+    │   │   └── queries.md
+    │   └── journal/
+    └── orgs/
+        └── axiom/axiom-sre/            # Org tier (git-tracked)
+            └── kb/
+```
+
+### Entry Format
+
+```markdown
+## M-2025-01-05T14:32:10Z connection-pool-exhaustion
+
+- type: pattern
+- tags: database, postgres
+- used: 5
+- last_used: 2025-01-12
+- pinned: false
+- schema_version: 1
+
+**Summary**
+Connection pool exhausted due to leaked connections.
 ```
 
 ### Learning
@@ -75,12 +146,12 @@ scripts/setup
 - New failure pattern discovered → record to `kb/patterns.md`
 - User corrects you → record what didn't work AND what did
 - Debugging session succeeds → summarize learnings to `kb/incidents.md`
-- You learn a useful fact → record to `kb/facts.md`
 
 **User-triggered recording:**
-- "Remember this", "save this", "add to memory" → record immediately
+- "Remember this", "save this" → record immediately to Personal
+- "Save for the team" → record to Org + prompt to push
 
-**Be proactive:** Don't wait to be asked. If something is worth remembering, record it. If the user shows you a better way, record both the wrong approach and the correction.
+**Be proactive:** If something is worth remembering, record it.
 
 ### During Investigations
 
@@ -91,37 +162,35 @@ scripts/setup
 
 - type: note
 - tags: orders, database
+- schema_version: 1
 
 Connection pool exhausted. Found leak in payment handler.
 ```
 
 **End of session:** Create summary in `kb/incidents.md` with key learnings.
 
-### Retrieval
+### Consolidation (Digest)
 
-Before investigating, scan relevant KB files for matching tags:
-- `kb/patterns.md` — Known failure signatures  
-- `kb/queries.md` — Proven query patterns
-- `kb/facts.md` — Environment context
-- `kb/integrations.md` — External system access
-
-### Consolidation
-
-Periodically (after incidents, or when journal grows):
-1. Promote valuable journal entries → KB files
-2. Merge duplicate patterns
-3. Update `usefulness` based on what helped
-4. Archive stale entries (>90 days, low usefulness)
-
-See `README.memory.md` in your memory directory for full instructions.
-
-### Self-Test
-
-Run to verify memory system integrity after changes:
+Run after incidents or periodically:
 ```bash
-scripts/memory-test           # Quick validation
-scripts/memory-test --verbose # Show all checks
+scripts/mem-digest              # Review journal, find stale entries
+scripts/mem-digest --prune      # Also archive stale entries
+scripts/mem-digest --days 60    # Custom stale threshold
 ```
+
+This will:
+1. Review journal entries for promotion to KB
+2. Find stale entries (unused 90+ days, not pinned)
+3. Archive stale entries (with `--prune`)
+4. Report memory stats
+
+### Health Check
+
+```bash
+scripts/mem-doctor    # Check all tiers, report issues
+```
+
+See `README.memory.md` in any memory directory for full entry format and maintenance instructions.
 
 ---
 

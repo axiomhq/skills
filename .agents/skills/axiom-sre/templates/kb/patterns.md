@@ -10,9 +10,10 @@ Failure signatures, recurring causes, and debugging heuristics.
 
 - type: pattern
 - tags: database, connection-pool, timeout
-- status: active
-- usefulness: 0.8
 - used: 4
+- last_used: 2025-01-20
+- pinned: false
+- schema_version: 1
 
 **Symptoms**
 
@@ -53,9 +54,10 @@ Failure signatures, recurring causes, and debugging heuristics.
 
 - type: pattern
 - tags: ingress, nginx, deploy, 502
-- status: active
-- usefulness: 0.6
 - used: 2
+- last_used: 2025-01-18
+- pinned: false
+- schema_version: 1
 
 **Symptoms**
 

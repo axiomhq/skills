@@ -10,9 +10,10 @@ Proven APL patterns and query learnings.
 
 - type: query
 - tags: errors, service, overview
-- status: active
-- usefulness: 0.9
 - used: 12
+- last_used: 2025-01-20
+- pinned: true
+- schema_version: 1
 
 **Query**
 
@@ -42,9 +43,10 @@ First query for any incident - gives overview of which services are affected.
 
 - type: query
 - tags: latency, percentiles, performance
-- status: active
-- usefulness: 0.85
 - used: 8
+- last_used: 2025-01-19
+- pinned: false
+- schema_version: 1
 
 **Query**
 
@@ -69,9 +71,10 @@ Investigating latency issues. Always check p99, not just average.
 
 - type: query
 - tags: performance, contains, has_cs, optimization
-- status: active
-- usefulness: 0.9
 - used: 6
+- last_used: 2025-01-18
+- pinned: true
+- schema_version: 1
 
 **Learning**
 

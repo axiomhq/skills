@@ -10,7 +10,10 @@ External systems, databases, APIs, and tools for debugging.
 
 - type: integration
 - tags: orders, database, postgres
-- status: active
+- used: 5
+- last_used: 2025-01-20
+- pinned: true
+- schema_version: 1
 
 **Summary**
 
@@ -47,7 +50,10 @@ SELECT * FROM order_events WHERE order_id = ? ORDER BY timestamp;
 
 - type: integration
 - tags: axiom, observability
-- status: active
+- used: 10
+- last_used: 2025-01-20
+- pinned: true
+- schema_version: 1
 
 **Summary**
 

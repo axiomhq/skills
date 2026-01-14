@@ -10,7 +10,10 @@ Stable environment knowledge: teams, channels, conventions, contacts.
 
 - type: fact
 - tags: orders, oncall, slack
-- status: active
+- used: 3
+- last_used: 2025-01-20
+- pinned: true
+- schema_version: 1
 
 **Summary**
 
@@ -29,7 +32,10 @@ Orders team uses #orders-oncall for incidents. Primary oncall rotation in PagerD
 
 - type: fact
 - tags: deploy, schedule
-- status: active
+- used: 1
+- last_used: 2025-01-15
+- pinned: false
+- schema_version: 1
 
 **Summary**
 

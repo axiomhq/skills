@@ -10,9 +10,10 @@ Past incident summaries, learnings, and playbooks.
 
 - type: incident
 - tags: orders, database, connection-pool
-- status: active
-- usefulness: 0.7
 - used: 2
+- last_used: 2025-01-18
+- pinned: false
+- schema_version: 1
 
 **Summary**
 
@@ -61,8 +62,10 @@ Connection leak in payment confirmation handler. On error path, database connect
 
 - type: incident
 - tags: auth, redis, failover
-- status: summarized
-- usefulness: 0.5
+- used: 1
+- last_used: 2024-12-20
+- pinned: false
+- schema_version: 1
 
 **Summary**
 

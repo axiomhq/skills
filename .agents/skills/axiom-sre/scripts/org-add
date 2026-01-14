@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# Add or configure an org for shared memory
+# Usage: scripts/org-add <name> [git-repo-url] [--match "pattern"] [--default]
+#
+# Examples:
+#   scripts/org-add axiom git@github.com:axiomhq/sre-memory.git
+#   scripts/org-add axiom --match "github.com/axiomhq/*"
+#   scripts/org-add axiom --default
+
+set -euo pipefail
+
+SKILL_NAME="axiom-sre"
+ORGS_DIR="$HOME/.config/amp/memory/orgs"
+ORGS_CONFIG="$HOME/.config/amp/orgs.yaml"
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: scripts/org-add <name> [git-repo-url] [--match pattern] [--default]"
+  echo ""
+  echo "Examples:"
+  echo "  scripts/org-add axiom git@github.com:axiomhq/sre-memory.git"
+  echo "  scripts/org-add axiom --match 'github.com/axiomhq/*'"
+  echo "  scripts/org-add axiom --default"
+  exit 1
+fi
+
+ORG_NAME="$1"
+shift
+
+REPO_URL=""
+MATCH_PATTERNS=()
+IS_DEFAULT=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --match)
+      MATCH_PATTERNS+=("$2")
+      shift 2
+      ;;
+    --default)
+      IS_DEFAULT="true"
+      shift
+      ;;
+    *)
+      if [[ -z "$REPO_URL" && "$1" != --* ]]; then
+        REPO_URL="$1"
+      fi
+      shift
+      ;;
+  esac
+done
+
+ORG_DIR="$ORGS_DIR/$ORG_NAME"
+
+# Ensure orgs.yaml exists
+mkdir -p "$(dirname "$ORGS_CONFIG")"
+if [[ ! -f "$ORGS_CONFIG" ]]; then
+  cat > "$ORGS_CONFIG" << 'EOF'
+default_org: null
+orgs: {}
+EOF
+fi
+
+# Clone repo if provided and not exists
+if [[ -n "$REPO_URL" ]]; then
+  if [[ -d "$ORG_DIR/.git" ]]; then
+    echo "Org '$ORG_NAME' already cloned at $ORG_DIR"
+    echo "To update, run: scripts/mem-sync $ORG_NAME"
+  else
+    echo "Cloning $REPO_URL → $ORG_DIR"
+    git clone "$REPO_URL" "$ORG_DIR"
+    echo "✓ Cloned"
+  fi
+elif [[ ! -d "$ORG_DIR" ]]; then
+  echo "Creating local-only org at $ORG_DIR"
+  mkdir -p "$ORG_DIR/$SKILL_NAME/kb"
+  echo "✓ Created (no git repo)"
+fi
+
+echo ""
+echo "Add to $ORGS_CONFIG:"
+echo ""
+echo "orgs:"
+echo "  $ORG_NAME:"
+if [[ -n "$REPO_URL" ]]; then
+  echo "    repo: $REPO_URL"
+else
+  echo "    repo: null"
+fi
+if [[ ${#MATCH_PATTERNS[@]} -gt 0 ]]; then
+  echo "    match:"
+  for p in "${MATCH_PATTERNS[@]}"; do
+    echo "      - \"$p\""
+  done
+fi
+if [[ -n "$IS_DEFAULT" ]]; then
+  echo ""
+  echo "# Also set as default:"
+  echo "default_org: $ORG_NAME"
+fi
+
+echo ""
+echo "Edit $ORGS_CONFIG to add this configuration."
