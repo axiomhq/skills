@@ -353,6 +353,7 @@ After running `axiom-query`, generate the corresponding link with `axiom-link` u
 **Performance Tips:**
 - Time filter FIRST — always filter `_time` before other conditions
 - **Sample before filtering** — use `| distinct ['field']` to see variety of values before building predicates
+- **Use duration literals** — write `where duration > 10s` not `extend duration_s = todouble(['duration']) / 1000000000 | where duration_s > 10`
 - Most selective filters first — put conditions that discard most rows early
 - Use `has_cs` over `contains` (5-10x faster, case-sensitive)
 - Prefer `_cs` operators — case-sensitive variants are faster
