@@ -21,11 +21,17 @@ Ready-to-use APL queries for common investigation scenarios.
 ## Latency Analysis
 
 ```apl
-// Percentiles over time
+// Percentiles over time (logs with duration_ms field)
 ['logs'] | where _time between (ago(1h) .. now()) 
 | summarize percentiles_array(duration_ms, 50, 95, 99) by bin_auto(_time)
 
+// Percentiles over time (traces with duration timespan field)
+['traces'] | where _time between (ago(1h) .. now()) 
+| summarize percentiles_array(duration, 50, 95, 99) by bin_auto(_time)
+
 // What do slow requests have in common?
+// Use duration literals for timespan fields: duration > 1s
+// Use numeric comparison for ms fields: duration_ms > 1000
 ['logs'] | where _time between (ago(1h) .. now()) | where duration_ms > 1000 
 | summarize count() by uri, method | top 20 by count_
 
