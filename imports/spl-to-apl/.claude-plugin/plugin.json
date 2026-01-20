@@ -1,0 +1,14 @@
+{
+  "name": "spl-to-apl",
+  "description": "Translates Splunk SPL queries to Axiom APL. Provides command mappings, function equivalents, and syntax transformations. Use when migrating from Splunk, converting SPL queries, or learning APL equivalents of SPL patterns.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Tomás Senart",
+    "email": "tomas@axiom.co",
+    "url": "https://github.com/tsenart"
+  },
+  "homepage": "https://github.com/axiomhq/spl-to-apl",
+  "repository": "https://github.com/axiomhq/spl-to-apl",
+  "license": "MIT",
+  "keywords": ["splunk", "spl", "apl", "axiom", "migration", "query", "translation"]
+}
