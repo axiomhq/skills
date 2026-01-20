@@ -41,9 +41,11 @@ index=http_logs | timechart span=5m count(eval(status>=500)) as errors, count as
 ```apl
 ['sample-http-logs']
 | where _time between (ago(1h) .. now())
-| summarize errors = countif(status >= 500), total = count() by bin(_time, 5m)
+| summarize errors = countif(toint(status) >= 500), total = count() by bin(_time, 5m)
 | extend error_rate = toreal(errors) / total * 100
 ```
+
+> **Note:** The `status` field in sample-http-logs is a string, so `toint()` is needed for numeric comparison.
 
 ### 4. Request duration percentiles
 **SPL:**
@@ -72,11 +74,12 @@ index=http_logs | iplocation clientip | stats count by Country, City | sort - co
 ```apl
 ['sample-http-logs']
 | where _time between (ago(1h) .. now())
-| extend geo = geo_info_from_ip_address(clientip)
-| summarize count() by Country = geo.country, City = geo.city
+| summarize count() by ['geo.country'], ['geo.city']
 | order by count_ desc
 | take 20
 ```
+
+> **Note:** The sample-http-logs dataset already has pre-computed `geo.country` and `geo.city` fields. If your dataset has a raw IP field, use `geo_info_from_ip_address(clientip)` to look up the geo data.
 
 ### 6. Unique users per endpoint
 **SPL:**
@@ -103,12 +106,14 @@ index=http_logs | eval severity=if(status>=500, "error", if(status>=400, "warnin
 ['sample-http-logs']
 | where _time between (ago(1h) .. now())
 | extend severity = case(
-    status >= 500, "error",
-    status >= 400, "warning",
+    toint(status) >= 500, "error",
+    toint(status) >= 400, "warning",
     "ok"
 )
 | summarize count() by severity
 ```
+
+> **Note:** The `status` field in sample-http-logs is a string, so `toint()` is needed for numeric comparison.
 
 ## Test Cases for otel-demo-traces
 
@@ -151,12 +156,14 @@ index=traces status_code="ERROR" | timechart span=1m count by service.name
 
 ## Validation Checklist
 
-- [ ] Query 1: Basic count by status
-- [ ] Query 2: Top 10 URIs
-- [ ] Query 3: Error rate over time
-- [ ] Query 4: Request duration percentiles
-- [ ] Query 5: Geo distribution
-- [ ] Query 6: Unique users per endpoint
-- [ ] Query 7: Conditional field creation
-- [ ] Query 8: Span duration by service
-- [ ] Query 9: Error spans over time
+- [x] Query 1: Basic count by status ✅
+- [x] Query 2: Top 10 URIs ✅
+- [x] Query 3: Error rate over time ✅ (fixed: needs `toint(status)`)
+- [x] Query 4: Request duration percentiles ✅
+- [x] Query 5: Geo distribution ✅ (adapted: uses existing geo fields)
+- [x] Query 6: Unique users per endpoint ✅
+- [x] Query 7: Conditional field creation ✅ (fixed: needs `toint(status)`)
+- [x] Query 8: Span duration by service ✅
+- [x] Query 9: Error spans over time ✅
+
+**Last validated:** 2026-01-20 via Axiom Playground (play.axiom.co)
