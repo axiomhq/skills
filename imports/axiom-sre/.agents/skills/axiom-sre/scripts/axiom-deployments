@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+"""List configured Axiom deployments WITHOUT exposing secrets."""
+
+import sys
+from pathlib import Path
+
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib  # fallback for Python < 3.11
+
+config_file = Path.home() / ".axiom.toml"
+
+if not config_file.exists():
+    print(f"No Axiom config found at {config_file}")
+    sys.exit(1)
+
+try:
+    config = tomllib.loads(config_file.read_text())
+except Exception as e:
+    print(f"Error parsing {config_file}: {e}")
+    sys.exit(1)
+
+deployments = config.get("deployments", {})
+
+if not deployments:
+    print(f"No deployments configured in {config_file}")
+    sys.exit(0)
+
+print("Configured deployments:")
+for name in deployments.keys():
+    print(f"  - {name}")
