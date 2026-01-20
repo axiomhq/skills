@@ -331,10 +331,50 @@ See `reference/query-patterns.md` for full examples.
 ['logs'] | where _time between (ago(1h) .. now()) 
 | summarize percentiles_array(duration_ms, 50, 95, 99) by bin_auto(_time)
 
-// Spotlight (automated root cause)
-['logs'] | where _time between (ago(15m) .. now())
-| summarize spotlight(status >= 500, method, uri, service)
+// Spotlight (automated root cause) - compare problem period to baseline
+// The is_comparison param should be a TIME RANGE condition, not an error condition
+// This tells Spotlight what's DIFFERENT during the problem window
+['logs'] | where _time between (ago(2h) .. now())
+| summarize spotlight(_time between (ago(30m) .. now()), method, uri, service, dataset)
 
+// Example: CPU saturation from 19:37-19:52 - compare against surrounding hours
+['k8s-logs-prod'] | where _time between (datetime(2026-01-15T18:00:00Z) .. datetime(2026-01-15T21:00:00Z))
+| where ['kubernetes.labels.app'] == 'axiom-db'
+| summarize spotlight(_time between (datetime(2026-01-15T19:37:00Z) .. datetime(2026-01-15T19:52:00Z)), 
+    tostring(['data.dataset']), tostring(['data.message']))
+```
+
+**Parsing Spotlight Results Efficiently**
+
+Spotlight returns verbose JSON. Use recursive descent (`..`) to find results without hardcoding paths:
+
+```bash
+# Summary: all dimensions with top finding (best starting point)
+axiom-query staging "..." --raw | jq '.. | objects | select(.differences?) 
+  | {dim: .dimension, effect: .delta_score, 
+     top: (.differences | sort_by(-.frequency_ratio) | .[0] | {v: .value[0:60], r: .frequency_ratio, c: .comparison_count})}'
+
+# Top 5 OVER-represented values per dimension (ratio=1 means ONLY during problem)
+axiom-query staging "..." --raw | jq '.. | objects | select(.differences?) 
+  | {dim: .dimension, over: [.differences | sort_by(-.frequency_ratio) | .[:5] | .[] 
+     | {v: .value[0:60], r: .frequency_ratio, c: .comparison_count}]}'
+
+# Top 5 UNDER-represented values (negative ratio = LESS during problem)  
+axiom-query staging "..." --raw | jq '.. | objects | select(.differences?) 
+  | {dim: .dimension, under: [.differences | sort_by(.frequency_ratio) | .[:5] | .[] 
+     | {v: .value[0:60], r: .frequency_ratio, c: .comparison_count}]}'
+```
+
+**Interpreting Spotlight Output**
+
+- `frequency_ratio > 0`: Value appears MORE during problem period (potential cause)
+- `frequency_ratio < 0`: Value appears LESS during problem period  
+- `effect_size`: How strongly this dimension explains the difference (higher = more important)
+- `p_value`: Statistical significance (lower = more confident)
+
+Look for dimensions with high `effect_size` and factors with large absolute `frequency_ratio`.
+
+```apl
 // Cascading failure detection
 ['logs'] | where _time between (ago(1h) .. now()) | where status >= 500 
 | summarize first_error = min(_time) by service | order by first_error asc
