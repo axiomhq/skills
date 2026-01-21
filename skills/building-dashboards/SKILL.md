@@ -1,6 +1,6 @@
 ---
 name: building-dashboards
-description: Designs and builds Axiom dashboards from intent, templates, or Splunk migrations. Covers APL patterns per chart type, layout composition, and best practices. Uses dashctl for deployment. Integrates with axiom-sre for exploration and spl-to-apl for migrations.
+description: Designs and builds Axiom dashboards via API. Covers chart types, APL patterns, SmartFilters, layout, and configuration options. Use when creating dashboards, migrating from Splunk, or configuring chart options.
 ---
 
 # Building Dashboards
@@ -204,122 +204,22 @@ Raw events that answer "what exactly happened?"
 ### SmartFilter (Filter Bar)
 **When:** Interactive filtering for the entire dashboard.
 
-SmartFilter is a **chart type** that creates dropdown/search filters. It requires TWO parts:
-1. A `SmartFilter` chart in the `charts` array with filter definitions
-2. `declare query_parameters` in each panel query that should respond to filters
-
-**SmartFilter chart JSON structure:**
-```json
-{
-  "id": "country-filter",
-  "name": "Filters",
-  "type": "SmartFilter",
-  "query": {"apl": ""},
-  "filters": [
-    {
-      "id": "country_filter",
-      "name": "Country",
-      "type": "select",
-      "selectType": "apl",
-      "active": true,
-      "apl": {
-        "apl": "['logs'] | distinct ['geo.country'] | project key=['geo.country'], value=['geo.country'] | sort by key asc",
-        "queryOptions": {"quickRange": "1h"}
-      },
-      "options": [
-        {"key": "All", "value": "", "default": true}
-      ]
-    }
-  ]
-}
-```
+SmartFilter is a **chart type** that creates dropdown/search filters. Requires:
+1. A `SmartFilter` chart with filter definitions
+2. `declare query_parameters` in each panel query
 
 **Filter types:**
-- `"selectType": "apl"` — Dynamic dropdown populated by APL query (requires `apl.apl` and `apl.queryOptions`)
-- `"selectType": "list"` — Static dropdown with predefined `options` array only
+- `selectType: "apl"` — Dynamic dropdown from APL query
+- `selectType: "list"` — Static dropdown with predefined options
+- `type: "search"` — Free-text input
 
-**Dynamic APL filter requirements:**
-- `apl.apl`: Query returning `key` and `value` columns
-- `apl.queryOptions.quickRange`: Time range for the query (e.g., `"1h"`, `"7d"`)
-- `options`: Must include at least `[{"key": "All", "value": "", "default": true}]`
-
-**Static list example:**
-```json
-{
-  "id": "status_filter",
-  "name": "Status",
-  "type": "select",
-  "selectType": "list",
-  "active": true,
-  "options": [
-    {"key": "All", "value": "", "default": true},
-    {"key": "2xx", "value": "2"},
-    {"key": "4xx", "value": "4"},
-    {"key": "5xx", "value": "5"}
-  ]
-}
-```
-
-**Layout:** Place SmartFilter at y=0, full width (w=12, h=1), shift other panels down.
-
-**Panel queries must declare parameters:**
+**Panel query pattern:**
 ```apl
 declare query_parameters (country_filter:string = "");
-['logs']
-| where isempty(country_filter) or ['geo.country'] == country_filter
-| summarize count() by bin_auto(_time)
+['logs'] | where isempty(country_filter) or ['geo.country'] == country_filter
 ```
 
-**Filter query for dynamic dropdowns:**
-```apl
-['logs']
-| distinct ['geo.country']
-| project key=['geo.country'], value=['geo.country']
-| sort by key asc
-```
-
-**Dependent/cascading filters:**
-
-Filters can depend on other filters by declaring their parameters in the APL query:
-
-```json
-{
-  "id": "city_filter",
-  "name": "City",
-  "type": "select",
-  "selectType": "apl",
-  "active": true,
-  "apl": {
-    "apl": "declare query_parameters (country_filter:string=\"\");\n['logs']\n| where ['geo.country'] == country_filter\n| distinct ['geo.city']\n| project key=['geo.city'], value=['geo.city']",
-    "queryOptions": {"quickRange": "1h"}
-  },
-  "options": [{"key": "All", "value": "", "default": true}]
-}
-```
-
-The city dropdown re-queries when country_filter changes, showing only cities in the selected country.
-
-**Search filter type:**
-
-Use `"type": "search"` for free-text input instead of dropdown:
-
-```json
-{
-  "id": "trace_id",
-  "name": "Trace ID",
-  "type": "search",
-  "selectType": "list",
-  "active": true,
-  "options": [{"key": "All", "value": "", "default": true}]
-}
-```
-
-**Best practices:**
-- Filter `id` must match the parameter name in `declare query_parameters`
-- Use `isempty(filter)` check so "All" option works (empty string = no filter)
-- One SmartFilter chart can contain multiple filters
-- Place at top of dashboard (y=0) for visibility
-- For cascading filters, order matters: parent filter should come before dependent filters
+See `reference/smartfilter.md` for full JSON structure and cascading filter examples.
 
 ### Monitor List
 **When:** Display monitor status on operational dashboards.
@@ -342,184 +242,22 @@ Use GitHub Flavored Markdown for:
 
 ## Chart Configuration
 
-Charts support JSON configuration options beyond the query. These are set at the chart level.
+Charts support JSON configuration options beyond the query. See `reference/chart-config.md` for full details.
 
-### Common Options (All Charts)
+**Quick reference:**
 
-```json
-{
-  "overrideDashboardTimeRange": false,
-  "overrideDashboardCompareAgainst": false,
-  "hideHeader": false
-}
-```
+| Chart Type | Key Options |
+|------------|-------------|
+| Statistic | `colorScheme`, `customUnits`, `unit`, `showChart` (sparkline), `errorThreshold`/`warningThreshold` |
+| TimeSeries | `aggChartOpts`: `variant` (line/area/bars), `scaleDistr` (linear/log), `displayNull` |
+| LogStream/Table | `tableSettings`: `columns`, `fontSize`, `highlightSeverity`, `wrapLines` |
+| Pie | `hideHeader` |
+| Note | `text` (markdown), `variant` |
 
-### Statistic Options
-
-```json
-{
-  "type": "Statistic",
-  "colorScheme": "Blue",
-  "customUnits": "req/s",
-  "unit": "Auto",
-  "decimals": 2,
-  "showChart": true,
-  "hideValue": false,
-  "errorThreshold": "Above",
-  "errorThresholdValue": "100",
-  "warningThreshold": "Above",
-  "warningThresholdValue": "50",
-  "invertTheme": false
-}
-```
-
-| Option | Values | Description |
-|--------|--------|-------------|
-| `colorScheme` | Blue, Orange, Red, Purple, Teal, Yellow, Green, Pink, Grey, Brown | Color theme |
-| `customUnits` | string | Unit suffix (e.g., "ms", "req/s", "trolls") |
-| `unit` | Auto, Abbreviated, Byte, KB, MB, GB, TimeMS, TimeSec, Percent, etc. | Value formatting |
-| `decimals` | number | Decimal places |
-| `showChart` | boolean | Show sparkline |
-| `hideValue` | boolean | Hide the main value |
-| `errorThreshold` | Above, AboveOrEqual, Below, BelowOrEqual, AboveOrBelow | Error condition |
-| `errorThresholdValue` | string | Error threshold value |
-| `warningThreshold` | same as error | Warning condition |
-| `warningThresholdValue` | string | Warning threshold value |
-| `invertTheme` | boolean | Invert colors |
-
-**Available units:**
-- Numbers: `Auto`, `Abbreviated`
-- Data: `Byte`, `Kilobyte`, `Megabyte`, `Gigabyte`
-- Data rates: `BitsSec`, `BytesSec`, `KilobitsSec`, `MegabitsSec`, etc.
-- Time: `TimeNS`, `TimeUS`, `TimeMS`, `TimeSec`, `TimeMin`, `TimeHour`, `TimeDay`
-- Percent: `Percent` (0-1), `Percent100` (0-100)
-- Currency: `CurrencyUSD`, `CurrencyEUR`, `CurrencyGBP`, etc.
-
-### TimeSeries Options
-
-TimeSeries chart options are stored in `query.queryOptions.aggChartOpts` as a JSON string:
-
-```json
-{
-  "type": "TimeSeries",
-  "query": {
-    "apl": "['logs'] | summarize count() by bin_auto(_time)",
-    "queryOptions": {
-      "aggChartOpts": "{\"{\\\"alias\\\":\\\"count_\\\",\\\"op\\\":\\\"count\\\"}\":{\"variant\":\"area\",\"scaleDistr\":\"log\",\"displayNull\":\"span\"}}"
-    }
-  }
-}
-```
-
-**Per-series options (inside aggChartOpts):**
-
-| Option | Values | Description |
-|--------|--------|-------------|
-| `variant` | `line`, `area`, `bars` | Chart display mode |
-| `scaleDistr` | `linear`, `log` | Y-axis scale |
-| `displayNull` | `auto`, `null`, `span`, `zero` | Missing data handling |
-
-**displayNull values:**
-- `auto`: Best representation based on chart type
-- `null`: Skip/ignore missing values (gaps in chart)
-- `span`: Join adjacent values across gaps
-- `zero`: Fill missing with zeros
-
-### LogStream / Table Options
-
-```json
-{
-  "type": "LogStream",
-  "tableSettings": {
-    "columns": [
-      {"name": "_time", "width": 150},
-      {"name": "message", "width": 400}
-    ],
-    "settings": {
-      "fontSize": "12px",
-      "highlightSeverity": true,
-      "showRaw": true,
-      "showEvent": true,
-      "showTimestamp": true,
-      "wrapLines": true,
-      "hideNulls": true
-    }
-  }
-}
-```
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `columns` | array | Column order and widths |
-| `fontSize` | string | Font size (e.g., "12px") |
-| `highlightSeverity` | boolean | Color-code by log level |
-| `showRaw` | boolean | Show raw JSON |
-| `showTimestamp` | boolean | Show timestamp column |
-| `wrapLines` | boolean | Wrap long lines |
-| `hideNulls` | boolean | Hide null values |
-
-### Pie Options
-
-```json
-{
-  "type": "Pie",
-  "hideHeader": false
-}
-```
-
-### Note Options
-
-```json
-{
-  "type": "Note",
-  "text": "## Section Header\n\nMarkdown content here.",
-  "variant": "default"
-}
-```
-
-### Annotations
-
-Display deployment markers, incidents, or custom events on charts.
-
-Annotations are managed via the Axiom API `/v2/annotations` endpoint:
-
-```bash
-curl -X 'POST' 'https://api.axiom.co/v2/annotations' \
-  -H 'Authorization: Bearer $AXIOM_TOKEN' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "time": "2024-03-18T08:39:28.382Z",
-    "type": "deploy",
-    "datasets": ["http-logs"],
-    "title": "Production deployment",
-    "description": "Deploy v2.1.0",
-    "url": "https://github.com/org/repo/releases/tag/v2.1.0"
-  }'
-```
-
-Or use GitHub Actions:
-```yaml
-- name: Add annotation
-  uses: axiomhq/annotation-action@v0.1.0
-  with:
-    axiomToken: ${{ secrets.AXIOM_TOKEN }}
-    datasets: http-logs
-    type: "deploy"
-    title: "Production deployment"
-```
-
-### Comparison Period (Against)
-Compare current time range against a historical period:
-- `-1D`: Same time yesterday
-- `-1W`: Same time last week
-- Custom offset
-
-Use in dashboard URL: `?t_qr=24h&t_against=-1d`
-
-### Custom Time Range per Panel
-Individual panels can override the dashboard time range:
-- Set `overrideDashboardTimeRange: true` in chart config
-- Via UI: Edit panel → Time range → Custom
+**Common options (all charts):**
+- `overrideDashboardTimeRange`: boolean
+- `overrideDashboardCompareAgainst`: boolean  
+- `hideHeader`: boolean
 
 ---
 
@@ -653,236 +391,86 @@ Recommendations:
 Data visibility is still governed by dataset permissions—users only see data from datasets they can access.
 
 ### URL Time Range Parameters
-Share dashboards with specific time ranges:
 
-```
-# Quick range
-?t_qr=24h
-?t_qr=7d
-
-# Custom range (ISO 8601)
-?t_ts=2024-01-01T00:00:00Z&t_te=2024-01-07T23:59:59Z
-
-# With comparison period
-?t_qr=24h&t_against=-1d
-```
+`?t_qr=24h` (quick range), `?t_ts=...&t_te=...` (custom), `?t_against=-1d` (comparison)
 
 ---
 
 ## Setup
 
-Run setup to check requirements:
+Run `scripts/setup` to check requirements (curl, jq, ~/.axiom.toml).
 
-```bash
-scripts/setup
-```
-
-This will:
-1. Check for required tools (curl, jq)
-2. Check for `~/.axiom.toml` (shared with axiom-sre)
-3. Make scripts executable
-
-### Configuration
-
-Create `~/.axiom.toml` with your Axiom credentials:
-
+Config in `~/.axiom.toml` (shared with axiom-sre):
 ```toml
 [deployments.prod]
 url = "https://api.axiom.co"
 token = "xaat-your-token"
 org_id = "your-org-id"
-
-[deployments.staging]
-url = "https://api.axiom.co"
-token = "xaat-staging-token"
-org_id = "your-org-id"
 ```
-
-This config is shared with the axiom-sre skill.
 
 ---
 
 ## Deployment
 
-### Dashboard API Scripts
+### Scripts
 
-```bash
-# Get your user ID (required for owner field)
-scripts/get-user-id prod
-
-# List all dashboards
-scripts/dashboard-list prod
-
-# Get dashboard JSON
-scripts/dashboard-get prod <id>
-
-# Validate before creating
-scripts/dashboard-validate ./dashboard.json
-
-# Create from file
-scripts/dashboard-create prod ./dashboard.json
-
-# Clone existing dashboard
-scripts/dashboard-copy prod <id>
-
-# Get shareable link
-scripts/dashboard-link prod <id>
-
-# Update (requires version from dashboard-get)
-scripts/dashboard-get prod <id> > dashboard.json
-# ... edit dashboard.json ...
-scripts/dashboard-update prod <id> dashboard.json
-
-# Delete (with confirmation)
-scripts/dashboard-delete prod <id>
-```
-
-### Low-level API Access
-
-```bash
-# Direct API calls via axiom-api script
-scripts/axiom-api prod GET /internal/dashboards
-scripts/axiom-api prod GET /internal/dashboards/<id>
-scripts/axiom-api prod POST /internal/dashboards '{"name":"Test",...}'
-```
+| Script | Usage |
+|--------|-------|
+| `scripts/get-user-id <deploy>` | Get your user ID for `owner` field |
+| `scripts/dashboard-list <deploy>` | List all dashboards |
+| `scripts/dashboard-get <deploy> <id>` | Fetch dashboard JSON |
+| `scripts/dashboard-validate <file>` | Validate JSON structure |
+| `scripts/dashboard-create <deploy> <file>` | Create dashboard |
+| `scripts/dashboard-update <deploy> <id> <file>` | Update (needs version) |
+| `scripts/dashboard-copy <deploy> <id>` | Clone dashboard |
+| `scripts/dashboard-link <deploy> <id>` | Get shareable URL |
+| `scripts/dashboard-delete <deploy> <id>` | Delete (with confirm) |
+| `scripts/axiom-api <deploy> <method> <path>` | Low-level API calls |
 
 ### Workflow
 
-**⚠️ CRITICAL: Always validate queries BEFORE deploying.** Never skip step 4.
+**⚠️ CRITICAL: Always validate queries BEFORE deploying.**
 
-1. Design dashboard plan (sections + panels)
+1. Design dashboard (sections + panels)
 2. Write APL for each panel
-3. Build dashboard JSON (from template or manually)
-4. **Validate queries execute successfully** using axiom-sre:
-   ```bash
-   # Test each query against the actual dataset
-   # Load axiom-sre skill and run queries with explicit time filter
-   ['your-dataset'] | where _time > ago(1h) | ... your query ...
-   ```
-5. `dashboard-validate` to check JSON structure
+3. Build JSON (from template or manually)
+4. **Validate queries** using axiom-sre with explicit time filter
+5. `dashboard-validate` to check structure
 6. `dashboard-create` to deploy
-7. Verify dashboard renders correctly in browser
-8. Iterate based on feedback
-
-### Query Validation Checklist
-
-Before creating any dashboard, verify:
-
-- [ ] Dataset exists: `['dataset-name'] | take 1`
-- [ ] Required fields exist: `['dataset-name'] | getschema`
-- [ ] Each panel query returns data (not errors)
-- [ ] Filters match actual field values (e.g., `service == 'x'` uses real service names)
+7. Verify in browser
 
 ---
 
 ## Sibling Skill Integration
 
-### With spl-to-apl (Splunk Migration)
+**spl-to-apl:** Translate Splunk SPL → APL. Map `timechart` → TimeSeries, `stats` → Statistic/Table. See `reference/splunk-migration.md`.
 
-When user provides SPL queries or Splunk dashboard export:
-
-1. **Translate SPL → APL** using spl-to-apl skill
-2. **Map panel types:**
-   - Splunk `timechart` → TimeSeries
-   - Splunk `stats` with single row → Statistic
-   - Splunk `stats`/`top` with multiple rows → Table
-   - Splunk `chart` with categorical → Pie (if low cardinality)
-3. **Add time filters** (SPL time picker → explicit `where _time between`)
-4. **Adjust binning** to match Axiom visualization
-
-See `reference/splunk-migration.md` for detailed mapping.
-
-### With axiom-sre (Exploration)
-
-When dataset or fields are unknown:
-
-1. **Discover schema:**
-   ```apl
-   ['dataset'] | where _time between (ago(1h) .. now()) | getschema
-   ```
-
-2. **Explore baselines** using axiom-sre golden signal patterns
-
-3. **Identify drilldown dimensions** by sampling:
-   ```apl
-   ['dataset'] | where _time between (ago(1h) .. now()) | distinct service, route, status | take 100
-   ```
-
-4. **Productize** validated queries into dashboard panels
+**axiom-sre:** Discover schema with `getschema`, explore baselines, identify dimensions, then productize into panels.
 
 ---
 
 ## Templates
 
-Pre-built dashboard templates in `reference/templates/`:
+Pre-built templates in `reference/templates/`:
 
 | Template | Use case |
 |----------|----------|
-| `service-overview.json` | Single service oncall dashboard |
+| `service-overview.json` | Single service oncall dashboard with Heatmap |
+| `service-overview-with-filters.json` | Same with SmartFilter (route/status dropdowns) |
 | `api-health.json` | HTTP API with traffic/errors/latency |
-| `blank.json` | Minimal skeleton for custom dashboards |
+| `blank.json` | Minimal skeleton |
 
-### Template Placeholders
+**Placeholders:** `{{owner_id}}`, `{{service}}`, `{{dataset}}`
 
-Templates use these placeholders:
-
-| Placeholder | Description | How to get |
-|-------------|-------------|------------|
-| `{{owner_id}}` | Your Axiom user ID (UUID) | Run `scripts/get-user-id prod` |
-| `{{service}}` | Service name for filtering | Your service identifier |
-| `{{dataset}}` | Axiom dataset name | Check available datasets in Axiom UI |
-
-### Template Field Assumptions
-
-**⚠️ Templates assume specific field names.** You MUST adapt queries to match your dataset schema.
-
-Before using a template:
-1. Discover your schema: `['your-dataset'] | getschema`
-2. Note which fields differ from template assumptions
-3. Edit the JSON or use sed to fix field names before creating
-
-| Template field | Description | Example alternatives |
-|----------------|-------------|---------------------|
-| `service` | Service name | `app`, `name`, `component`, `['kubernetes.labels.app']` |
-| `status` | HTTP status code (numeric) | `status_code`, `http.status_code` |
-| `route` | Request path | `uri`, `domain`, `path`, `http.target` |
-| `duration_ms` | Request duration in ms | `req_duration_ms`, `latency_ms` |
-| `error_message` | Error description | `message`, `error`, `exception.message` |
-| `trace_id` | Trace identifier | `monitor_id`, `traceId`, `['trace.id']` |
-
-**Fix field names before or after creation:**
+**Usage:**
 ```bash
-# Before creating - edit the JSON
-sed -i '' 's/duration_ms/latency_ms/g' dashboard.json
-sed -i '' 's/route/uri/g' dashboard.json
-
-# After creating - get, edit, update
-scripts/dashboard-get prod <id> > dashboard.json
-sed -i '' 's/duration_ms/latency_ms/g' dashboard.json
-scripts/dashboard-update prod <id> dashboard.json
-```
-
-### Using Templates
-
-```bash
-# 1. Get your user ID
 USER_ID=$(scripts/get-user-id prod)
-
-# 2. Generate from template
 scripts/dashboard-from-template service-overview "my-service" "$USER_ID" "my-dataset" ./dashboard.json
-
-# 3. Validate
 scripts/dashboard-validate ./dashboard.json
-
-# 4. Fix field names if needed (before creating)
-sed -i '' 's/duration_ms/latency_ms/g' ./dashboard.json
-
-# 5. Deploy
-DASHBOARD_ID=$(scripts/dashboard-create prod ./dashboard.json)
-
-# 6. Get link to verify
-scripts/dashboard-link prod $DASHBOARD_ID
+scripts/dashboard-create prod ./dashboard.json
 ```
+
+**⚠️ Templates assume field names** (`service`, `status`, `route`, `duration_ms`). Discover your schema first and use `sed` to fix mismatches.
 
 ---
 
@@ -900,10 +488,12 @@ scripts/dashboard-link prod $DASHBOARD_ID
 
 ## Reference
 
-- `reference/design-playbook.md` — Decision-first design, anti-patterns
-- `reference/chart-cookbook.md` — Detailed patterns per chart type
+- `reference/chart-config.md` — All chart configuration options (JSON)
+- `reference/smartfilter.md` — SmartFilter/FilterBar full configuration
+- `reference/chart-cookbook.md` — APL patterns per chart type
 - `reference/layout-recipes.md` — Grid layouts and section blueprints
 - `reference/splunk-migration.md` — Splunk panel → Axiom mapping
+- `reference/design-playbook.md` — Decision-first design principles
 - `reference/templates/` — Ready-to-use dashboard JSON files
 
 For APL syntax: https://axiom.co/docs/apl/introduction
