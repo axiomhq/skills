@@ -7,17 +7,18 @@
 
 import { runPromptInjection, type PromptInjectionOptions } from "./prompt-injection";
 import { runToolSimulation, type ToolSimulationOptions } from "./tool-simulation";
+import type { HarnessResult } from "./types";
 
 export type HarnessType = "prompt-injection" | "tool-simulation";
 
-export interface HarnessMetadata {
+export interface HarnessTypeMetadata {
   name: string;
   description: string;
   testsDiscoverability: boolean;
   testsReferences: boolean;
 }
 
-export const HARNESS_METADATA: Record<HarnessType, HarnessMetadata> = {
+export const HARNESS_TYPE_METADATA: Record<HarnessType, HarnessTypeMetadata> = {
   "prompt-injection": {
     name: "Prompt Injection",
     description: "Injects skill content directly into system prompt",
@@ -43,7 +44,7 @@ export async function runHarness(
   prompt: string,
   harnessType: HarnessType,
   options: HarnessOptions
-): Promise<string> {
+): Promise<HarnessResult> {
   switch (harnessType) {
     case "prompt-injection":
       return runPromptInjection(prompt, options);
@@ -55,4 +56,4 @@ export async function runHarness(
 }
 
 export { runPromptInjection, runToolSimulation };
-export type { PromptInjectionOptions, ToolSimulationOptions };
+export type { PromptInjectionOptions, ToolSimulationOptions, HarnessResult };

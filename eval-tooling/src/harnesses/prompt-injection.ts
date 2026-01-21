@@ -21,8 +21,11 @@ import { wrapAISDKModel } from "axiom/ai";
 import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import matter from "gray-matter";
+import type { HarnessResult } from "./types";
+import { buildSkillMetadata, parseModelId } from "../shared/metadata";
 
-const model = wrapAISDKModel(gateway("google/gemini-2.5-flash"));
+const MODEL_ID = "google/gemini-2.5-flash";
+const model = wrapAISDKModel(gateway(MODEL_ID));
 
 export interface PromptInjectionOptions {
   skillDir: string;
@@ -66,7 +69,7 @@ async function loadAllContent(skillDir: string, skillFile: string): Promise<stri
 export async function runPromptInjection(
   prompt: string,
   options: PromptInjectionOptions
-): Promise<string> {
+): Promise<HarnessResult> {
   const skillFile = options.skillFile ?? "SKILL.md";
   const allContent = await loadAllContent(options.skillDir, skillFile);
 
@@ -76,6 +79,8 @@ ${allContent}
 
 ${options.systemPromptSuffix}`;
 
+  const startTime = performance.now();
+
   const result = await generateText({
     model,
     system: systemPrompt,
@@ -83,5 +88,30 @@ ${options.systemPromptSuffix}`;
     temperature: 0,
   });
 
-  return result.text.trim();
+  const latencyMs = Math.round(performance.now() - startTime);
+
+  const skillMetadata = await buildSkillMetadata(options.skillDir, skillFile);
+
+  return {
+    output: result.text.trim(),
+    metadata: {
+      model: parseModelId(MODEL_ID),
+      skill: skillMetadata,
+      harness: {
+        type: "prompt-injection",
+      },
+      tokens: {
+        prompt: result.usage.inputTokens ?? 0,
+        completion: result.usage.outputTokens ?? 0,
+        total: result.usage.totalTokens ?? 0,
+      },
+      latency: {
+        ms: latencyMs,
+      },
+      tools: {
+        available: [],
+        called: [],
+      },
+    },
+  };
 }

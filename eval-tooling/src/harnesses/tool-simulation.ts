@@ -27,8 +27,11 @@ import { readFile, readdir } from "node:fs/promises";
 import { resolve, posix } from "node:path";
 import { z } from "zod";
 import matter from "gray-matter";
+import type { HarnessResult } from "./types";
+import { buildSkillMetadata, parseModelId } from "../shared/metadata";
 
-const model = wrapAISDKModel(gateway("google/gemini-2.5-flash"));
+const MODEL_ID = "google/gemini-2.5-flash";
+const model = wrapAISDKModel(gateway(MODEL_ID));
 
 export interface ToolSimulationOptions {
   skillDir: string;
@@ -127,9 +130,11 @@ Call this tool with the skill name to receive full instructions.`;
 export async function runToolSimulation(
   prompt: string,
   options: ToolSimulationOptions
-): Promise<string> {
+): Promise<HarnessResult> {
   const skillFile = options.skillFile ?? "SKILL.md";
   const skill = await discoverSkill(options.skillDir, skillFile);
+
+  const toolsCalled: string[] = [];
 
   const tools = {
     skill: tool({
@@ -138,6 +143,8 @@ export async function runToolSimulation(
         skillName: z.string().describe("The name of the skill to load"),
       }),
       execute: async ({ skillName }) => {
+        toolsCalled.push("skill");
+
         if (skillName !== skill.name) {
           return {
             success: false,
@@ -182,6 +189,8 @@ export async function runToolSimulation(
           ),
       }),
       execute: async ({ path: filePath }) => {
+        toolsCalled.push("readFile");
+
         const normalizedPath = posix.normalize(filePath);
         if (
           normalizedPath.startsWith("..") ||
@@ -226,6 +235,8 @@ You have access to skills that can help you. Use the skill tool to load instruct
 
 ${options.systemPromptSuffix}`;
 
+  const startTime = performance.now();
+
   const result = await generateText({
     model,
     system: systemPrompt,
@@ -235,5 +246,30 @@ ${options.systemPromptSuffix}`;
     temperature: 0,
   });
 
-  return result.text.trim();
+  const latencyMs = Math.round(performance.now() - startTime);
+
+  const skillMetadata = await buildSkillMetadata(options.skillDir, skillFile);
+
+  return {
+    output: result.text.trim(),
+    metadata: {
+      model: parseModelId(MODEL_ID),
+      skill: skillMetadata,
+      harness: {
+        type: "tool-simulation",
+      },
+      tokens: {
+        prompt: result.totalUsage.inputTokens ?? 0,
+        completion: result.totalUsage.outputTokens ?? 0,
+        total: result.totalUsage.totalTokens ?? 0,
+      },
+      latency: {
+        ms: latencyMs,
+      },
+      tools: {
+        available: Object.keys(tools),
+        called: toolsCalled,
+      },
+    },
+  };
 }

@@ -1,7 +1,7 @@
 import { Eval, Scorer } from "axiom/ai/evals";
 import { testCases } from "./cases";
 import { flag, pickFlags } from "../../../eval-tooling/src/shared";
-import { runHarness, type HarnessType } from "../../../eval-tooling/src/harnesses";
+import { runHarness, type HarnessType, type HarnessResult } from "../../../eval-tooling/src/harnesses";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
@@ -9,6 +9,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const SKILL_DIR = resolve(__dirname, "..");
+
+interface TaskOutput {
+  output: string;
+  metadata: HarnessResult["metadata"];
+}
 
 /**
  * Normalize APL query for comparison:
@@ -33,15 +38,15 @@ function normalizeApl(query: string): string {
 
 const ExactMatch = Scorer(
   "exact-match",
-  ({ output, expected }: { output: string; expected: string }) =>
-    normalizeApl(output) === normalizeApl(expected)
+  ({ output, expected }: { output: TaskOutput; expected: string }) =>
+    normalizeApl(output.output) === normalizeApl(expected)
 );
 
 const KeyOperatorsPresent = Scorer(
   "key-operators-present",
-  ({ output, expected }: { output: string; expected: string }) => {
+  ({ output, expected }: { output: TaskOutput; expected: string }) => {
     const expectedLower = expected.toLowerCase();
-    const outputLower = output.toLowerCase();
+    const outputLower = output.output.toLowerCase();
 
     const keyPatterns = [
       /\bsummarize\b/,
@@ -82,26 +87,26 @@ const KeyOperatorsPresent = Scorer(
 
 const DatasetCorrect = Scorer(
   "dataset-correct",
-  ({ output, expected }: { output: string; expected: string }) => {
+  ({ output, expected }: { output: TaskOutput; expected: string }) => {
     const datasetMatch = expected.match(/\['([^']+)'\]/);
     if (!datasetMatch) return 1;
 
     const expectedDataset = datasetMatch[1];
-    return output.includes(`['${expectedDataset}']`) ? 1 : 0;
+    return output.output.includes(`['${expectedDataset}']`) ? 1 : 0;
   }
 );
 
 const TimeFilterPresent = Scorer(
   "time-filter-present",
-  ({ output, expected }: { output: string; expected: string }) => {
+  ({ output, expected }: { output: TaskOutput; expected: string }) => {
     const expectsTimeFilter =
       expected.includes("_time between") || expected.includes("ago(");
     if (!expectsTimeFilter) return 1;
 
     const hasTimeFilter =
-      output.includes("_time between") ||
-      output.includes("ago(") ||
-      output.includes("_time >=");
+      output.output.includes("_time between") ||
+      output.output.includes("ago(") ||
+      output.output.includes("_time >=");
     return hasTimeFilter ? 1 : 0;
   }
 );
@@ -125,16 +130,21 @@ Eval("spl-translation", {
     testCaseCount: testCases.length,
   },
 
-  task: async ({ input }: { input: string }) => {
+  task: async ({ input }: { input: string }): Promise<TaskOutput> => {
     const harnessType = flag("harnessType") as HarnessType;
 
-    return runHarness(input, harnessType, {
+    const result = await runHarness(input, harnessType, {
       skillDir: SKILL_DIR,
       systemPromptPrefix:
         "You are an expert at translating Splunk SPL queries to Axiom APL queries.",
       systemPromptSuffix:
         "Translate the following SPL query to APL. Output ONLY the APL query, no explanation.",
     });
+
+    return {
+      output: result.output,
+      metadata: result.metadata,
+    };
   },
 
   scorers: [ExactMatch, KeyOperatorsPresent, DatasetCorrect, TimeFilterPresent],
