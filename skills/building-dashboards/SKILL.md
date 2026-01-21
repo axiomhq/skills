@@ -179,22 +179,147 @@ Raw events that answer "what exactly happened?"
 - Use `project-keep` to show relevant fields only
 - Filter aggressively—raw logs are expensive
 
-### SmartFilter
+### Heatmap
+**When:** Distribution visualization, latency patterns, density analysis.
+
+```apl
+['logs']
+| summarize histogram(duration_ms, 15) by bin_auto(_time)
+```
+
+**Best for:** Latency distributions, response time patterns, identifying outliers.
+
+### Scatter Plot
+**When:** Correlation between two metrics, identifying patterns.
+
+```apl
+['logs']
+| summarize avg(duration_ms), avg(resp_size_bytes) by route
+```
+
+**Best for:** Response size vs latency correlation, resource usage patterns.
+
+### Filter Bar
 **When:** Interactive filtering for the entire dashboard.
 
-Configure with high-value filter fields:
-- `service`, `environment`, `region`
-- `route`, `status`, `customer_id`
+Filter bars enable search and select filters that dynamically filter all panels.
 
-No APL needed—SmartFilter uses field metadata.
+**Filter types:**
+- **Search filter**: Free-text search (e.g., user agent contains "Mozilla")
+- **Select filter**: Dropdown from static list or dynamic query
+
+**Using filters in panel queries:**
+```apl
+declare query_parameters (country_filter:string = "", status_filter:string = "");
+['logs']
+| where isempty(country_filter) or ['geo.country'] == country_filter
+| where isempty(status_filter) or tostring(status) == status_filter
+| summarize count() by bin_auto(_time)
+```
+
+**Select filter query (dynamic options):**
+```apl
+['logs']
+| distinct ['geo.country']
+| project key=['geo.country'], value=['geo.country']
+| sort by key asc
+```
+
+**Dependent filters (city depends on country):**
+```apl
+declare query_parameters (country_filter:string = "");
+['logs']
+| where isnotempty(['geo.country']) and isnotempty(['geo.city'])
+| where ['geo.country'] == country_filter
+| summarize count() by ['geo.city']
+| project key=['geo.city'], value=['geo.city']
+| sort by key asc
+```
+
+**Best practices:**
+- Start filter IDs with underscore to avoid field name conflicts (e.g., `_country_filter`)
+- Use `isempty(filter)` check so "All" option works
+- One filter bar can contain multiple filters
+
+### Monitor List
+**When:** Display monitor status on operational dashboards.
+
+No APL needed—select monitors from the UI. Shows:
+- Monitor status (normal/triggered/off)
+- Run history (green/red squares)
+- Dataset, type, notifiers
 
 ### Note
 **When:** Context, instructions, section headers.
 
-Use markdown for:
+Use GitHub Flavored Markdown for:
 - Dashboard purpose and audience
 - Runbook links
 - Section dividers
+- On-call instructions
+
+---
+
+## Chart Configuration
+
+Dashboard elements have configurable display options:
+
+### Values (Missing Data Handling)
+- **Auto**: Best representation based on chart type
+- **Ignore**: Skip missing values (gaps in chart)
+- **Join adjacent**: Connect data points across gaps (smoother lines)
+- **Fill with zeros**: Replace missing with 0 (shows drops clearly)
+
+### Variant (TimeSeries only)
+- **Line**: Continuous lines, best for trends
+- **Area**: Filled area under line, good for stacked comparisons
+- **Bars**: Bar chart, good for discrete time buckets
+
+### Y-Axis Scale
+- **Linear**: Equal distances = equal value changes (default)
+- **Log**: Logarithmic scale, good for wide value ranges (10x per unit)
+
+### Annotations
+Display deployment markers, incidents, or custom events on charts.
+
+Create annotations via API:
+```bash
+curl -X 'POST' 'https://api.axiom.co/v2/annotations' \
+  -H 'Authorization: Bearer $AXIOM_TOKEN' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "time": "2024-03-18T08:39:28.382Z",
+    "type": "deploy",
+    "datasets": ["http-logs"],
+    "title": "Production deployment",
+    "description": "Deploy v2.1.0",
+    "url": "https://github.com/org/repo/releases/tag/v2.1.0"
+  }'
+```
+
+Or use GitHub Actions:
+```yaml
+- name: Add annotation
+  uses: axiomhq/annotation-action@v0.1.0
+  with:
+    axiomToken: ${{ secrets.AXIOM_TOKEN }}
+    datasets: http-logs
+    type: "deploy"
+    title: "Production deployment"
+```
+
+### Comparison Period (Against)
+Compare current time range against a historical period:
+- `-1D`: Same time yesterday
+- `-1W`: Same time last week
+- Custom offset
+
+Use in dashboard URL: `?t_qr=24h&t_against=-1d`
+
+### Custom Time Range per Panel
+Individual panels can override the dashboard time range:
+- Via UI: Edit panel → Time range → Custom
+- Via APL: `| where _time > now(-6h)`
 
 ---
 
@@ -303,6 +428,44 @@ Row 10+:  [LogStream w=12, h=6]
 - Use question-style titles: "Error rate by route" not "Errors"
 - Prefix with context if multi-service: "[API] Error rate"
 - Include units: "Latency (ms)", "Traffic (req/s)"
+
+---
+
+## Dashboard Settings
+
+### Refresh Rate
+Dashboard auto-refreshes at configured interval. Options: 15s, 30s, 1m, 5m, etc.
+
+**⚠️ Query cost warning:** Short refresh (15s) + long time range (90d) = expensive queries running constantly.
+
+Recommendations:
+| Use case | Refresh rate |
+|----------|-------------|
+| Oncall/real-time | 15s–30s |
+| Team health | 1m–5m |
+| Executive/weekly | 5m–15m |
+
+### Sharing
+- **Just Me**: Private, only you can access
+- **Group**: Specific team/group in your org
+- **Everyone**: All users in your Axiom org
+
+Data visibility is still governed by dataset permissions—users only see data from datasets they can access.
+
+### URL Time Range Parameters
+Share dashboards with specific time ranges:
+
+```
+# Quick range
+?t_qr=24h
+?t_qr=7d
+
+# Custom range (ISO 8601)
+?t_ts=2024-01-01T00:00:00Z&t_te=2024-01-07T23:59:59Z
+
+# With comparison period
+?t_qr=24h&t_against=-1d
+```
 
 ---
 

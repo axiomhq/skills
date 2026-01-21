@@ -365,3 +365,108 @@ Markdown panels for context and navigation.
 3. Click a route to filter logs below
 4. Copy trace_id for detailed investigation
 ```
+
+---
+
+## Heatmap
+
+Visualize distributions and density patterns.
+
+### Latency Distribution Over Time
+```apl
+['http-logs']
+| where _time between (ago(1h) .. now())
+| summarize histogram(duration_ms, 20) by bin_auto(_time)
+```
+
+### Response Size Distribution
+```apl
+['http-logs']
+| where _time between (ago(1h) .. now())
+| summarize histogram(resp_body_size_bytes, 15) by bin_auto(_time)
+```
+
+### Request Rate by Hour of Day
+```apl
+['http-logs']
+| where _time between (ago(7d) .. now())
+| extend hour = hourofday(_time), day = dayofweek(_time)
+| summarize count() by hour, day
+```
+
+---
+
+## Scatter Plot
+
+Identify correlations between metrics.
+
+### Latency vs Response Size
+```apl
+['http-logs']
+| where _time between (ago(1h) .. now())
+| summarize avg(duration_ms), avg(resp_body_size_bytes) by route
+```
+
+### Request Rate vs Error Rate by Route
+```apl
+['http-logs']
+| where _time between (ago(1h) .. now())
+| summarize 
+    requests = count(),
+    error_rate = round(100.0 * countif(status >= 500) / count(), 2)
+  by route
+| where requests >= 10
+```
+
+### CPU vs Memory by Pod
+```apl
+['metrics']
+| where _time between (ago(1h) .. now())
+| summarize avg(cpu_percent), avg(memory_percent) by pod
+```
+
+---
+
+## Filter Bar
+
+Interactive filters for dashboard-wide filtering.
+
+### Dynamic Country Filter Query
+```apl
+['http-logs']
+| where _time between (ago(1h) .. now())
+| distinct ['geo.country']
+| project key=['geo.country'], value=['geo.country']
+| sort by key asc
+```
+
+### Panel Using Filters
+```apl
+declare query_parameters (_country:string = "", _status:string = "");
+['http-logs']
+| where _time between (ago(1h) .. now())
+| where isempty(_country) or ['geo.country'] == _country
+| where isempty(_status) or tostring(status) == _status
+| summarize count() by bin_auto(_time)
+```
+
+### Dependent City Filter (depends on country)
+```apl
+declare query_parameters (_country:string = "");
+['http-logs']
+| where _time between (ago(1h) .. now())
+| where isnotempty(['geo.country']) and isnotempty(['geo.city'])
+| where ['geo.country'] == _country
+| distinct ['geo.city']
+| project key=['geo.city'], value=['geo.city']
+| sort by key asc
+```
+
+### Dataset Selector Filter
+For multi-dataset dashboards, let users choose which dataset to view:
+```apl
+declare query_parameters (_dataset:string = "http-logs");
+table(_dataset)
+| where _time between (ago(1h) .. now())
+| summarize count() by bin_auto(_time)
+```
