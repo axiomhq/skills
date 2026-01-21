@@ -26,10 +26,10 @@
     },
     {
       "id": "traffic-rps",
-      "name": "Request Rate",
+      "name": "Total Requests",
       "type": "Statistic",
       "query": {
-        "apl": "['{{dataset}}'] | where service == '{{service}}' | summarize requests = count() | extend duration_sec = datetime_diff('second', endofrange(_time), startofrange(_time)) | project ['req/s'] = round(todouble(requests) / duration_sec, 2)"
+        "apl": "['{{dataset}}'] | where service == '{{service}}' | summarize ['Total Requests'] = count()"
       }
     },
     {

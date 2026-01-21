@@ -62,10 +62,10 @@
     },
     {
       "id": "traffic-rps",
-      "name": "Request Rate",
+      "name": "Total Requests",
       "type": "Statistic",
       "query": {
-        "apl": "declare query_parameters (route_filter:string = \"\", status_filter:string = \"\");\n['{{dataset}}']\n| where service == '{{service}}'\n| where isempty(route_filter) or route == route_filter\n| where isempty(status_filter) or tostring(status) startswith status_filter\n| summarize requests = count()\n| extend duration_sec = datetime_diff('second', endofrange(_time), startofrange(_time))\n| project ['req/s'] = round(todouble(requests) / duration_sec, 2)"
+        "apl": "declare query_parameters (route_filter:string = \"\", status_filter:string = \"\");\n['{{dataset}}']\n| where service == '{{service}}'\n| where isempty(route_filter) or route == route_filter\n| where isempty(status_filter) or tostring(status) startswith status_filter\n| summarize ['Total Requests'] = count()"
       }
     },
     {
