@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# dashctl wrapper - reads credentials from ~/.axiom.toml (shared with axiom-sre)
+# Usage: dashctl <deployment> <command> [args...]
+#
+# Examples:
+#   dashctl prod getAll --summary
+#   dashctl prod get <dashboard-id>
+#   dashctl staging lint ./dashboard.json
+#   dashctl prod create ./dashboard.json
+#   dashctl prod findAndReplace <id> --find "old" --replace "new" --dry-run
+#   dashctl prod copy <id>
+
+set -euo pipefail
+
+DEPLOYMENT="${1:-}"
+shift || true
+
+if [[ -z "$DEPLOYMENT" ]]; then
+  echo "Usage: dashctl <deployment> <command> [args...]" >&2
+  echo "" >&2
+  echo "Deployments are defined in ~/.axiom.toml" >&2
+  echo "" >&2
+  echo "Commands:" >&2
+  echo "  getAll [--summary]     List all dashboards" >&2
+  echo "  get <id>               Get dashboard by ID" >&2
+  echo "  create <file.json>     Create dashboard from JSON" >&2
+  echo "  lint <file.json>       Validate dashboard JSON" >&2
+  echo "  copy <id>              Clone a dashboard" >&2
+  echo "  findAndReplace <id>    Replace text in queries" >&2
+  exit 1
+fi
+
+# Find dashctl installation
+DASHCTL_DIR="${DASHCTL_DIR:-$HOME/.local/share/dashctl}"
+DASHCTL="$DASHCTL_DIR/dashctl.js"
+
+if [[ ! -f "$DASHCTL" ]]; then
+  echo "Error: dashctl not found at $DASHCTL_DIR" >&2
+  echo "" >&2
+  echo "Run setup first:" >&2
+  echo "  scripts/setup" >&2
+  exit 1
+fi
+
+# Check bun
+if ! command -v bun &> /dev/null; then
+  echo "Error: bun is required but not installed" >&2
+  echo "Install: https://bun.sh/docs/installation" >&2
+  exit 1
+fi
+
+# Read config from ~/.axiom.toml (same as axiom-sre)
+CONFIG_FILE="$HOME/.axiom.toml"
+if [[ ! -f "$CONFIG_FILE" ]]; then
+  echo "Error: $CONFIG_FILE not found" >&2
+  echo "" >&2
+  echo "Create it with your Axiom credentials:" >&2
+  echo "" >&2
+  echo "[deployments.$DEPLOYMENT]" >&2
+  echo 'url = "https://api.axiom.co"' >&2
+  echo 'token = "xaat-your-token"' >&2
+  echo 'org_id = "your-org-id"' >&2
+  exit 1
+fi
+
+# Parse TOML for deployment config (same parser as axiom-sre)
+extract_value() {
+  local key="$1"
+  awk -v deployment="$DEPLOYMENT" -v key="$key" '
+    /^\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
+    in_deployment && $1 == key { gsub(/[" ]/, "", $3); print $3; exit }
+  ' "$CONFIG_FILE"
+}
+
+URL=$(extract_value "url")
+TOKEN=$(extract_value "token")
+ORG_ID=$(extract_value "org_id")
+
+if [[ -z "$URL" || -z "$TOKEN" || -z "$ORG_ID" ]]; then
+  echo "Error: Could not find deployment '$DEPLOYMENT' in $CONFIG_FILE" >&2
+  echo "" >&2
+  echo "Available deployments:" >&2
+  grep '^\[deployments\.' "$CONFIG_FILE" | sed 's/\[deployments\.\(.*\)\]/  \1/' >&2
+  exit 1
+fi
+
+# dashctl expects these specific env vars
+# dashctl uses app.axiom.co/api for internal dashboard endpoints
+# Convert api.axiom.co -> app.axiom.co if needed
+DASHCTL_URL="${URL/api.axiom.co/app.axiom.co}"
+export AXIOM_API_URL="${DASHCTL_URL}/api"
+export AXIOM_API_TOKEN="$TOKEN"
+export AXIOM_ORG_ID="$ORG_ID"
+
+# Run dashctl
+cd "$DASHCTL_DIR"
+exec bun run dashctl.js "$@"

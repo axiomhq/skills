@@ -1,0 +1,12 @@
+{
+  "name": "{{name}}",
+  "description": "{{description}}",
+  "owner": "{{owner_id}}",
+  "datasets": ["{{dataset}}"],
+  "refreshTime": 60,
+  "schemaVersion": 2,
+  "timeWindowStart": "qr-now-1h",
+  "timeWindowEnd": "qr-now",
+  "charts": [],
+  "layout": []
+}
