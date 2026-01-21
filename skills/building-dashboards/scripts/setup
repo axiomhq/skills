@@ -1,74 +1,49 @@
 #!/usr/bin/env bash
 # Setup building-dashboards skill
-# Usage: scripts/setup [--force]
+# Usage: scripts/setup
 #
 # This script:
-#   1. Checks for bun (required by dashctl)
-#   2. Clones/updates dashctl
-#   3. Checks for ~/.axiom.toml (shared with axiom-sre)
+#   1. Checks for required tools (curl, jq)
+#   2. Checks for ~/.axiom.toml (shared with axiom-sre)
+#   3. Makes scripts executable
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SKILL_DIR="$(dirname "$SCRIPT_DIR")"
-
-# Default dashctl location
-DASHCTL_DIR="${DASHCTL_DIR:-$HOME/.local/share/dashctl}"
-DASHCTL_REPO="https://github.com/axiomhq/dashctl.git"
-
-FORCE=false
-for arg in "$@"; do
-  case $arg in
-    --force) FORCE=true ;;
-  esac
-done
 
 echo "=== building-dashboards Setup ==="
 echo ""
 
-# --- Check bun ---
-echo "[1/3] Checking bun..."
-if command -v bun &> /dev/null; then
-  BUN_VERSION=$(bun --version)
-  echo "✓ bun $BUN_VERSION found"
-else
-  echo "✗ bun not found"
-  echo ""
-  echo "Install bun:"
-  echo "  curl -fsSL https://bun.sh/install | bash"
-  exit 1
+# --- Check required tools ---
+echo "[1/3] Checking required tools..."
+
+MISSING=()
+for cmd in curl jq; do
+    if command -v "$cmd" &> /dev/null; then
+        echo "✓ $cmd found"
+    else
+        echo "✗ $cmd not found"
+        MISSING+=("$cmd")
+    fi
+done
+
+if [[ ${#MISSING[@]} -gt 0 ]]; then
+    echo ""
+    echo "Install missing tools:"
+    for cmd in "${MISSING[@]}"; do
+        case "$cmd" in
+            jq) echo "  brew install jq  # or apt-get install jq" ;;
+            curl) echo "  brew install curl  # or apt-get install curl" ;;
+        esac
+    done
+    exit 1
 fi
 
-# --- Clone/update dashctl ---
+# --- Make scripts executable ---
 echo ""
-echo "[2/3] Setting up dashctl at $DASHCTL_DIR..."
-
-if [[ -d "$DASHCTL_DIR/.git" ]]; then
-  if [[ "$FORCE" == true ]]; then
-    echo "Removing existing dashctl (--force)..."
-    rm -rf "$DASHCTL_DIR"
-  else
-    echo "Updating existing dashctl..."
-    (cd "$DASHCTL_DIR" && git pull --quiet)
-    (cd "$DASHCTL_DIR" && bun install --silent)
-    echo "✓ dashctl updated"
-  fi
-fi
-
-if [[ ! -d "$DASHCTL_DIR" ]]; then
-  echo "Cloning dashctl..."
-  git clone --quiet "$DASHCTL_REPO" "$DASHCTL_DIR"
-  (cd "$DASHCTL_DIR" && bun install --silent)
-  echo "✓ dashctl installed"
-fi
-
-# Verify dashctl works
-if [[ -f "$DASHCTL_DIR/dashctl.js" ]]; then
-  echo "✓ dashctl ready at $DASHCTL_DIR"
-else
-  echo "✗ dashctl.js not found in $DASHCTL_DIR"
-  exit 1
-fi
+echo "[2/3] Making scripts executable..."
+chmod +x "$SCRIPT_DIR"/*
+echo "✓ Scripts ready"
 
 # --- Check Axiom config ---
 echo ""
@@ -76,15 +51,18 @@ echo "[3/3] Checking Axiom configuration..."
 
 AXIOM_CONFIG="$HOME/.axiom.toml"
 if [[ -f "$AXIOM_CONFIG" ]]; then
-  # Count deployments
-  DEPLOYMENTS=$(grep -c '^\[deployments\.' "$AXIOM_CONFIG" 2>/dev/null || echo 0)
-  echo "✓ Found $AXIOM_CONFIG with $DEPLOYMENTS deployment(s)"
+    DEPLOYMENTS=$(grep -c '^\[deployments\.' "$AXIOM_CONFIG" 2>/dev/null || echo 0)
+    echo "✓ Found $AXIOM_CONFIG with $DEPLOYMENTS deployment(s)"
+    
+    # List deployments
+    echo "  Deployments:"
+    grep '^\[deployments\.' "$AXIOM_CONFIG" | sed 's/\[deployments\.\(.*\)\]/    - \1/'
 else
-  echo "⚠ $AXIOM_CONFIG not found"
-  echo ""
-  echo "Create it to enable dashboard operations:"
-  echo ""
-  cat << 'EOF'
+    echo "⚠ $AXIOM_CONFIG not found"
+    echo ""
+    echo "Create it to enable dashboard operations:"
+    echo ""
+    cat << 'EOF'
 [deployments.prod]
 url = "https://api.axiom.co"
 token = "xaat-your-token-here"
@@ -95,20 +73,19 @@ url = "https://api.axiom.co"
 token = "xaat-your-staging-token"
 org_id = "your-org-id"
 EOF
-  echo ""
+    echo ""
 fi
 
 echo ""
 echo "=== Setup Complete ==="
 echo ""
-echo "dashctl: $DASHCTL_DIR"
-echo "config:  $AXIOM_CONFIG"
-echo ""
 echo "Usage:"
-echo "  scripts/get-user-id prod                 # Get your user ID for dashboard creation"
-echo "  scripts/dashctl prod getAll --summary    # List dashboards"
-echo "  scripts/dashctl prod get <dashboard-id>  # Get dashboard JSON"
-echo "  scripts/dashctl prod create ./dashboard.json"
+echo "  scripts/get-user-id prod              # Get your user ID"
+echo "  scripts/dashboard-list prod           # List dashboards"
+echo "  scripts/dashboard-get prod <id>       # Get dashboard JSON"
+echo "  scripts/dashboard-create prod <file>  # Create dashboard"
+echo "  scripts/dashboard-copy prod <id>      # Clone dashboard"
+echo "  scripts/dashboard-link prod <id>      # Get dashboard URL"
 echo ""
 echo "Templates:"
 echo "  USER_ID=\$(scripts/get-user-id prod)"

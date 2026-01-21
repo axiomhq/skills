@@ -98,6 +98,8 @@ Raw events that answer "what exactly happened?"
 
 **Note:** Dashboard queries inherit time from the UI picker—no explicit `_time` filter needed.
 
+**dashctl support:** TimeSeries, Statistic, Table, Pie, LogStream, Note, MonitorList are fully validated. Heatmap, ScatterPlot, FilterBar work but trigger linter warnings (use `--no-lint` if needed).
+
 ### Statistic
 **When:** Single KPI, current value, threshold comparison.
 
@@ -279,8 +281,10 @@ Dashboard elements have configurable display options:
 - **Linear**: Equal distances = equal value changes (default)
 - **Log**: Logarithmic scale, good for wide value ranges (10x per unit)
 
-### Annotations
+### Annotations (API-only, not dashctl)
 Display deployment markers, incidents, or custom events on charts.
+
+Annotations are managed via the Axiom API `/v2/annotations` endpoint, not dashctl.
 
 Create annotations via API:
 ```bash
@@ -471,16 +475,16 @@ Share dashboards with specific time ranges:
 
 ## Setup
 
-Run setup to install dashctl and check configuration:
+Run setup to check requirements:
 
 ```bash
 scripts/setup
 ```
 
 This will:
-1. Check for bun (required - install via `curl -fsSL https://bun.sh/install | bash`)
-2. Clone dashctl to `~/.local/share/dashctl`
-3. Check for `~/.axiom.toml` (shared with axiom-sre)
+1. Check for required tools (curl, jq)
+2. Check for `~/.axiom.toml` (shared with axiom-sre)
+3. Make scripts executable
 
 ### Configuration
 
@@ -504,33 +508,46 @@ This config is shared with the axiom-sre skill.
 
 ## Deployment
 
-### Using dashctl
+### Dashboard API Scripts
 
 ```bash
 # Get your user ID (required for owner field)
 scripts/get-user-id prod
 
-# List dashboards
-scripts/dashctl prod getAll --summary
+# List all dashboards
+scripts/dashboard-list prod
 
 # Get dashboard JSON
-scripts/dashctl prod get <id>
-
-# Create from file
-scripts/dashctl prod create ./dashboard.json
+scripts/dashboard-get prod <id>
 
 # Validate before creating
-scripts/dashctl prod lint ./dashboard.json
+scripts/dashboard-validate ./dashboard.json
+
+# Create from file
+scripts/dashboard-create prod ./dashboard.json
 
 # Clone existing dashboard
-scripts/dashctl prod copy <id>
+scripts/dashboard-copy prod <id>
 
-# Find and replace in queries (great for fixing dataset/field names)
-scripts/dashctl prod findAndReplace <id> --find "old-dataset" --replace "new-dataset" --dry-run
-scripts/dashctl prod findAndReplace <id> --find "old-dataset" --replace "new-dataset"  # apply
-
-# Generate shareable dashboard link
+# Get shareable link
 scripts/dashboard-link prod <id>
+
+# Update (requires version from dashboard-get)
+scripts/dashboard-get prod <id> > dashboard.json
+# ... edit dashboard.json ...
+scripts/dashboard-update prod <id> dashboard.json
+
+# Delete (with confirmation)
+scripts/dashboard-delete prod <id>
+```
+
+### Low-level API Access
+
+```bash
+# Direct API calls via axiom-api script
+scripts/axiom-api prod GET /internal/dashboards
+scripts/axiom-api prod GET /internal/dashboards/<id>
+scripts/axiom-api prod POST /internal/dashboards '{"name":"Test",...}'
 ```
 
 ### Workflow
@@ -538,8 +555,8 @@ scripts/dashboard-link prod <id>
 2. Write APL for each panel
 3. Test queries in Axiom UI or via axiom-sre scripts
 4. Build dashboard JSON (from template or manually)
-5. `dashctl lint` to validate
-6. `dashctl create` to deploy
+5. `dashboard-validate` to check structure
+6. `dashboard-create` to deploy
 7. Iterate based on feedback
 
 ---
@@ -608,7 +625,7 @@ Templates use these placeholders:
 Before using a template:
 1. Discover your schema: `['your-dataset'] | getschema`
 2. Note which fields differ from template assumptions
-3. After creating, use `findAndReplace` to fix field names
+3. Edit the JSON or use sed to fix field names before creating
 
 | Template field | Description | Example alternatives |
 |----------------|-------------|---------------------|
@@ -619,10 +636,16 @@ Before using a template:
 | `error_message` | Error description | `message`, `error`, `exception.message` |
 | `trace_id` | Trace identifier | `monitor_id`, `traceId`, `['trace.id']` |
 
-**Fix field names after creation:**
+**Fix field names before or after creation:**
 ```bash
-scripts/dashctl prod findAndReplace <id> --find "duration_ms" --replace "latency_ms"
-scripts/dashctl prod findAndReplace <id> --find "route" --replace "uri"
+# Before creating - edit the JSON
+sed -i '' 's/duration_ms/latency_ms/g' dashboard.json
+sed -i '' 's/route/uri/g' dashboard.json
+
+# After creating - get, edit, update
+scripts/dashboard-get prod <id> > dashboard.json
+sed -i '' 's/duration_ms/latency_ms/g' dashboard.json
+scripts/dashboard-update prod <id> dashboard.json
 ```
 
 ### Using Templates
@@ -637,12 +660,11 @@ scripts/dashboard-from-template service-overview "my-service" "$USER_ID" "my-dat
 # 3. Validate
 scripts/dashboard-validate ./dashboard.json
 
-# 4. Deploy
-scripts/dashctl prod create ./dashboard.json
+# 4. Fix field names if needed (before creating)
+sed -i '' 's/duration_ms/latency_ms/g' ./dashboard.json
 
-# 5. Fix field names if needed
-DASHBOARD_ID=<id-from-create>
-scripts/dashctl prod findAndReplace $DASHBOARD_ID --find "duration_ms" --replace "latency_ms"
+# 5. Deploy
+DASHBOARD_ID=$(scripts/dashboard-create prod ./dashboard.json)
 
 # 6. Get link to verify
 scripts/dashboard-link prod $DASHBOARD_ID
@@ -654,11 +676,11 @@ scripts/dashboard-link prod $DASHBOARD_ID
 
 | Problem | Cause | Solution |
 |---------|-------|----------|
-| "unable to find dataset" errors | Dataset name doesn't exist in your org | Check available datasets with `axiom-api prod GET /v1/datasets` |
+| "unable to find dataset" errors | Dataset name doesn't exist in your org | Check available datasets in Axiom UI |
 | "creating dashboards for other users" 403 | Owner ID doesn't match your token | Use `scripts/get-user-id prod` to get your UUID |
-| All panels show errors | Field names don't match your schema | Discover schema first, then use `findAndReplace` to fix |
+| All panels show errors | Field names don't match your schema | Discover schema first, use sed to fix field names |
 | Dashboard shows no data | Service filter too restrictive | Remove or adjust `where service == 'x'` filters |
-| Queries time out | Missing time filter or too broad | Always include `where _time between (ago(1h) .. now())` first |
+| Queries time out | Missing time filter or too broad | Dashboard inherits time from picker; ad-hoc queries need explicit time filter |
 
 ---
 
@@ -671,4 +693,3 @@ scripts/dashboard-link prod $DASHBOARD_ID
 - `reference/templates/` — Ready-to-use dashboard JSON files
 
 For APL syntax: https://axiom.co/docs/apl/introduction
-For dashctl: https://github.com/axiomhq/dashctl

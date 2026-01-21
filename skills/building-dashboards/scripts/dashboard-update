@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# dashboard-update: Update an existing dashboard
+#
+# Usage: dashboard-update <deployment> <id> <json-file>
+#
+# The JSON file must contain the version field from the current dashboard
+# to avoid conflicts. Use dashboard-get to fetch the current version first.
+#
+# Examples:
+#   dashboard-get prod abc123 > dashboard.json
+#   # ... edit dashboard.json ...
+#   dashboard-update prod abc123 dashboard.json
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+DEPLOYMENT="${1:-}"
+ID="${2:-}"
+JSON_FILE="${3:-}"
+
+if [[ -z "$DEPLOYMENT" || -z "$ID" || -z "$JSON_FILE" ]]; then
+    echo "Usage: dashboard-update <deployment> <id> <json-file>" >&2
+    exit 1
+fi
+
+if [[ ! -f "$JSON_FILE" ]]; then
+    echo "Error: File not found: $JSON_FILE" >&2
+    exit 1
+fi
+
+BODY=$(cat "$JSON_FILE")
+
+# Check for version field (required for PUT)
+VERSION=$(echo "$BODY" | jq -r '.version // empty')
+if [[ -z "$VERSION" ]]; then
+    echo "Error: version field is required for updates" >&2
+    echo "Fetch the current dashboard first: dashboard-get $DEPLOYMENT $ID" >&2
+    exit 1
+fi
+
+RESPONSE=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" PUT "/internal/dashboards/$ID" "$BODY")
+
+echo "$RESPONSE" | jq .

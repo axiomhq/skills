@@ -11,12 +11,12 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 DEPLOYMENT="${1:-}"
 
 if [[ -z "$DEPLOYMENT" ]]; then
     echo "Usage: get-user-id <deployment>" >&2
-    echo "" >&2
-    echo "Returns the user ID for the API token configured in ~/.axiom.toml" >&2
     exit 1
 fi
 
@@ -42,7 +42,7 @@ if [[ -z "$TOKEN" ]]; then
     exit 1
 fi
 
-# Get user info from API
+# Get user info from API (public endpoint, uses api.axiom.co)
 RESPONSE=$(curl -s -H "Authorization: Bearer $TOKEN" "https://api.axiom.co/v2/user")
 
 USER_ID=$(echo "$RESPONSE" | jq -r '.id // empty')

@@ -8,7 +8,7 @@
 #   2. Required fields present (name, owner, charts, layout)
 #   3. Chart IDs match layout IDs
 #   4. LogStream queries have take limits
-#   5. dashctl lint (if available)
+#   5. Grid layout doesn't exceed 12 columns
 #
 # Options:
 #   --strict  Treat warnings as errors
@@ -94,10 +94,7 @@ if [[ "$chart_ids" != "$layout_ids" ]]; then
     echo "  Layout: $(echo $layout_ids | tr '\n' ' ')"
 fi
 
-# 6. Dashboard queries inherit time from UI picker - no time filter needed
-# (Previously warned about missing time filters, but dashboard panels don't need them)
-
-# 7. Check LogStream queries for take limits
+# 6. Check LogStream queries for take limits
 logstream_without_take=$(jq -r '.charts[] | select(.type == "LogStream") | select(.query.apl != null) | select(.query.apl | test("take ") | not) | .id' "$FILE" 2>/dev/null || true)
 if [[ -n "$logstream_without_take" ]]; then
     for id in $logstream_without_take; do
@@ -105,19 +102,16 @@ if [[ -n "$logstream_without_take" ]]; then
     done
 fi
 
-# 8. Run dashctl lint if available
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DASHCTL_DIR="${DASHCTL_DIR:-$HOME/.local/share/dashctl}"
+# 7. Check grid width (should be 12 columns max)
+max_right=$(jq '[.layout[] | (.x + .w)] | max // 0' "$FILE" 2>/dev/null || echo 0)
+if [[ "$max_right" -gt 12 ]]; then
+    warn "Layout exceeds 12-column grid (max right edge = $max_right)"
+fi
 
-if [[ -f "$DASHCTL_DIR/dashctl.js" ]] && command -v bun &> /dev/null; then
-    info "Running dashctl lint..."
-    if (cd "$DASHCTL_DIR" && bun run dashctl.js lint "$FILE" 2>&1); then
-        info "dashctl lint passed"
-    else
-        warn "dashctl lint reported issues (see above)"
-    fi
-else
-    info "Skipping dashctl lint (run scripts/setup to install dashctl)"
+# 8. Check schemaVersion
+schema_version=$(jq -r '.schemaVersion // 0' "$FILE")
+if [[ "$schema_version" != "2" ]]; then
+    warn "schemaVersion is $schema_version, expected 2"
 fi
 
 # Summary

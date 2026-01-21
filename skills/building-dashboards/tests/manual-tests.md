@@ -255,7 +255,7 @@ cat /tmp/test-template.json | jq .
 **Expected:** Validation passes
 
 - [ ] Script runs without error
-- [ ] Reports any warnings (time filters, take limits)
+- [ ] Reports any warnings (take limits, grid width)
 - [ ] Exits 0 if valid
 
 ### 7.4 dashboard-validate with bad input
@@ -268,6 +268,36 @@ echo '{"name": "bad"}' > /tmp/bad-dashboard.json
 
 - [ ] Script reports missing charts/layout
 - [ ] Exits non-zero
+
+### 7.5 dashboard-list
+```bash
+./scripts/dashboard-list prod
+```
+
+**Expected:** Tab-separated list of dashboard IDs and names
+
+- [ ] Script runs without error
+- [ ] Output shows id<TAB>name format
+
+### 7.6 dashboard-get
+```bash
+./scripts/dashboard-get prod <dashboard-id>
+```
+
+**Expected:** Full dashboard JSON
+
+- [ ] Script runs without error  
+- [ ] Output is valid JSON with charts, layout, etc.
+
+### 7.7 axiom-api (low-level)
+```bash
+./scripts/axiom-api prod GET /v2/user | jq .id
+```
+
+**Expected:** Returns your user ID
+
+- [ ] Script runs without error
+- [ ] Returns valid JSON
 
 ---
 
@@ -380,7 +410,10 @@ USER_ID=$(./scripts/get-user-id prod)
 ./scripts/dashboard-validate /tmp/deploy-test.json
 
 # Deploy to prod (uses ~/.axiom.toml)
-./scripts/dashctl prod create /tmp/deploy-test.json
+DASHBOARD_ID=$(./scripts/dashboard-create prod /tmp/deploy-test.json)
+
+# Get link
+./scripts/dashboard-link prod $DASHBOARD_ID
 ```
 
 **Validation:**
@@ -404,7 +437,10 @@ USER_ID=$(./scripts/get-user-id prod)
 - [ ] dashboard-new works
 - [ ] dashboard-from-template works
 - [ ] dashboard-validate catches issues
-- [ ] dashctl-wrap validates environment
+- [ ] dashboard-list shows dashboards
+- [ ] dashboard-get fetches dashboard JSON
+- [ ] dashboard-create deploys dashboard
+- [ ] axiom-api makes authenticated requests
 
 ### Integration
 - [ ] SPL migration triggers spl-to-apl patterns
