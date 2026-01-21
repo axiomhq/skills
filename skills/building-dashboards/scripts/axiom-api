@@ -47,8 +47,8 @@ if [[ -z "$URL" || -z "$TOKEN" || -z "$ORG_ID" ]]; then
     exit 1
 fi
 
-# Dashboard API uses app.axiom.co, not api.axiom.co
-API_URL="${URL/api.axiom.co/app.axiom.co}/api"
+# Dashboard API uses app.* instead of api.*
+API_URL="${URL/api./app.}/api"
 
 CURL_ARGS=(
     -s

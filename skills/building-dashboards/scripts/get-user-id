@@ -35,15 +35,16 @@ extract_value() {
     ' "$CONFIG_FILE"
 }
 
+URL=$(extract_value "url")
 TOKEN=$(extract_value "token")
 
-if [[ -z "$TOKEN" ]]; then
+if [[ -z "$URL" || -z "$TOKEN" ]]; then
     echo "Error: Could not find deployment '$DEPLOYMENT' in $CONFIG_FILE" >&2
     exit 1
 fi
 
-# Get user info from API (public endpoint, uses api.axiom.co)
-RESPONSE=$(curl -s -H "Authorization: Bearer $TOKEN" "https://api.axiom.co/v2/user")
+# Get user info from API
+RESPONSE=$(curl -s -H "Authorization: Bearer $TOKEN" "${URL}/v2/user")
 
 USER_ID=$(echo "$RESPONSE" | jq -r '.id // empty')
 

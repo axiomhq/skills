@@ -201,25 +201,76 @@ Raw events that answer "what exactly happened?"
 
 **Best for:** Response size vs latency correlation, resource usage patterns.
 
-### Filter Bar
+### SmartFilter (Filter Bar)
 **When:** Interactive filtering for the entire dashboard.
 
-Filter bars enable search and select filters that dynamically filter all panels.
+SmartFilter is a **chart type** that creates dropdown/search filters. It requires TWO parts:
+1. A `SmartFilter` chart in the `charts` array with filter definitions
+2. `declare query_parameters` in each panel query that should respond to filters
+
+**SmartFilter chart JSON structure:**
+```json
+{
+  "id": "country-filter",
+  "name": "Filters",
+  "type": "SmartFilter",
+  "query": {"apl": ""},
+  "filters": [
+    {
+      "id": "country_filter",
+      "name": "Country",
+      "type": "select",
+      "selectType": "apl",
+      "active": true,
+      "apl": {
+        "apl": "['logs'] | distinct ['geo.country'] | project key=['geo.country'], value=['geo.country'] | sort by key asc",
+        "queryOptions": {"quickRange": "1h"}
+      },
+      "options": [
+        {"key": "All", "value": "", "default": true}
+      ]
+    }
+  ]
+}
+```
 
 **Filter types:**
-- **Search filter**: Free-text search (e.g., user agent contains "Mozilla")
-- **Select filter**: Dropdown from static list or dynamic query
+- `"selectType": "apl"` — Dynamic dropdown populated by APL query (requires `apl.apl` and `apl.queryOptions`)
+- `"selectType": "list"` — Static dropdown with predefined `options` array only
 
-**Using filters in panel queries:**
+**Dynamic APL filter requirements:**
+- `apl.apl`: Query returning `key` and `value` columns
+- `apl.queryOptions.quickRange`: Time range for the query (e.g., `"1h"`, `"7d"`)
+- `options`: Must include at least `[{"key": "All", "value": "", "default": true}]`
+
+**Static list example:**
+```json
+{
+  "id": "status_filter",
+  "name": "Status",
+  "type": "select",
+  "selectType": "list",
+  "active": true,
+  "options": [
+    {"key": "All", "value": "", "default": true},
+    {"key": "2xx", "value": "2"},
+    {"key": "4xx", "value": "4"},
+    {"key": "5xx", "value": "5"}
+  ]
+}
+```
+
+**Layout:** Place SmartFilter at y=0, full width (w=12, h=1), shift other panels down.
+
+**Panel queries must declare parameters:**
 ```apl
-declare query_parameters (country_filter:string = "", status_filter:string = "");
+declare query_parameters (country_filter:string = "");
 ['logs']
 | where isempty(country_filter) or ['geo.country'] == country_filter
-| where isempty(status_filter) or tostring(status) == status_filter
 | summarize count() by bin_auto(_time)
 ```
 
-**Select filter query (dynamic options):**
+**Filter query for dynamic dropdowns:**
 ```apl
 ['logs']
 | distinct ['geo.country']
@@ -227,21 +278,48 @@ declare query_parameters (country_filter:string = "", status_filter:string = "")
 | sort by key asc
 ```
 
-**Dependent filters (city depends on country):**
-```apl
-declare query_parameters (country_filter:string = "");
-['logs']
-| where isnotempty(['geo.country']) and isnotempty(['geo.city'])
-| where ['geo.country'] == country_filter
-| summarize count() by ['geo.city']
-| project key=['geo.city'], value=['geo.city']
-| sort by key asc
+**Dependent/cascading filters:**
+
+Filters can depend on other filters by declaring their parameters in the APL query:
+
+```json
+{
+  "id": "city_filter",
+  "name": "City",
+  "type": "select",
+  "selectType": "apl",
+  "active": true,
+  "apl": {
+    "apl": "declare query_parameters (country_filter:string=\"\");\n['logs']\n| where ['geo.country'] == country_filter\n| distinct ['geo.city']\n| project key=['geo.city'], value=['geo.city']",
+    "queryOptions": {"quickRange": "1h"}
+  },
+  "options": [{"key": "All", "value": "", "default": true}]
+}
+```
+
+The city dropdown re-queries when country_filter changes, showing only cities in the selected country.
+
+**Search filter type:**
+
+Use `"type": "search"` for free-text input instead of dropdown:
+
+```json
+{
+  "id": "trace_id",
+  "name": "Trace ID",
+  "type": "search",
+  "selectType": "list",
+  "active": true,
+  "options": [{"key": "All", "value": "", "default": true}]
+}
 ```
 
 **Best practices:**
-- Start filter IDs with underscore to avoid field name conflicts (e.g., `_country_filter`)
-- Use `isempty(filter)` check so "All" option works
-- One filter bar can contain multiple filters
+- Filter `id` must match the parameter name in `declare query_parameters`
+- Use `isempty(filter)` check so "All" option works (empty string = no filter)
+- One SmartFilter chart can contain multiple filters
+- Place at top of dashboard (y=0) for visibility
+- For cascading filters, order matters: parent filter should come before dependent filters
 
 ### Monitor List
 **When:** Display monitor status on operational dashboards.
@@ -551,13 +629,31 @@ scripts/axiom-api prod POST /internal/dashboards '{"name":"Test",...}'
 ```
 
 ### Workflow
+
+**⚠️ CRITICAL: Always validate queries BEFORE deploying.** Never skip step 4.
+
 1. Design dashboard plan (sections + panels)
 2. Write APL for each panel
-3. Test queries in Axiom UI or via axiom-sre scripts
-4. Build dashboard JSON (from template or manually)
-5. `dashboard-validate` to check structure
+3. Build dashboard JSON (from template or manually)
+4. **Validate queries execute successfully** using axiom-sre:
+   ```bash
+   # Test each query against the actual dataset
+   # Load axiom-sre skill and run queries with explicit time filter
+   ['your-dataset'] | where _time > ago(1h) | ... your query ...
+   ```
+5. `dashboard-validate` to check JSON structure
 6. `dashboard-create` to deploy
-7. Iterate based on feedback
+7. Verify dashboard renders correctly in browser
+8. Iterate based on feedback
+
+### Query Validation Checklist
+
+Before creating any dashboard, verify:
+
+- [ ] Dataset exists: `['dataset-name'] | take 1`
+- [ ] Required fields exist: `['dataset-name'] | getschema`
+- [ ] Each panel query returns data (not errors)
+- [ ] Filters match actual field values (e.g., `service == 'x'` uses real service names)
 
 ---
 
