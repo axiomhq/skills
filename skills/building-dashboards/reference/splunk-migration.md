@@ -13,7 +13,7 @@ Guide for converting Splunk dashboards to Axiom dashboards.
 5. **Test queries** with explicit time filters in Query tab (dashboards inherit time from UI picker)
 6. **Adjust binning** for Axiom visualization
 7. **Build Axiom dashboard** using templates (remove time filters from panel queries)
-8. **Validate and deploy** with dashctl
+8. **Validate and deploy** with `dashboard-validate` and `dashboard-create`
 
 ---
 
@@ -36,6 +36,8 @@ Guide for converting Splunk dashboards to Axiom dashboards.
 
 ## Panel Translation Examples
 
+**Note:** Dashboard panel queries do NOT need time filters—the dashboard UI time picker applies to all panels automatically. The examples below show the final dashboard query format.
+
 ### Single Value → Statistic
 
 **Splunk:**
@@ -44,10 +46,9 @@ index=web status>=500
 | stats count as errors
 ```
 
-**Axiom:**
+**Axiom (dashboard panel):**
 ```apl
 ['web-logs']
-| where _time between (ago(15m) .. now())
 | where status >= 500
 | summarize errors = count()
 ```
@@ -60,11 +61,10 @@ index=web
 | timechart span=5m count by status
 ```
 
-**Axiom:**
+**Axiom (dashboard panel):**
 ```apl
 ['web-logs']
-| where _time between (ago(1h) .. now())
-| summarize count() by bin(_time, 5m), status
+| summarize count() by bin_auto(_time), status
 ```
 
 ### Stats Table → Table
@@ -77,10 +77,9 @@ index=web status>=500
 | head 10
 ```
 
-**Axiom:**
+**Axiom (dashboard panel):**
 ```apl
 ['web-logs']
-| where _time between (ago(1h) .. now())
 | where status >= 500
 | summarize count = count() by uri
 | top 10 by count
@@ -95,10 +94,9 @@ index=web
 | top limit=10 user_agent
 ```
 
-**Axiom:**
+**Axiom (dashboard panel):**
 ```apl
 ['web-logs']
-| where _time between (ago(1h) .. now())
 | summarize count() by user_agent
 | top 10 by count_
 | project "User Agent" = user_agent, Count = count_
@@ -112,10 +110,9 @@ index=web status>=500
 | table _time, uri, status, error_message
 ```
 
-**Axiom:**
+**Axiom (dashboard panel):**
 ```apl
 ['web-logs']
-| where _time between (ago(15m) .. now())
 | where status >= 500
 | project-keep _time, uri, status, error_message
 | order by _time desc
@@ -131,14 +128,13 @@ index=web
 | eval error_rate = round(errors/total*100, 2)
 ```
 
-**Axiom:**
+**Axiom (dashboard panel):**
 ```apl
 ['web-logs']
-| where _time between (ago(1h) .. now())
 | summarize 
     total = count(),
     errors = countif(status >= 500)
-  by bin(_time, 5m)
+  by bin_auto(_time)
 | extend error_rate = round(100.0 * errors / total, 2)
 | project _time, error_rate
 ```
@@ -214,10 +210,6 @@ Splunk and Axiom may have different field names for the same data.
 
 ## Common Migration Pitfalls
 
-### Missing Time Filter
-**Problem:** Splunk uses time picker; APL query has no time filter.
-**Fix:** Always add `where _time between (...)` first.
-
 ### Unbounded Results
 **Problem:** Splunk implicitly limits; Axiom may return all rows.
 **Fix:** Add `| top N by ...` or `| take N` for tables/logs.
@@ -241,11 +233,11 @@ Splunk and Axiom may have different field names for the same data.
 - [ ] Inventory all panels from Splunk dashboard
 - [ ] Map each panel's visualization type
 - [ ] Translate SPL queries using spl-to-apl
-- [ ] Add explicit time filters to all queries
 - [ ] Verify field names with getschema
+- [ ] Test queries in Query tab (with time filters for testing)
 - [ ] Add `top N` or `take N` where needed
 - [ ] Test each query individually in Axiom
-- [ ] Build dashboard JSON with appropriate layout
-- [ ] Validate with `dashctl lint`
-- [ ] Deploy with `dashctl create`
+- [ ] Build dashboard JSON (remove time filters from panel queries)
+- [ ] Validate with `dashboard-validate`
+- [ ] Deploy with `dashboard-create`
 - [ ] Compare visually to original Splunk dashboard

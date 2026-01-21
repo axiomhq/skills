@@ -98,7 +98,7 @@ Raw events that answer "what exactly happened?"
 
 **Note:** Dashboard queries inherit time from the UI picker—no explicit `_time` filter needed.
 
-**dashctl support:** TimeSeries, Statistic, Table, Pie, LogStream, Note, MonitorList are fully validated. Heatmap, ScatterPlot, FilterBar work but trigger linter warnings (use `--no-lint` if needed).
+**Validation:** TimeSeries, Statistic, Table, Pie, LogStream, Note, MonitorList are fully validated by `dashboard-validate`. Heatmap, ScatterPlot, SmartFilter work but may trigger warnings.
 
 ### Statistic
 **When:** Single KPI, current value, threshold comparison.

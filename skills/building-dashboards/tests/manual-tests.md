@@ -10,7 +10,7 @@ Comprehensive manual testing for all skill features. Run through each section to
 
 Before testing:
 
-1. Run setup (installs dashctl, checks config):
+1. Run setup (checks config):
    ```bash
    cd skills/building-dashboards
    ./scripts/setup

@@ -5,7 +5,7 @@
 #
 # Arguments:
 #   name        - Dashboard name
-#   owner_id    - Axiom user ID (find yours via: scripts/dashctl prod getAll --summary)
+#   owner_id    - Axiom user ID (find yours via: scripts/get-user-id prod)
 #   dataset     - Primary dataset name
 #   output-file - Output path (default: stdout)
 #

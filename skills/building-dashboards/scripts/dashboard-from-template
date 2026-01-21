@@ -6,7 +6,7 @@
 # Arguments:
 #   template    - Template name: service-overview, api-health, blank
 #   service     - Service name
-#   owner_id    - Axiom user ID (find yours via: scripts/dashctl prod getAll --summary)
+#   owner_id    - Axiom user ID (find yours via: scripts/get-user-id prod)
 #   dataset     - Dataset name
 #   output-file - Output path (default: stdout)
 #
