@@ -342,29 +342,147 @@ Use GitHub Flavored Markdown for:
 
 ## Chart Configuration
 
-Dashboard elements have configurable display options:
+Charts support JSON configuration options beyond the query. These are set at the chart level.
 
-### Values (Missing Data Handling)
-- **Auto**: Best representation based on chart type
-- **Ignore**: Skip missing values (gaps in chart)
-- **Join adjacent**: Connect data points across gaps (smoother lines)
-- **Fill with zeros**: Replace missing with 0 (shows drops clearly)
+### Common Options (All Charts)
 
-### Variant (TimeSeries only)
-- **Line**: Continuous lines, best for trends
-- **Area**: Filled area under line, good for stacked comparisons
-- **Bars**: Bar chart, good for discrete time buckets
+```json
+{
+  "overrideDashboardTimeRange": false,
+  "overrideDashboardCompareAgainst": false,
+  "hideHeader": false
+}
+```
 
-### Y-Axis Scale
-- **Linear**: Equal distances = equal value changes (default)
-- **Log**: Logarithmic scale, good for wide value ranges (10x per unit)
+### Statistic Options
 
-### Annotations (API-only, not dashctl)
+```json
+{
+  "type": "Statistic",
+  "colorScheme": "Blue",
+  "customUnits": "req/s",
+  "unit": "Auto",
+  "decimals": 2,
+  "showChart": true,
+  "hideValue": false,
+  "errorThreshold": "Above",
+  "errorThresholdValue": "100",
+  "warningThreshold": "Above",
+  "warningThresholdValue": "50",
+  "invertTheme": false
+}
+```
+
+| Option | Values | Description |
+|--------|--------|-------------|
+| `colorScheme` | Blue, Orange, Red, Purple, Teal, Yellow, Green, Pink, Grey, Brown | Color theme |
+| `customUnits` | string | Unit suffix (e.g., "ms", "req/s", "trolls") |
+| `unit` | Auto, Abbreviated, Byte, KB, MB, GB, TimeMS, TimeSec, Percent, etc. | Value formatting |
+| `decimals` | number | Decimal places |
+| `showChart` | boolean | Show sparkline |
+| `hideValue` | boolean | Hide the main value |
+| `errorThreshold` | Above, AboveOrEqual, Below, BelowOrEqual, AboveOrBelow | Error condition |
+| `errorThresholdValue` | string | Error threshold value |
+| `warningThreshold` | same as error | Warning condition |
+| `warningThresholdValue` | string | Warning threshold value |
+| `invertTheme` | boolean | Invert colors |
+
+**Available units:**
+- Numbers: `Auto`, `Abbreviated`
+- Data: `Byte`, `Kilobyte`, `Megabyte`, `Gigabyte`
+- Data rates: `BitsSec`, `BytesSec`, `KilobitsSec`, `MegabitsSec`, etc.
+- Time: `TimeNS`, `TimeUS`, `TimeMS`, `TimeSec`, `TimeMin`, `TimeHour`, `TimeDay`
+- Percent: `Percent` (0-1), `Percent100` (0-100)
+- Currency: `CurrencyUSD`, `CurrencyEUR`, `CurrencyGBP`, etc.
+
+### TimeSeries Options
+
+TimeSeries chart options are stored in `query.queryOptions.aggChartOpts` as a JSON string:
+
+```json
+{
+  "type": "TimeSeries",
+  "query": {
+    "apl": "['logs'] | summarize count() by bin_auto(_time)",
+    "queryOptions": {
+      "aggChartOpts": "{\"{\\\"alias\\\":\\\"count_\\\",\\\"op\\\":\\\"count\\\"}\":{\"variant\":\"area\",\"scaleDistr\":\"log\",\"displayNull\":\"span\"}}"
+    }
+  }
+}
+```
+
+**Per-series options (inside aggChartOpts):**
+
+| Option | Values | Description |
+|--------|--------|-------------|
+| `variant` | `line`, `area`, `bars` | Chart display mode |
+| `scaleDistr` | `linear`, `log` | Y-axis scale |
+| `displayNull` | `auto`, `null`, `span`, `zero` | Missing data handling |
+
+**displayNull values:**
+- `auto`: Best representation based on chart type
+- `null`: Skip/ignore missing values (gaps in chart)
+- `span`: Join adjacent values across gaps
+- `zero`: Fill missing with zeros
+
+### LogStream / Table Options
+
+```json
+{
+  "type": "LogStream",
+  "tableSettings": {
+    "columns": [
+      {"name": "_time", "width": 150},
+      {"name": "message", "width": 400}
+    ],
+    "settings": {
+      "fontSize": "12px",
+      "highlightSeverity": true,
+      "showRaw": true,
+      "showEvent": true,
+      "showTimestamp": true,
+      "wrapLines": true,
+      "hideNulls": true
+    }
+  }
+}
+```
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `columns` | array | Column order and widths |
+| `fontSize` | string | Font size (e.g., "12px") |
+| `highlightSeverity` | boolean | Color-code by log level |
+| `showRaw` | boolean | Show raw JSON |
+| `showTimestamp` | boolean | Show timestamp column |
+| `wrapLines` | boolean | Wrap long lines |
+| `hideNulls` | boolean | Hide null values |
+
+### Pie Options
+
+```json
+{
+  "type": "Pie",
+  "hideHeader": false
+}
+```
+
+### Note Options
+
+```json
+{
+  "type": "Note",
+  "text": "## Section Header\n\nMarkdown content here.",
+  "variant": "default"
+}
+```
+
+### Annotations
+
 Display deployment markers, incidents, or custom events on charts.
 
-Annotations are managed via the Axiom API `/v2/annotations` endpoint, not dashctl.
+Annotations are managed via the Axiom API `/v2/annotations` endpoint:
 
-Create annotations via API:
 ```bash
 curl -X 'POST' 'https://api.axiom.co/v2/annotations' \
   -H 'Authorization: Bearer $AXIOM_TOKEN' \
@@ -400,8 +518,8 @@ Use in dashboard URL: `?t_qr=24h&t_against=-1d`
 
 ### Custom Time Range per Panel
 Individual panels can override the dashboard time range:
+- Set `overrideDashboardTimeRange: true` in chart config
 - Via UI: Edit panel → Time range → Custom
-- Via APL: `| where _time > now(-6h)`
 
 ---
 
