@@ -1,0 +1,84 @@
+name: Evaluate Changed Skills
+
+on:
+  pull_request:
+    paths:
+      - 'skills/**'
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      skills: ${{ steps.changed-skills.outputs.skills }}
+      has_evals: ${{ steps.changed-skills.outputs.has_evals }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed skills with evals
+        id: changed-skills
+        run: |
+          # Get list of changed files in the PR
+          changed_files=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          
+          # Extract unique skill names from changed paths (skills/<skill>/...)
+          skills=$(echo "$changed_files" | grep '^skills/' | cut -d'/' -f2 | sort -u)
+          
+          # Filter to only skills that have eval files
+          skills_with_evals=""
+          for skill in $skills; do
+            eval_file="skills/${skill}/.meta/${skill}.eval.ts"
+            if [ -f "$eval_file" ]; then
+              if [ -n "$skills_with_evals" ]; then
+                skills_with_evals="${skills_with_evals},${skill}"
+              else
+                skills_with_evals="${skill}"
+              fi
+            fi
+          done
+          
+          # Output as JSON array for matrix
+          if [ -n "$skills_with_evals" ]; then
+            json_array=$(echo "$skills_with_evals" | tr ',' '\n' | jq -R . | jq -s -c .)
+            echo "skills=$json_array" >> $GITHUB_OUTPUT
+            echo "has_evals=true" >> $GITHUB_OUTPUT
+            echo "Skills with evals to run: $skills_with_evals"
+          else
+            echo "skills=[]" >> $GITHUB_OUTPUT
+            echo "has_evals=false" >> $GITHUB_OUTPUT
+            echo "No skills with evals found in changed files"
+          fi
+
+  run-evals:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_evals == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        skill: ${{ fromJson(needs.detect-changes.outputs.skills) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: eval-tooling/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: eval-tooling
+        run: pnpm install
+
+      - name: Run eval for ${{ matrix.skill }}
+        working-directory: eval-tooling
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          echo "Running eval for skill: ${{ matrix.skill }}"
+          pnpm exec axiom eval ../skills/${{ matrix.skill }}/.meta/${{ matrix.skill }}.eval.ts
