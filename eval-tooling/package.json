@@ -1,0 +1,26 @@
+{
+  "name": "skill-eval-tooling",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "check": "tsc --noEmit",
+    "eval": "axiom eval",
+    "eval:spl-to-apl": "axiom eval ../skills/spl-to-apl/.meta/spl-to-apl.eval.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5",
+    "vitest": "^4.0.17"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.18",
+    "@ai-sdk/gateway": "^3.0.17",
+    "@anthropic-ai/sdk": "^0.40.0",
+    "@t3-oss/env-core": "^0.13.10",
+    "ai": "^6.0.43",
+    "axiom": "^0.38.0",
+    "gray-matter": "^4.0.3",
+    "zod": "^4.3.5"
+  }
+}
