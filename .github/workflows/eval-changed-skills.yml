@@ -1,0 +1,232 @@
+name: Evaluate Changed Skills
+
+on:
+  pull_request:
+    paths:
+      - 'skills/**'
+  workflow_dispatch:
+    inputs:
+      skill:
+        description: 'Skill to evaluate (leave empty to detect from branch diff)'
+        required: false
+        type: string
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      skills: ${{ steps.changed-skills.outputs.skills }}
+      has_evals: ${{ steps.changed-skills.outputs.has_evals }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed skills with evals
+        id: changed-skills
+        run: |
+          # If skill input is provided, use it directly
+          if [ -n "${{ inputs.skill }}" ]; then
+            skill="${{ inputs.skill }}"
+            eval_file="skills/${skill}/.meta/${skill}.eval.ts"
+            if [ -f "$eval_file" ]; then
+              echo "skills=[\"${skill}\"]" >> $GITHUB_OUTPUT
+              echo "has_evals=true" >> $GITHUB_OUTPUT
+              echo "Running eval for manually specified skill: ${skill}"
+              exit 0
+            else
+              echo "No eval file found for skill: ${skill}"
+              echo "skills=[]" >> $GITHUB_OUTPUT
+              echo "has_evals=false" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          fi
+
+          # Get list of changed files in the PR
+          base_ref="${{ github.base_ref }}"
+          if [ -z "$base_ref" ]; then
+            base_ref="main"
+          fi
+          changed_files=$(git diff --name-only origin/${base_ref}...HEAD)
+          
+          # Extract unique skill names from changed paths (skills/<skill>/...)
+          skills=$(echo "$changed_files" | grep '^skills/' | cut -d'/' -f2 | sort -u)
+          
+          # Filter to only skills that have eval files
+          skills_with_evals=""
+          for skill in $skills; do
+            eval_file="skills/${skill}/.meta/${skill}.eval.ts"
+            if [ -f "$eval_file" ]; then
+              if [ -n "$skills_with_evals" ]; then
+                skills_with_evals="${skills_with_evals},${skill}"
+              else
+                skills_with_evals="${skill}"
+              fi
+            fi
+          done
+          
+          # Output as JSON array for matrix
+          if [ -n "$skills_with_evals" ]; then
+            json_array=$(echo "$skills_with_evals" | tr ',' '\n' | jq -R . | jq -s -c .)
+            echo "skills=$json_array" >> $GITHUB_OUTPUT
+            echo "has_evals=true" >> $GITHUB_OUTPUT
+            echo "Skills with evals to run: $skills_with_evals"
+          else
+            echo "skills=[]" >> $GITHUB_OUTPUT
+            echo "has_evals=false" >> $GITHUB_OUTPUT
+            echo "No skills with evals found in changed files"
+          fi
+
+  run-evals:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_evals == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        skill: ${{ fromJson(needs.detect-changes.outputs.skills) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: eval-tooling/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: eval-tooling
+        run: pnpm install
+
+      - name: Run eval for ${{ matrix.skill }}
+        id: run-eval
+        working-directory: eval-tooling
+        env:
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+          AXIOM_TOKEN: ${{ secrets.AXIOM_TOKEN }}
+          AXIOM_DATASET: ${{ secrets.AXIOM_DATASET }}
+          AXIOM_URL: ${{ secrets.AXIOM_URL }}
+        run: |
+          echo "Running eval for skill: ${{ matrix.skill }}"
+          
+          # Capture output while still displaying it, strip ANSI codes
+          pnpm exec axiom eval ../skills/${{ matrix.skill }}/.meta/${{ matrix.skill }}.eval.ts 2>&1 | tee eval-output-raw.txt
+          
+          # Strip ANSI escape codes
+          sed 's/\x1b\[[0-9;]*m//g' eval-output-raw.txt > eval-output.txt
+          
+          # Extract from FINAL EVALUATION REPORT to the closing box character or View eval result
+          sed -n '/FINAL EVALUATION REPORT/,/^View eval result:/p' eval-output.txt > report-section.txt
+          
+          # Also grab the URL line after "View eval result:"
+          grep -A1 "View eval result:" eval-output.txt >> report-section.txt 2>/dev/null || true
+
+      - name: Save eval report
+        run: |
+          mkdir -p eval-reports
+          
+          # Create report with metadata
+          cat > eval-reports/${{ matrix.skill }}.md << 'EOF'
+          ### ${{ matrix.skill }}
+          
+          **Commit:** `${{ github.sha }}`
+          **Branch:** `${{ github.head_ref || github.ref_name }}`
+          
+          ```
+          EOF
+          
+          cat eval-tooling/report-section.txt >> eval-reports/${{ matrix.skill }}.md
+          echo '```' >> eval-reports/${{ matrix.skill }}.md
+
+      - name: Upload eval report
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report-${{ matrix.skill }}
+          path: eval-reports/${{ matrix.skill }}.md
+          retention-days: 7
+
+  post-comment:
+    needs: [detect-changes, run-evals]
+    if: always() && needs.detect-changes.outputs.has_evals == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Download all eval reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: eval-report-*
+          path: eval-reports
+          merge-multiple: true
+
+      - name: Build combined comment
+        id: build-comment
+        run: |
+          # Create the combined comment
+          cat > comment.md << 'EOF'
+          ## Skill Evaluation Results
+          
+          EOF
+          
+          # Append all individual reports
+          for report in eval-reports/*.md; do
+            if [ -f "$report" ]; then
+              cat "$report" >> comment.md
+              echo "" >> comment.md
+              echo "---" >> comment.md
+              echo "" >> comment.md
+            fi
+          done
+          
+          # Add footer
+          cat >> comment.md << 'EOF'
+          
+          <sub>generated by skill evaluation workflow</sub>
+          EOF
+          
+          cat comment.md
+
+      - name: Post or update PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const commentBody = fs.readFileSync('comment.md', 'utf8');
+            const marker = '<!-- skill-eval-results -->';
+            const fullBody = marker + '\n' + commentBody;
+            
+            // Only post comment on PRs
+            if (!context.payload.pull_request) {
+              console.log('Not a PR, skipping comment');
+              return;
+            }
+            
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+            });
+            
+            const existingComment = comments.find(c => c.body.includes(marker));
+            
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: fullBody,
+              });
+              console.log('Updated existing comment');
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: fullBody,
+              });
+              console.log('Created new comment');
+            }

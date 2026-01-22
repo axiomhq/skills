@@ -16,7 +16,7 @@ export const { flag, pickFlags } = createAppScope({
   flagSchema: z.object({
     harnessType: z
       .enum(["prompt-injection", "tool-simulation"])
-      .default("prompt-injection"),
+      .default("tool-simulation"),
     harnessVersion: z.enum(["v1", "v2"]).default(HARNESS_VERSION),
   }),
 });
