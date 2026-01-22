@@ -127,36 +127,39 @@ jobs:
           # Strip ANSI escape codes
           sed 's/\x1b\[[0-9;]*m//g' eval-output-raw.txt > eval-output.txt
           
-          # Extract trace ID from output
-          # URL format: https://app.axiom.co/.../evaluations/<name>/<traceId>?...
-          trace_id=$(grep -oE '/evaluations/[^/]+/[A-Z0-9]+' eval-output.txt | head -1 | sed 's|.*/||' || true)
-          if [ -z "$trace_id" ]; then
-            # Fallback: try trace_id= pattern
-            trace_id=$(grep -oE 'trace_id=[a-zA-Z0-9-]+' eval-output.txt | head -1 | cut -d= -f2 || true)
+          # Extract baseline ID from output
+          # URL format: https://app.axiom.co/.../evaluations/<eval-name>/<runId>?...
+          # The --baseline flag needs format: <eval-name>-<runId>
+          url_match=$(grep -oE '/evaluations/[^/]+/[A-Z0-9]+' eval-output.txt | head -1 || true)
+          if [ -n "$url_match" ]; then
+            # Extract eval-name and runId, combine as eval-name-runId
+            eval_name=$(echo "$url_match" | cut -d'/' -f3)
+            run_id=$(echo "$url_match" | cut -d'/' -f4)
+            baseline_id="${eval_name}-${run_id}"
           fi
           
-          if [ -n "$trace_id" ]; then
-            echo "trace_id=$trace_id" >> $GITHUB_OUTPUT
-            echo "Extracted trace ID: $trace_id"
+          if [ -n "$baseline_id" ]; then
+            echo "baseline_id=$baseline_id" >> $GITHUB_OUTPUT
+            echo "Extracted baseline ID: $baseline_id"
           else
-            echo "Failed to extract trace ID from eval output"
+            echo "Failed to extract baseline ID from eval output"
             cat eval-output.txt
             exit 1
           fi
 
       - name: Update baseline file
         run: |
-          trace_id="${{ steps.run-eval.outputs.trace_id }}"
+          baseline_id="${{ steps.run-eval.outputs.baseline_id }}"
           skill="${{ matrix.skill }}"
           commit="${{ github.sha }}"
           timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           
           # Update the baseline file using jq
           jq --arg skill "$skill" \
-             --arg trace_id "$trace_id" \
+             --arg baseline_id "$baseline_id" \
              --arg commit "$commit" \
              --arg timestamp "$timestamp" \
-             '.baselines[$skill] = {traceId: $trace_id, commit: $commit, updatedAt: $timestamp}' \
+             '.baselines[$skill] = {baselineId: $baseline_id, commit: $commit, updatedAt: $timestamp}' \
              .eval-baselines.json > .eval-baselines.json.tmp
           
           mv .eval-baselines.json.tmp .eval-baselines.json
@@ -167,7 +170,7 @@ jobs:
       - name: Commit baseline update
         env:
           SKILL_NAME: ${{ matrix.skill }}
-          TRACE_ID: ${{ steps.run-eval.outputs.trace_id }}
+          BASELINE_ID: ${{ steps.run-eval.outputs.baseline_id }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
           git config user.name "github-actions[bot]"
@@ -179,7 +182,7 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "chore: update eval baseline for ${SKILL_NAME}" \
-              -m "Trace ID: ${TRACE_ID}" \
+              -m "Baseline ID: ${BASELINE_ID}" \
               -m "Commit: ${COMMIT_SHA}"
             
             git push

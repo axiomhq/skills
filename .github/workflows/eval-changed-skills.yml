@@ -103,16 +103,16 @@ jobs:
         working-directory: eval-tooling
         run: pnpm install
 
-      - name: Get baseline trace ID
+      - name: Get baseline ID
         id: baseline
         run: |
           baseline_file=".eval-baselines.json"
           if [ -f "$baseline_file" ]; then
-            trace_id=$(jq -r '.baselines["${{ matrix.skill }}"].traceId // empty' "$baseline_file")
-            if [ -n "$trace_id" ]; then
-              echo "trace_id=$trace_id" >> $GITHUB_OUTPUT
+            baseline_id=$(jq -r '.baselines["${{ matrix.skill }}"].baselineId // empty' "$baseline_file")
+            if [ -n "$baseline_id" ]; then
+              echo "baseline_id=$baseline_id" >> $GITHUB_OUTPUT
               echo "has_baseline=true" >> $GITHUB_OUTPUT
-              echo "Found baseline for ${{ matrix.skill }}: $trace_id"
+              echo "Found baseline for ${{ matrix.skill }}: $baseline_id"
             else
               echo "has_baseline=false" >> $GITHUB_OUTPUT
               echo "No baseline found for ${{ matrix.skill }}"
@@ -136,8 +136,8 @@ jobs:
           # Build eval command with optional baseline
           eval_cmd="pnpm exec axiom eval ../skills/${{ matrix.skill }}/.meta/${{ matrix.skill }}.eval.ts"
           if [ "${{ steps.baseline.outputs.has_baseline }}" = "true" ]; then
-            eval_cmd="$eval_cmd --baseline ${{ steps.baseline.outputs.trace_id }}"
-            echo "Comparing against baseline: ${{ steps.baseline.outputs.trace_id }}"
+            eval_cmd="$eval_cmd --baseline ${{ steps.baseline.outputs.baseline_id }}"
+            echo "Comparing against baseline: ${{ steps.baseline.outputs.baseline_id }}"
           fi
           
           # Capture output while still displaying it, strip ANSI codes
@@ -174,7 +174,7 @@ jobs:
           EOF
           
           if [ "${{ steps.baseline.outputs.has_baseline }}" = "true" ]; then
-            echo "**Baseline:** \`${{ steps.baseline.outputs.trace_id }}\`" >> eval-reports/${{ matrix.skill }}.md
+            echo "**Baseline:** \`${{ steps.baseline.outputs.baseline_id }}\`" >> eval-reports/${{ matrix.skill }}.md
           else
             echo "**Baseline:** _none (first eval)_" >> eval-reports/${{ matrix.skill }}.md
           fi

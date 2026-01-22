@@ -13,9 +13,9 @@
       "additionalProperties": {
         "type": "object",
         "properties": {
-          "traceId": {
+          "baselineId": {
             "type": "string",
-            "description": "Axiom trace ID from the baseline eval run"
+            "description": "Axiom baseline ID in format <eval-name>-<runId>"
           },
           "commit": {
             "type": "string",
@@ -27,7 +27,7 @@
             "description": "ISO timestamp when baseline was last updated"
           }
         },
-        "required": ["traceId", "commit", "updatedAt"]
+        "required": ["baselineId", "commit", "updatedAt"]
       }
     }
   },
