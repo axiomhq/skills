@@ -128,10 +128,11 @@ jobs:
           sed 's/\x1b\[[0-9;]*m//g' eval-output-raw.txt > eval-output.txt
           
           # Extract trace ID from output
-          trace_id=$(grep -oE 'trace_id=[a-zA-Z0-9-]+' eval-output.txt | head -1 | cut -d= -f2 || true)
+          # URL format: https://app.axiom.co/.../evaluations/<name>/<traceId>?...
+          trace_id=$(grep -oE '/evaluations/[^/]+/[A-Z0-9]+' eval-output.txt | head -1 | sed 's|.*/||' || true)
           if [ -z "$trace_id" ]; then
-            # Try alternate pattern from URL
-            trace_id=$(grep -oE '/evals/[a-zA-Z0-9-]+' eval-output.txt | head -1 | sed 's|/evals/||' || true)
+            # Fallback: try trace_id= pattern
+            trace_id=$(grep -oE 'trace_id=[a-zA-Z0-9-]+' eval-output.txt | head -1 | cut -d= -f2 || true)
           fi
           
           if [ -n "$trace_id" ]; then
