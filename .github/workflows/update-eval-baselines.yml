@@ -164,6 +164,10 @@ jobs:
           cat .eval-baselines.json
 
       - name: Commit baseline update
+        env:
+          SKILL_NAME: ${{ matrix.skill }}
+          TRACE_ID: ${{ steps.run-eval.outputs.trace_id }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -173,10 +177,9 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "chore: update eval baseline for ${{ matrix.skill }}
-
-Trace ID: ${{ steps.run-eval.outputs.trace_id }}
-Commit: ${{ github.sha }}"
+            git commit -m "chore: update eval baseline for ${SKILL_NAME}" \
+              -m "Trace ID: ${TRACE_ID}" \
+              -m "Commit: ${COMMIT_SHA}"
             
             git push
           fi
