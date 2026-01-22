@@ -113,14 +113,17 @@ jobs:
         run: |
           echo "Running eval for skill: ${{ matrix.skill }}"
           
-          # Capture output while still displaying it
-          pnpm exec axiom eval ../skills/${{ matrix.skill }}/.meta/${{ matrix.skill }}.eval.ts 2>&1 | tee eval-output.txt
+          # Capture output while still displaying it, strip ANSI codes
+          pnpm exec axiom eval ../skills/${{ matrix.skill }}/.meta/${{ matrix.skill }}.eval.ts 2>&1 | tee eval-output-raw.txt
           
-          # Extract the final report section
-          awk '/FINAL EVALUATION REPORT/,/^$/' eval-output.txt > report-section.txt
+          # Strip ANSI escape codes
+          sed 's/\x1b\[[0-9;]*m//g' eval-output-raw.txt > eval-output.txt
           
-          # Also capture the View eval result URL if present
-          grep -A1 "View eval result:" eval-output.txt >> report-section.txt || true
+          # Extract from FINAL EVALUATION REPORT to the closing box character or View eval result
+          sed -n '/FINAL EVALUATION REPORT/,/^View eval result:/p' eval-output.txt > report-section.txt
+          
+          # Also grab the URL line after "View eval result:"
+          grep -A1 "View eval result:" eval-output.txt >> report-section.txt 2>/dev/null || true
 
       - name: Save eval report
         run: |
