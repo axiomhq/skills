@@ -4,6 +4,12 @@ on:
   pull_request:
     paths:
       - 'skills/**'
+  workflow_dispatch:
+    inputs:
+      skill:
+        description: 'Skill to evaluate (leave empty to detect from branch diff)'
+        required: false
+        type: string
 
 jobs:
   detect-changes:
@@ -19,8 +25,29 @@ jobs:
       - name: Detect changed skills with evals
         id: changed-skills
         run: |
+          # If skill input is provided, use it directly
+          if [ -n "${{ inputs.skill }}" ]; then
+            skill="${{ inputs.skill }}"
+            eval_file="skills/${skill}/.meta/${skill}.eval.ts"
+            if [ -f "$eval_file" ]; then
+              echo "skills=[\"${skill}\"]" >> $GITHUB_OUTPUT
+              echo "has_evals=true" >> $GITHUB_OUTPUT
+              echo "Running eval for manually specified skill: ${skill}"
+              exit 0
+            else
+              echo "No eval file found for skill: ${skill}"
+              echo "skills=[]" >> $GITHUB_OUTPUT
+              echo "has_evals=false" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          fi
+
           # Get list of changed files in the PR
-          changed_files=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          base_ref="${{ github.base_ref }}"
+          if [ -z "$base_ref" ]; then
+            base_ref="main"
+          fi
+          changed_files=$(git diff --name-only origin/${base_ref}...HEAD)
           
           # Extract unique skill names from changed paths (skills/<skill>/...)
           skills=$(echo "$changed_files" | grep '^skills/' | cut -d'/' -f2 | sort -u)
@@ -78,7 +105,10 @@ jobs:
       - name: Run eval for ${{ matrix.skill }}
         working-directory: eval-tooling
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+          AXIOM_TOKEN: ${{ secrets.AXIOM_TOKEN }}
+          AXIOM_DATASET: ${{ secrets.AXIOM_DATASET }}
+          AXIOM_URL: ${{ secrets.AXIOM_URL }}
         run: |
           echo "Running eval for skill: ${{ matrix.skill }}"
           pnpm exec axiom eval ../skills/${{ matrix.skill }}/.meta/${{ matrix.skill }}.eval.ts
