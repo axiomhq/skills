@@ -9,6 +9,8 @@ import { runPromptInjection, type PromptInjectionOptions } from "./prompt-inject
 import { runToolSimulation, type ToolSimulationOptions } from "./tool-simulation";
 import type { HarnessResult } from "./types";
 
+export const MODEL_ID = "anthropic/claude-opus-4.5";
+
 export type HarnessType = "prompt-injection" | "tool-simulation";
 
 export interface HarnessTypeMetadata {

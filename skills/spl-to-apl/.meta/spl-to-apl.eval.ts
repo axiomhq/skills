@@ -1,7 +1,7 @@
 import { Eval, Scorer } from "axiom/ai/evals";
 import { testCases } from "./cases";
 import { flag, pickFlags, getGitCommit, buildSkillMetadata } from "../../../eval-tooling/src/shared";
-import { runHarness, type HarnessType, type HarnessResult } from "../../../eval-tooling/src/harnesses";
+import { runHarness, MODEL_ID, type HarnessType, type HarnessResult } from "../../../eval-tooling/src/harnesses";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
@@ -131,6 +131,7 @@ Eval("spl-translation", {
   configFlags: pickFlags("harnessType", "harnessVersion", "git"),
   metadata: {
     description: "Evaluates SPL to APL translation quality",
+    model: MODEL_ID,
     testCaseCount: testCases.length,
     git: {
       commit: gitCommit,
