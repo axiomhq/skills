@@ -2,9 +2,9 @@
   "$schema": "./.github/eval-baselines.schema.json",
   "baselines": {
     "spl-to-apl": {
-      "traceId": "ILVQ3XHHQH",
-      "commit": "eb8ac3c4d9dee35913f384d2a7e49dca54231a09",
-      "updatedAt": "2026-01-22T16:29:37Z"
+      "baselineId": "spl-translation-7F8XA4DX91",
+      "commit": "163241fd53410283ac3d87ed51d11b42c30792aa",
+      "updatedAt": "2026-01-22T16:59:16Z"
     }
   }
 }
