@@ -133,8 +133,10 @@ jobs:
         run: |
           echo "Running eval for skill: ${{ matrix.skill }}"
           
-          # Build eval command with optional baseline
+          # Build eval command with optional baseline and git metadata
           eval_cmd="pnpm exec axiom eval ../skills/${{ matrix.skill }}/.meta/${{ matrix.skill }}.eval.ts"
+          eval_cmd="$eval_cmd --flag.git.branch=${{ github.head_ref || github.ref_name }}"
+          eval_cmd="$eval_cmd --flag.git.commit=${{ github.sha }}"
           if [ "${{ steps.baseline.outputs.has_baseline }}" = "true" ]; then
             eval_cmd="$eval_cmd --baseline ${{ steps.baseline.outputs.baseline_id }}"
             echo "Comparing against baseline: ${{ steps.baseline.outputs.baseline_id }}"
