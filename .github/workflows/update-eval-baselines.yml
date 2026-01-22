@@ -1,0 +1,182 @@
+name: Update Eval Baselines
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'skills/**'
+      - 'eval-tooling/**'
+  workflow_dispatch:
+    inputs:
+      skill:
+        description: 'Skill to update baseline for (leave empty for all changed)'
+        required: false
+        type: string
+      force:
+        description: 'Force update even if skill files unchanged'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  detect-skills:
+    runs-on: ubuntu-latest
+    outputs:
+      skills: ${{ steps.detect.outputs.skills }}
+      has_skills: ${{ steps.detect.outputs.has_skills }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect skills to update
+        id: detect
+        run: |
+          # If skill input is provided, use it directly
+          if [ -n "${{ inputs.skill }}" ]; then
+            skill="${{ inputs.skill }}"
+            eval_file="skills/${skill}/.meta/${skill}.eval.ts"
+            if [ -f "$eval_file" ]; then
+              echo "skills=[\"${skill}\"]" >> $GITHUB_OUTPUT
+              echo "has_skills=true" >> $GITHUB_OUTPUT
+              echo "Updating baseline for: ${skill}"
+              exit 0
+            else
+              echo "No eval file found for skill: ${skill}"
+              echo "skills=[]" >> $GITHUB_OUTPUT
+              echo "has_skills=false" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          fi
+
+          # Get changed files in this push
+          changed_files=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only HEAD)
+          
+          # Extract unique skill names from changed paths
+          skills=$(echo "$changed_files" | grep '^skills/' | cut -d'/' -f2 | sort -u)
+          
+          # Filter to only skills that have eval files
+          skills_with_evals=""
+          for skill in $skills; do
+            eval_file="skills/${skill}/.meta/${skill}.eval.ts"
+            if [ -f "$eval_file" ]; then
+              if [ -n "$skills_with_evals" ]; then
+                skills_with_evals="${skills_with_evals},${skill}"
+              else
+                skills_with_evals="${skill}"
+              fi
+            fi
+          done
+          
+          if [ -n "$skills_with_evals" ]; then
+            json_array=$(echo "$skills_with_evals" | tr ',' '\n' | jq -R . | jq -s -c .)
+            echo "skills=$json_array" >> $GITHUB_OUTPUT
+            echo "has_skills=true" >> $GITHUB_OUTPUT
+            echo "Skills to update baselines: $skills_with_evals"
+          else
+            echo "skills=[]" >> $GITHUB_OUTPUT
+            echo "has_skills=false" >> $GITHUB_OUTPUT
+            echo "No skills with evals changed"
+          fi
+
+  update-baselines:
+    needs: detect-skills
+    if: needs.detect-skills.outputs.has_skills == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        skill: ${{ fromJson(needs.detect-skills.outputs.skills) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: eval-tooling/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: eval-tooling
+        run: pnpm install
+
+      - name: Run eval for ${{ matrix.skill }}
+        id: run-eval
+        working-directory: eval-tooling
+        env:
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+          AXIOM_TOKEN: ${{ secrets.AXIOM_TOKEN }}
+          AXIOM_DATASET: ${{ secrets.AXIOM_DATASET }}
+          AXIOM_URL: ${{ secrets.AXIOM_URL }}
+        run: |
+          echo "Running eval for skill: ${{ matrix.skill }}"
+          
+          pnpm exec axiom eval ../skills/${{ matrix.skill }}/.meta/${{ matrix.skill }}.eval.ts 2>&1 | tee eval-output-raw.txt
+          
+          # Strip ANSI escape codes
+          sed 's/\x1b\[[0-9;]*m//g' eval-output-raw.txt > eval-output.txt
+          
+          # Extract trace ID from output
+          trace_id=$(grep -oE 'trace_id=[a-zA-Z0-9-]+' eval-output.txt | head -1 | cut -d= -f2 || true)
+          if [ -z "$trace_id" ]; then
+            # Try alternate pattern from URL
+            trace_id=$(grep -oE '/evals/[a-zA-Z0-9-]+' eval-output.txt | head -1 | sed 's|/evals/||' || true)
+          fi
+          
+          if [ -n "$trace_id" ]; then
+            echo "trace_id=$trace_id" >> $GITHUB_OUTPUT
+            echo "Extracted trace ID: $trace_id"
+          else
+            echo "Failed to extract trace ID from eval output"
+            cat eval-output.txt
+            exit 1
+          fi
+
+      - name: Update baseline file
+        run: |
+          trace_id="${{ steps.run-eval.outputs.trace_id }}"
+          skill="${{ matrix.skill }}"
+          commit="${{ github.sha }}"
+          timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          
+          # Update the baseline file using jq
+          jq --arg skill "$skill" \
+             --arg trace_id "$trace_id" \
+             --arg commit "$commit" \
+             --arg timestamp "$timestamp" \
+             '.baselines[$skill] = {traceId: $trace_id, commit: $commit, updatedAt: $timestamp}' \
+             .eval-baselines.json > .eval-baselines.json.tmp
+          
+          mv .eval-baselines.json.tmp .eval-baselines.json
+          
+          echo "Updated baseline for $skill:"
+          cat .eval-baselines.json
+
+      - name: Commit baseline update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add .eval-baselines.json
+          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update eval baseline for ${{ matrix.skill }}
+
+Trace ID: ${{ steps.run-eval.outputs.trace_id }}
+Commit: ${{ github.sha }}"
+            
+            git push
+          fi

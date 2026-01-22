@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'skills/**'
+      - 'eval-tooling/**'
   workflow_dispatch:
     inputs:
       skill:
@@ -102,6 +103,25 @@ jobs:
         working-directory: eval-tooling
         run: pnpm install
 
+      - name: Get baseline trace ID
+        id: baseline
+        run: |
+          baseline_file=".eval-baselines.json"
+          if [ -f "$baseline_file" ]; then
+            trace_id=$(jq -r '.baselines["${{ matrix.skill }}"].traceId // empty' "$baseline_file")
+            if [ -n "$trace_id" ]; then
+              echo "trace_id=$trace_id" >> $GITHUB_OUTPUT
+              echo "has_baseline=true" >> $GITHUB_OUTPUT
+              echo "Found baseline for ${{ matrix.skill }}: $trace_id"
+            else
+              echo "has_baseline=false" >> $GITHUB_OUTPUT
+              echo "No baseline found for ${{ matrix.skill }}"
+            fi
+          else
+            echo "has_baseline=false" >> $GITHUB_OUTPUT
+            echo "No baseline file found"
+          fi
+
       - name: Run eval for ${{ matrix.skill }}
         id: run-eval
         working-directory: eval-tooling
@@ -113,11 +133,26 @@ jobs:
         run: |
           echo "Running eval for skill: ${{ matrix.skill }}"
           
+          # Build eval command with optional baseline
+          eval_cmd="pnpm exec axiom eval ../skills/${{ matrix.skill }}/.meta/${{ matrix.skill }}.eval.ts"
+          if [ "${{ steps.baseline.outputs.has_baseline }}" = "true" ]; then
+            eval_cmd="$eval_cmd --baseline ${{ steps.baseline.outputs.trace_id }}"
+            echo "Comparing against baseline: ${{ steps.baseline.outputs.trace_id }}"
+          fi
+          
           # Capture output while still displaying it, strip ANSI codes
-          pnpm exec axiom eval ../skills/${{ matrix.skill }}/.meta/${{ matrix.skill }}.eval.ts 2>&1 | tee eval-output-raw.txt
+          $eval_cmd 2>&1 | tee eval-output-raw.txt
           
           # Strip ANSI escape codes
           sed 's/\x1b\[[0-9;]*m//g' eval-output-raw.txt > eval-output.txt
+          
+          # Extract trace ID from output for potential baseline update
+          trace_id=$(grep -oE 'trace_id=[a-zA-Z0-9-]+' eval-output.txt | head -1 | cut -d= -f2 || true)
+          if [ -z "$trace_id" ]; then
+            # Try alternate pattern from URL
+            trace_id=$(grep -oE '/evals/[a-zA-Z0-9-]+' eval-output.txt | head -1 | sed 's|/evals/||' || true)
+          fi
+          echo "trace_id=$trace_id" >> $GITHUB_OUTPUT
           
           # Extract from FINAL EVALUATION REPORT to the closing box character or View eval result
           sed -n '/FINAL EVALUATION REPORT/,/^View eval result:/p' eval-output.txt > report-section.txt
@@ -130,15 +165,21 @@ jobs:
           mkdir -p eval-reports
           
           # Create report with metadata
-          cat > eval-reports/${{ matrix.skill }}.md << 'EOF'
+          cat > eval-reports/${{ matrix.skill }}.md << EOF
           ### ${{ matrix.skill }}
           
-          **Commit:** `${{ github.sha }}`
-          **Branch:** `${{ github.head_ref || github.ref_name }}`
-          
-          ```
+          **Commit:** \`${{ github.sha }}\`
+          **Branch:** \`${{ github.head_ref || github.ref_name }}\`
           EOF
           
+          if [ "${{ steps.baseline.outputs.has_baseline }}" = "true" ]; then
+            echo "**Baseline:** \`${{ steps.baseline.outputs.trace_id }}\`" >> eval-reports/${{ matrix.skill }}.md
+          else
+            echo "**Baseline:** _none (first eval)_" >> eval-reports/${{ matrix.skill }}.md
+          fi
+          
+          echo "" >> eval-reports/${{ matrix.skill }}.md
+          echo '```' >> eval-reports/${{ matrix.skill }}.md
           cat eval-tooling/report-section.txt >> eval-reports/${{ matrix.skill }}.md
           echo '```' >> eval-reports/${{ matrix.skill }}.md
 
