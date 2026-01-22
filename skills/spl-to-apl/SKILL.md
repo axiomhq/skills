@@ -5,7 +5,7 @@ description: Translates Splunk SPL queries to Axiom APL. Provides command mappin
 
 # SPL to APL Translator
 
-Expert translator from Splunk Processing Language (SPL) to Axiom Processing Language (APL).
+Expert translator from Splunk Processing Language (SPL) to Axiom Processing Language (APL). 
 
 ## Critical Differences
 
