@@ -15,7 +15,7 @@
         "properties": {
           "baselineId": {
             "type": "string",
-            "description": "Axiom baseline ID in format <eval-name>-<runId>"
+            "description": "Axiom baseline ID (hex hash from baselineId query param)"
           },
           "commit": {
             "type": "string",

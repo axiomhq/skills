@@ -128,15 +128,9 @@ jobs:
           sed 's/\x1b\[[0-9;]*m//g' eval-output-raw.txt > eval-output.txt
           
           # Extract baseline ID from output
-          # URL format: https://app.axiom.co/.../evaluations/<eval-name>/<runId>?...
-          # The --baseline flag needs format: <eval-name>-<runId>
-          url_match=$(grep -oE '/evaluations/[^/]+/[A-Z0-9]+' eval-output.txt | head -1 || true)
-          if [ -n "$url_match" ]; then
-            # Extract eval-name and runId, combine as eval-name-runId
-            eval_name=$(echo "$url_match" | cut -d'/' -f3)
-            run_id=$(echo "$url_match" | cut -d'/' -f4)
-            baseline_id="${eval_name}-${run_id}"
-          fi
+          # URL format: https://app.axiom.co/.../evaluations/<eval-name>/<runId>?baselineId=<id>
+          # The --baseline flag needs the baselineId query param value
+          baseline_id=$(grep -oE 'baselineId=[a-f0-9]+' eval-output.txt | head -1 | cut -d= -f2 || true)
           
           if [ -n "$baseline_id" ]; then
             echo "baseline_id=$baseline_id" >> $GITHUB_OUTPUT
