@@ -1,0 +1,4 @@
+{
+  "$schema": "./.github/eval-baselines.schema.json",
+  "baselines": {}
+}

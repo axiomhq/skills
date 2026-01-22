@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Eval Baselines",
+  "description": "Stores trace IDs for skill eval baselines from main branch",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "baselines": {
+      "type": "object",
+      "description": "Map of skill name to baseline info",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "traceId": {
+            "type": "string",
+            "description": "Axiom trace ID from the baseline eval run"
+          },
+          "commit": {
+            "type": "string",
+            "description": "Git commit SHA when baseline was set"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO timestamp when baseline was last updated"
+          }
+        },
+        "required": ["traceId", "commit", "updatedAt"]
+      }
+    }
+  },
+  "required": ["baselines"]
+}
