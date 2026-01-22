@@ -18,5 +18,11 @@ export const { flag, pickFlags } = createAppScope({
       .enum(["prompt-injection", "tool-simulation"])
       .default("tool-simulation"),
     harnessVersion: z.enum(["v1", "v2"]).default(HARNESS_VERSION),
+    git: z
+      .object({
+        branch: z.string().default(""),
+        commit: z.string().default(""),
+      })
+      .default({ branch: "", commit: "" }),
   }),
 });
