@@ -1,4 +1,10 @@
 {
   "$schema": "./.github/eval-baselines.schema.json",
-  "baselines": {}
+  "baselines": {
+    "spl-to-apl": {
+      "traceId": "ILVQ3XHHQH",
+      "commit": "eb8ac3c4d9dee35913f384d2a7e49dca54231a09",
+      "updatedAt": "2026-01-22T16:29:37Z"
+    }
+  }
 }
