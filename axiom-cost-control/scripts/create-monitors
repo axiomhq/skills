@@ -1,0 +1,207 @@
+#!/bin/bash
+# Create 5 hybrid cost control monitors
+# Strategy: Budget guardrails (threshold) + Spike attribution (anomaly) + Glidepath (threshold)
+#
+# Usage: create-monitors <deployment> [notifier_id] [contract_tb] [glidepath_tb]
+#
+# Arguments:
+#   deployment   - Axiom deployment name (required)
+#   notifier_id  - Notifier ID for alerts (optional, monitors created without alerts if omitted)
+#   contract_tb  - Daily contract limit in TB (default: 167 = 5 PB/month)
+#   glidepath_tb - Initial glidepath target in TB (default: contract_tb * 1.5)
+
+set -euo pipefail
+
+AXIOM_API="${AXIOM_API:-$HOME/.config/agents/skills/axiom-sre/scripts/axiom-api}"
+DEPLOYMENT="${1:-staging}"
+NOTIFIER_ID="${2:-}"
+CONTRACT_TB="${3:-167}"
+GLIDEPATH_TB="${4:-}"
+
+# Validate dependencies
+command -v jq >/dev/null 2>&1 || { echo "Error: jq required" >&2; exit 1; }
+command -v bc >/dev/null 2>&1 || { echo "Error: bc required" >&2; exit 1; }
+[[ -x "$AXIOM_API" ]] || { echo "Error: axiom-api not found at $AXIOM_API" >&2; exit 1; }
+
+# Validate numeric inputs
+[[ "$CONTRACT_TB" =~ ^[0-9]+([.][0-9]+)?$ ]] || { echo "Error: contract_tb must be numeric" >&2; exit 1; }
+
+# Helper: evaluate with bc -l, round to 3 decimals
+bc_round() { bc -l <<< "scale=3; $1" | sed 's/^\./0./'; }
+
+# Default glidepath to 1.5x contract if not specified
+if [[ -z "$GLIDEPATH_TB" ]]; then
+    GLIDEPATH_TB=$(bc_round "$CONTRACT_TB * 1.5")
+fi
+
+# Calculate thresholds
+WARN_TB=$(bc_round "$CONTRACT_TB * 1.1")
+CRIT_TB=$(bc_round "$CONTRACT_TB * 1.5")
+
+# Build notifier array
+if [[ -n "$NOTIFIER_ID" ]]; then
+    NOTIFIER_JSON="[\"$NOTIFIER_ID\"]"
+else
+    NOTIFIER_JSON="[]"
+fi
+
+echo "=== Creating Cost Control Monitors ==="
+echo "Deployment: $DEPLOYMENT"
+echo "Contract: $CONTRACT_TB TB/day"
+echo "Warning threshold: $WARN_TB TB (1.1x)"
+echo "Critical threshold: $CRIT_TB TB (1.5x)"
+echo "Glidepath target: $GLIDEPATH_TB TB"
+echo "Notifier: ${NOTIFIER_ID:-none}"
+echo ""
+
+# =============================================================================
+# LAYER 1: BUDGET GUARDRAILS (Threshold monitors for contract compliance)
+# =============================================================================
+
+# 1. Last 24h Ingest vs Contract
+# Monitor range is 1440 min (24h), query sums over that range
+echo "1/5: Creating Last 24h Ingest vs Contract (threshold @ $CRIT_TB TB)..."
+$AXIOM_API "$DEPLOYMENT" POST "/v2/monitors" "$(cat <<EOF
+{
+  "name": "Cost Control: Last 24h Ingest vs Contract",
+  "description": "Budget guardrail. Last 24h ingest vs ${CONTRACT_TB} TB/day contract. Alert at >${CRIT_TB} TB (1.5x).",
+  "type": "Threshold",
+  "aplQuery": "['axiom-audit']\n| where action == \"usageCalculated\"\n| summarize total_24h_tb = sum(toreal(['properties.hourly_ingest_bytes'])) / 1000000000000",
+  "operator": "AboveOrEqual",
+  "threshold": $CRIT_TB,
+  "intervalMinutes": 60,
+  "rangeMinutes": 1440,
+  "notifierIds": $NOTIFIER_JSON,
+  "notifyByGroup": false,
+  "triggerFromNRuns": 2
+}
+EOF
+)"
+
+echo ""
+
+# =============================================================================
+# LAYER 2: SPIKE ATTRIBUTION (Anomaly monitors for change detection)
+# =============================================================================
+
+# 2. Per-Dataset Hourly Anomaly
+# Anomaly detection learns baseline per dataset automatically
+echo "2/5: Creating Per-Dataset Hourly Anomaly (anomaly)..."
+$AXIOM_API "$DEPLOYMENT" POST "/v2/monitors" "$(cat <<EOF
+{
+  "name": "Cost Control: Per-Dataset Spike Detection",
+  "description": "Spike attribution. Anomaly detection per dataset, above only.",
+  "type": "AnomalyDetection",
+  "aplQuery": "['axiom-audit']\n| where action == \"usageCalculated\"\n| summarize hourly_ingest_tb = sum(toreal(['properties.hourly_ingest_bytes'])) / 1000000000000 by bin(_time, 1h), dataset = tostring(['properties.dataset'])",
+  "operator": "Above",
+  "tolerance": 3,
+  "intervalMinutes": 15,
+  "rangeMinutes": 720,
+  "notifierIds": $NOTIFIER_JSON,
+  "notifyByGroup": true,
+  "triggerFromNRuns": 1
+}
+EOF
+)"
+
+echo ""
+
+# 3. Top Dataset Dominance
+# Alerts when any single dataset exceeds threshold
+echo "3/5: Creating Top Dataset Dominance (threshold)..."
+DOMINANCE_THRESH=$(bc_round "$CONTRACT_TB / 24 * 0.4")  # 40% of hourly contract
+# Ensure minimum threshold for small orgs
+[[ "$(echo "$DOMINANCE_THRESH < 0.001" | bc -l)" == "1" ]] && DOMINANCE_THRESH="0.001"
+$AXIOM_API "$DEPLOYMENT" POST "/v2/monitors" "$(cat <<EOF
+{
+  "name": "Cost Control: Top Dataset Dominance",
+  "description": "Alerts when any dataset exceeds 40% of hourly ingest. Catches concentration/runaway datasets.",
+  "type": "Threshold",
+  "aplQuery": "['axiom-audit']\n| where action == \"usageCalculated\"\n| summarize hourly_bytes = sum(toreal(['properties.hourly_ingest_bytes'])) by bin(_time, 1h), dataset = tostring(['properties.dataset'])\n| top 1 by hourly_bytes\n| extend hourly_tb = hourly_bytes / 1000000000000",
+  "operator": "AboveOrEqual",
+  "threshold": $DOMINANCE_THRESH,
+  "intervalMinutes": 60,
+  "rangeMinutes": 180,
+  "notifierIds": $NOTIFIER_JSON,
+  "notifyByGroup": true,
+  "triggerFromNRuns": 2
+}
+EOF
+)"
+
+echo ""
+
+# 4. Query Cost Anomaly
+# Hourly anomaly on query GB·ms - different cost driver than ingest
+echo "4/5: Creating Query Cost Anomaly (anomaly)..."
+$AXIOM_API "$DEPLOYMENT" POST "/v2/monitors" "$(cat <<EOF
+{
+  "name": "Cost Control: Query Cost Spike",
+  "description": "Hourly anomaly on query GB·ms. Detects unusual query cost spikes.",
+  "type": "AnomalyDetection",
+  "aplQuery": "['axiom-audit']\n| where action == \"usageCalculated\"\n| summarize hourly_query_gbms = sum(toreal(['properties.hourly_billable_query_gbms'])) by bin(_time, 1h)",
+  "operator": "Above",
+  "tolerance": 3,
+  "intervalMinutes": 15,
+  "rangeMinutes": 1440,
+  "notifierIds": $NOTIFIER_JSON,
+  "notifyByGroup": false,
+  "triggerFromNRuns": 1
+}
+EOF
+)"
+
+echo ""
+
+# =============================================================================
+# LAYER 3: REDUCTION GLIDEPATH (Threshold for tracking reduction progress)
+# =============================================================================
+
+# 5. Reduction Glidepath Target
+# UPDATE THIS THRESHOLD WEEKLY as reduction progresses
+echo "5/5: Creating Reduction Glidepath Target (threshold @ $GLIDEPATH_TB TB)..."
+$AXIOM_API "$DEPLOYMENT" POST "/v2/monitors" "$(cat <<EOF
+{
+  "name": "Cost Control: Reduction Glidepath",
+  "description": "Tracks progress toward ${CONTRACT_TB} TB/day contract. Current target: ${GLIDEPATH_TB} TB/day. Update weekly with update-glidepath script.",
+  "type": "Threshold",
+  "aplQuery": "['axiom-audit']\n| where action == \"usageCalculated\"\n| summarize daily_ingest_tb = sum(toreal(['properties.hourly_ingest_bytes'])) / 1000000000000 by bin(_time, 1d)",
+  "operator": "AboveOrEqual",
+  "threshold": $GLIDEPATH_TB,
+  "intervalMinutes": 360,
+  "rangeMinutes": 1440,
+  "notifierIds": $NOTIFIER_JSON,
+  "notifyByGroup": false,
+  "triggerFromNRuns": 1
+}
+EOF
+)"
+
+echo ""
+echo "=============================================="
+echo "Done! Created 5 hybrid cost control monitors."
+echo "=============================================="
+echo ""
+echo "LAYER 1 - Budget Guardrails:"
+echo "  1. Last 24h Ingest vs Contract (threshold @ $CRIT_TB TB)"
+echo ""
+echo "LAYER 2 - Spike Attribution:"
+echo "  2. Per-Dataset Spike Detection (anomaly, by dataset)"
+echo "  3. Top Dataset Dominance (threshold @ $DOMINANCE_THRESH TB/hr)"
+echo "  4. Query Cost Spike (anomaly)"
+echo ""
+echo "LAYER 3 - Reduction Glidepath:"
+echo "  5. Reduction Glidepath (threshold @ $GLIDEPATH_TB TB, update weekly)"
+echo ""
+
+# Get org_id for URL (best-effort)
+CONFIG_FILE="$HOME/.axiom.toml"
+if [[ -f "$CONFIG_FILE" ]]; then
+    ORG_ID=$(awk -v deployment="$DEPLOYMENT" '
+        /^\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
+        in_deployment && $1 == "org_id" { gsub(/[" ]/, "", $3); print $3; exit }
+    ' "$CONFIG_FILE" || true)
+    if [[ -n "${ORG_ID:-}" ]]; then
+        echo "View at: https://app.axiom.co/${ORG_ID}/monitors"
+    fi
+fi

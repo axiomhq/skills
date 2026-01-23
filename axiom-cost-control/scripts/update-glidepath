@@ -1,0 +1,55 @@
+#!/bin/bash
+# Update the Reduction Glidepath monitor threshold
+# Usage: update-glidepath <deployment> <new_threshold_tb>
+
+set -e
+
+DEPLOYMENT="${1:-staging}"
+NEW_THRESHOLD="${2}"
+AXIOM_API="${AXIOM_API:-$HOME/.config/agents/skills/axiom-sre/scripts/axiom-api}"
+
+if [[ -z "$NEW_THRESHOLD" ]]; then
+    echo "Usage: update-glidepath <deployment> <new_threshold_tb>"
+    echo ""
+    echo "Example glidepath schedule:"
+    echo "  Week 1: 450 TB/day (current p95)"
+    echo "  Week 2: 350 TB/day (-25%)"
+    echo "  Week 3: 250 TB/day (-50%)"
+    echo "  Week 4: 167 TB/day (contract)"
+    exit 1
+fi
+
+echo "=== Updating Reduction Glidepath Monitor ==="
+echo "Deployment: $DEPLOYMENT"
+echo "New threshold: $NEW_THRESHOLD TB/day"
+echo ""
+
+# Find the glidepath monitor
+MONITORS=$($AXIOM_API "$DEPLOYMENT" GET "/v2/monitors")
+MONITOR_ID=$(echo "$MONITORS" | jq -r '.[] | select(.name | contains("Glidepath")) | .id' | head -1)
+
+if [[ -z "$MONITOR_ID" || "$MONITOR_ID" == "null" ]]; then
+    echo "Error: Could not find Reduction Glidepath monitor"
+    echo "Run 'scripts/create-monitors $DEPLOYMENT' first"
+    exit 1
+fi
+
+echo "Found monitor: $MONITOR_ID"
+
+# Get current monitor config
+CURRENT=$($AXIOM_API "$DEPLOYMENT" GET "/v2/monitors/$MONITOR_ID")
+OLD_THRESHOLD=$(echo "$CURRENT" | jq -r '.threshold')
+
+# Update the threshold
+UPDATED=$(echo "$CURRENT" | jq --argjson threshold "$NEW_THRESHOLD" '.threshold = $threshold')
+RESULT=$($AXIOM_API "$DEPLOYMENT" PUT "/v2/monitors/$MONITOR_ID" "$UPDATED")
+
+if echo "$RESULT" | jq -e '.id' > /dev/null 2>&1; then
+    echo "✓ Glidepath threshold updated!"
+    echo "  Old: $OLD_THRESHOLD TB/day"
+    echo "  New: $NEW_THRESHOLD TB/day"
+else
+    echo "Error updating monitor:"
+    echo "$RESULT"
+    exit 1
+fi

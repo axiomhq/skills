@@ -1,0 +1,87 @@
+#!/bin/bash
+# Get baseline usage statistics for cost control planning
+# Usage: baseline-stats <deployment>
+
+set -euo pipefail
+
+DEPLOYMENT="${1:-staging}"
+AXIOM_QUERY="${AXIOM_QUERY:-$HOME/.config/agents/skills/axiom-sre/scripts/axiom-query}"
+
+# Validate dependencies
+command -v jq >/dev/null 2>&1 || { echo "Error: jq required" >&2; exit 1; }
+[[ -x "$AXIOM_QUERY" ]] || { echo "Error: axiom-query not found at $AXIOM_QUERY" >&2; exit 1; }
+
+echo "=== Axiom Cost Control: Baseline Stats ==="
+echo "Deployment: $DEPLOYMENT"
+echo "Time range: Last 30 days"
+echo ""
+
+echo "--- Daily Ingest Statistics (TB) ---"
+$AXIOM_QUERY "$DEPLOYMENT" "
+['axiom-audit']
+| where action == 'usageCalculated'
+| where _time > ago(30d)
+| summarize daily_bytes = sum(toreal(['properties.hourly_ingest_bytes'])) by bin(_time, 1d)
+| extend daily_tb = daily_bytes / 1000000000000
+| summarize 
+    avg_tb = round(avg(daily_tb), 2),
+    p50_tb = round(percentile(daily_tb, 50), 2),
+    p90_tb = round(percentile(daily_tb, 90), 2),
+    p95_tb = round(percentile(daily_tb, 95), 2),
+    max_tb = round(max(daily_tb), 2),
+    stddev_tb = round(stdev(daily_tb), 2),
+    days = count()
+"
+
+echo ""
+echo "--- Top 10 Datasets by Ingest (GB) ---"
+$AXIOM_QUERY "$DEPLOYMENT" "
+['axiom-audit']
+| where action == 'usageCalculated'
+| where _time > ago(30d)
+| summarize total_bytes = sum(toreal(['properties.hourly_ingest_bytes'])) by dataset = tostring(['properties.dataset'])
+| extend ingest_gb = round(total_bytes / 1000000000, 1)
+| order by ingest_gb desc
+| take 10
+| project dataset, ingest_gb
+"
+
+echo ""
+echo "--- Top 10 Datasets by Query Cost (GB·ms) ---"
+$AXIOM_QUERY "$DEPLOYMENT" "
+['axiom-audit']
+| where action == 'usageCalculated'
+| where _time > ago(30d)
+| summarize total_gbms = sum(toreal(['properties.hourly_billable_query_gbms'])) by dataset = tostring(['properties.dataset'])
+| where total_gbms > 0
+| extend query_gbms = round(total_gbms, 0)
+| order by query_gbms desc
+| take 10
+| project dataset, query_gbms
+"
+
+echo ""
+echo "--- Waste Candidates (Low Query Activity) ---"
+$AXIOM_QUERY "$DEPLOYMENT" "
+['axiom-audit']
+| where action == 'usageCalculated'
+| where _time > ago(30d)
+| summarize 
+    total_bytes = sum(toreal(['properties.hourly_ingest_bytes'])),
+    total_gbms = sum(toreal(['properties.hourly_billable_query_gbms']))
+  by dataset = tostring(['properties.dataset'])
+| extend ingest_gb = total_bytes / 1000000000
+| where ingest_gb > 10
+| extend work_per_gb = round(total_gbms / ingest_gb, 0)
+| order by work_per_gb asc
+| take 10
+| project dataset, ingest_gb = round(ingest_gb, 1), query_gbms = round(total_gbms, 0), work_per_gb
+"
+
+echo ""
+echo "--- Threshold Recommendations ---"
+echo "Based on the statistics above:"
+echo "  Warning threshold: p90 + 1×stddev"
+echo "  Critical threshold: p95 + 2×stddev (or contract limit)"
+echo ""
+echo "Run 'scripts/create-monitors $DEPLOYMENT' to deploy monitors."

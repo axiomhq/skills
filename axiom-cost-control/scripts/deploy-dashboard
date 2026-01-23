@@ -1,0 +1,70 @@
+#!/bin/bash
+# Deploy cost control dashboard to Axiom
+# Usage: deploy-dashboard <deployment> [dashboard_name]
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEPLOYMENT="${1:-staging}"
+DASHBOARD_NAME="${2:-Org Usage & Cost Control}"
+AXIOM_API="${AXIOM_API:-$HOME/.config/agents/skills/axiom-sre/scripts/axiom-api}"
+TEMPLATE="$SCRIPT_DIR/../templates/dashboard.json"
+
+if [[ ! -f "$TEMPLATE" ]]; then
+    echo "Error: Dashboard template not found at $TEMPLATE"
+    exit 1
+fi
+
+echo "=== Deploying Cost Control Dashboard ==="
+echo "Deployment: $DEPLOYMENT"
+echo "Dashboard: $DASHBOARD_NAME"
+echo ""
+
+# Get current user ID for owner field
+GET_USER_ID="${GET_USER_ID:-$HOME/.config/agents/skills/building-dashboards/scripts/get-user-id}"
+if [[ -x "$GET_USER_ID" ]]; then
+    OWNER_ID=$($GET_USER_ID "$DEPLOYMENT")
+else
+    echo "Error: building-dashboards skill not found. Install it first:"
+    echo "  amp skill install building-dashboards"
+    exit 1
+fi
+
+# Update the dashboard name and owner
+DASHBOARD_JSON=$(cat "$TEMPLATE" | jq --arg name "$DASHBOARD_NAME" --arg owner "$OWNER_ID" '.name = $name | .owner = $owner')
+
+# Create the dashboard using building-dashboards skill
+DASHBOARD_CREATE="${DASHBOARD_CREATE:-$HOME/.config/agents/skills/building-dashboards/scripts/dashboard-create}"
+
+if [[ -x "$DASHBOARD_CREATE" ]]; then
+    # Write temp file for dashboard-create
+    TMPFILE=$(mktemp)
+    echo "$DASHBOARD_JSON" > "$TMPFILE"
+    RESULT=$($DASHBOARD_CREATE "$DEPLOYMENT" "$TMPFILE" 2>&1)
+    rm -f "$TMPFILE"
+else
+    echo "Error: building-dashboards skill not found. Install it first:"
+    echo "  amp skill install building-dashboards"
+    exit 1
+fi
+
+# dashboard-create outputs the ID on success, error message on failure
+if [[ "$RESULT" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    DASHBOARD_ID="$RESULT"
+    echo "✓ Dashboard created successfully!"
+    echo ""
+    echo "Dashboard ID: $DASHBOARD_ID"
+    
+    # Get org_id for URL
+    CONFIG_FILE="$HOME/.axiom.toml"
+    ORG_ID=$(awk -v deployment="$DEPLOYMENT" '
+        /^\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
+        in_deployment && $1 == "org_id" { gsub(/[" ]/, "", $3); print $3; exit }
+    ' "$CONFIG_FILE")
+    
+    echo "View at: https://app.axiom.co/${ORG_ID}/dashboards/${DASHBOARD_ID}"
+else
+    echo "Error creating dashboard:"
+    echo "$RESULT"
+    exit 1
+fi
