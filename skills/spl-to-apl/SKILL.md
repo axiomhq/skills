@@ -254,3 +254,4 @@ Prefer `has` over `contains` (word-boundary matching is faster). Use `_cs` varia
 - `reference/function-mapping.md` — complete function list  
 - `reference/examples.md` — full query translation examples
 - APL docs: https://axiom.co/docs/apl/introduction
+
