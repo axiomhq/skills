@@ -61,21 +61,22 @@ TimeSeries chart options are stored in `query.queryOptions.aggChartOpts` as a JS
 
 ### Key Formats
 
-Use `"*"` as a **wildcard** to apply options to all series (recommended for multi-series charts):
+**Important:** The `"*"` wildcard is unreliable. Always use the specific key format derived from your query.
 
-```json
-{
-  "type": "TimeSeries",
-  "query": {
-    "apl": "['logs'] | summarize ['GB'] = sum(bytes) / 1e9 by bin_auto(_time), service",
-    "queryOptions": {
-      "aggChartOpts": "{\"*\":{\"variant\":\"bars\"}}"
-    }
-  }
-}
-```
+#### Deriving the Key
 
-To target a **specific series**, use `{"alias":"<column_name>","op":"<aggregation>"}`:
+The key format depends on how the column is computed:
+
+| Query Pattern | Key Format |
+|---------------|------------|
+| `summarize count()` | `{"alias":"count_","op":"count"}` |
+| `summarize sum(field)` | `{"alias":"sum_field","op":"sum"}` |
+| `summarize ['Name'] = sum(field) / 1000` | `{"alias":"Name","field":"field","op":"computed"}` |
+| `summarize ['Name'] = round(sum(field), 1)` | `{"alias":"Name","field":"field","op":"computed"}` |
+
+**Rule:** If the column uses any expression (math, `round()`, etc.), use `"op":"computed"` and include the source `"field"`.
+
+#### Simple Aggregation Example
 
 ```json
 {
@@ -83,13 +84,15 @@ To target a **specific series**, use `{"alias":"<column_name>","op":"<aggregatio
   "query": {
     "apl": "['logs'] | summarize count() by bin_auto(_time)",
     "queryOptions": {
-      "aggChartOpts": "{\"{\\\"alias\\\":\\\"count_\\\",\\\"op\\\":\\\"count\\\"}\":{\"variant\":\"area\",\"scaleDistr\":\"log\",\"displayNull\":\"span\"}}"
+      "aggChartOpts": "{\"{\\\"alias\\\":\\\"count_\\\",\\\"op\\\":\\\"count\\\"}\":{\"variant\":\"bars\"}}"
     }
   }
 }
 ```
 
-For **computed columns** (using expressions like `round()`, math operators), the key includes `"field"` and `"op":"computed"`:
+#### Computed Column Example
+
+For `['Ingest GB'] = round(sum(['properties.hourly_ingest_bytes']) / 1e9, 1)`:
 
 ```json
 {
@@ -97,7 +100,7 @@ For **computed columns** (using expressions like `round()`, math operators), the
 }
 ```
 
-**Tip:** Use `"*"` for consistent styling across all series. Combine with specific keys to override individual series.
+**Note:** The `field` value is the source field name without brackets or the `properties.` prefix path as written in the query.
 
 ### Per-Series Options (inside aggChartOpts)
 
