@@ -15,7 +15,7 @@ export const testCases: TranslationCase[] = [
   {
     id: "basic-count-by-status",
     name: "Basic count by status",
-    spl: `index=http_logs | stats count by status`,
+    spl: `index=sample-http-logs | stats count by status`,
     expectedApl: `['sample-http-logs']
 | where _time between (ago(1h) .. now())
 | summarize count() by status`,
@@ -25,7 +25,7 @@ export const testCases: TranslationCase[] = [
   {
     id: "top-10-uris",
     name: "Top 10 URIs",
-    spl: `index=http_logs | top limit=10 uri`,
+    spl: `index=sample-http-logs | top limit=10 uri`,
     expectedApl: `['sample-http-logs']
 | where _time between (ago(1h) .. now())
 | summarize count() by uri
@@ -36,7 +36,7 @@ export const testCases: TranslationCase[] = [
   {
     id: "error-rate-over-time",
     name: "Error rate over time",
-    spl: `index=http_logs | timechart span=5m count(eval(status>=500)) as errors, count as total | eval error_rate=errors/total*100`,
+    spl: `index=sample-http-logs | timechart span=5m count(eval(status>=500)) as errors, count as total | eval error_rate=errors/total*100`,
     expectedApl: `['sample-http-logs']
 | where _time between (ago(1h) .. now())
 | summarize errors = countif(toint(status) >= 500), total = count() by bin(_time, 5m)
@@ -48,7 +48,7 @@ export const testCases: TranslationCase[] = [
   {
     id: "request-duration-percentiles",
     name: "Request duration percentiles by method",
-    spl: `index=http_logs | stats perc50(req_duration_ms) as p50, perc95(req_duration_ms) as p95, perc99(req_duration_ms) as p99 by method`,
+    spl: `index=sample-http-logs | stats perc50(req_duration_ms) as p50, perc95(req_duration_ms) as p95, perc99(req_duration_ms) as p99 by method`,
     expectedApl: `['sample-http-logs']
 | where _time between (ago(1h) .. now())
 | summarize 
@@ -62,7 +62,7 @@ export const testCases: TranslationCase[] = [
   {
     id: "geo-distribution",
     name: "Geo distribution top 20",
-    spl: `index=http_logs | iplocation clientip | stats count by Country, City | sort - count | head 20`,
+    spl: `index=sample-http-logs | iplocation clientip | stats count by Country, City | sort - count | head 20`,
     expectedApl: `['sample-http-logs']
 | where _time between (ago(1h) .. now())
 | summarize count() by ['geo.country'], ['geo.city']
@@ -75,7 +75,7 @@ export const testCases: TranslationCase[] = [
   {
     id: "unique-users-per-endpoint",
     name: "Unique users per endpoint",
-    spl: `index=http_logs | stats dc(id) as unique_users, count as requests by uri | sort - unique_users`,
+    spl: `index=sample-http-logs | stats dc(id) as unique_users, count as requests by uri | sort - unique_users`,
     expectedApl: `['sample-http-logs']
 | where _time between (ago(1h) .. now())
 | summarize unique_users = dcount(id), requests = count() by uri
@@ -86,7 +86,7 @@ export const testCases: TranslationCase[] = [
   {
     id: "conditional-severity",
     name: "Conditional field creation (severity)",
-    spl: `index=http_logs | eval severity=if(status>=500, "error", if(status>=400, "warning", "ok")) | stats count by severity`,
+    spl: `index=sample-http-logs | eval severity=if(status>=500, "error", if(status>=400, "warning", "ok")) | stats count by severity`,
     expectedApl: `['sample-http-logs']
 | where _time between (ago(1h) .. now())
 | extend severity = case(
@@ -104,7 +104,7 @@ export const testCases: TranslationCase[] = [
   {
     id: "span-duration-by-service",
     name: "Span duration by service",
-    spl: `index=traces | stats avg(duration) as avg_duration, perc95(duration) as p95_duration by service.name`,
+    spl: `index=otel-demo-traces | stats avg(duration) as avg_duration, perc95(duration) as p95_duration by service.name`,
     expectedApl: `['otel-demo-traces']
 | where _time between (ago(1h) .. now())
 | summarize 
@@ -117,7 +117,7 @@ export const testCases: TranslationCase[] = [
   {
     id: "error-spans-over-time",
     name: "Error spans over time by service",
-    spl: `index=traces status_code="ERROR" | timechart span=1m count by service.name`,
+    spl: `index=otel-demo-traces status_code="ERROR" | timechart span=1m count by service.name`,
     expectedApl: `['otel-demo-traces']
 | where _time between (ago(1h) .. now())
 | where status_code == "ERROR"
