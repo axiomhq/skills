@@ -128,7 +128,7 @@ Eval("spl-translation", {
     })),
   capability: "spl-to-apl",
   step: "translate",
-  configFlags: pickFlags("harnessType", "harnessVersion", "git"),
+  configFlags: pickFlags("model", "harnessType", "harnessVersion", "git"),
   metadata: {
     description: "Evaluates SPL to APL translation quality",
     model: MODEL_ID,
