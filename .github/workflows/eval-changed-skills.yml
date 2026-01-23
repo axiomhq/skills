@@ -157,11 +157,15 @@ jobs:
           fi
           echo "trace_id=$trace_id" >> $GITHUB_OUTPUT
           
-          # Extract from FINAL EVALUATION REPORT to the closing box character or View eval result
-          sed -n '/FINAL EVALUATION REPORT/,/^View eval result:/p' eval-output.txt > report-section.txt
+          # Extract scores section (between header and "View eval result")
+          sed -n '/FINAL EVALUATION REPORT/,/^View eval result:/p' eval-output.txt | \
+            grep -v 'FINAL EVALUATION REPORT' | \
+            grep -v '^View eval result:' | \
+            sed '/^[[:space:]]*$/d' > report-section.txt
           
-          # Also grab the URL line after "View eval result:"
-          grep -A1 "View eval result:" eval-output.txt >> report-section.txt 2>/dev/null || true
+          # Extract the eval URL
+          eval_url=$(grep -A1 "View eval result:" eval-output.txt | tail -1 | tr -d ' ' || true)
+          echo "eval_url=$eval_url" >> $GITHUB_OUTPUT
 
       - name: Save eval report
         run: |
@@ -169,22 +173,28 @@ jobs:
           
           # Create report with metadata
           cat > eval-reports/${{ matrix.skill }}.md << EOF
-          ### ${{ matrix.skill }}
-          
-          **Commit:** \`${{ github.sha }}\`
-          **Branch:** \`${{ github.head_ref || github.ref_name }}\`
-          EOF
+### ${{ matrix.skill }}
+
+**commit:** \`${{ github.sha }}\`
+**branch:** \`${{ github.head_ref || github.ref_name }}\`
+EOF
           
           if [ "${{ steps.baseline.outputs.has_baseline }}" = "true" ]; then
-            echo "**Baseline:** \`${{ steps.baseline.outputs.baseline_id }}\`" >> eval-reports/${{ matrix.skill }}.md
+            echo "**baseline:** \`${{ steps.baseline.outputs.baseline_id }}\`" >> eval-reports/${{ matrix.skill }}.md
           else
-            echo "**Baseline:** _none (first eval)_" >> eval-reports/${{ matrix.skill }}.md
+            echo "**baseline:** _none (first eval)_" >> eval-reports/${{ matrix.skill }}.md
           fi
           
           echo "" >> eval-reports/${{ matrix.skill }}.md
           echo '```' >> eval-reports/${{ matrix.skill }}.md
           cat eval-tooling/report-section.txt >> eval-reports/${{ matrix.skill }}.md
           echo '```' >> eval-reports/${{ matrix.skill }}.md
+          
+          # Add clickable link outside code block
+          if [ -n "${{ steps.run-eval.outputs.eval_url }}" ]; then
+            echo "" >> eval-reports/${{ matrix.skill }}.md
+            echo "[view eval result](${{ steps.run-eval.outputs.eval_url }})" >> eval-reports/${{ matrix.skill }}.md
+          fi
 
       - name: Upload eval report
         uses: actions/upload-artifact@v4
