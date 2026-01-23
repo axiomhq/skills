@@ -59,7 +59,23 @@ Charts support JSON configuration options beyond the query. These are set at the
 
 TimeSeries chart options are stored in `query.queryOptions.aggChartOpts` as a JSON string.
 
-The key format is `{"alias":"<column_name>","op":"<aggregation>"}` to target specific series.
+### Key Formats
+
+Use `"*"` as a **wildcard** to apply options to all series (recommended for multi-series charts):
+
+```json
+{
+  "type": "TimeSeries",
+  "query": {
+    "apl": "['logs'] | summarize ['GB'] = sum(bytes) / 1e9 by bin_auto(_time), service",
+    "queryOptions": {
+      "aggChartOpts": "{\"*\":{\"variant\":\"bars\"}}"
+    }
+  }
+}
+```
+
+To target a **specific series**, use `{"alias":"<column_name>","op":"<aggregation>"}`:
 
 ```json
 {
@@ -72,6 +88,16 @@ The key format is `{"alias":"<column_name>","op":"<aggregation>"}` to target spe
   }
 }
 ```
+
+For **computed columns** (using expressions like `round()`, math operators), the key includes `"field"` and `"op":"computed"`:
+
+```json
+{
+  "aggChartOpts": "{\"{\\\"alias\\\":\\\"Ingest GB\\\",\\\"field\\\":\\\"properties.hourly_ingest_bytes\\\",\\\"op\\\":\\\"computed\\\"}\":{\"variant\":\"bars\",\"displayNull\":\"auto\"}}"
+}
+```
+
+**Tip:** Use `"*"` for consistent styling across all series. Combine with specific keys to override individual series.
 
 ### Per-Series Options (inside aggChartOpts)
 
