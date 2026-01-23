@@ -1,7 +1,7 @@
 #!/bin/bash
 # Analyze query coverage to score and rank unused data opportunities
 #
-# Usage: analyze-query-coverage <deployment> <dataset> [field] [days]
+# Usage: analyze-query-coverage <deployment> <dataset> [field] [query_days] [ingest_days]
 #
 # Outputs ranked opportunities with scores based on:
 #   - Ingest volume (high = more savings potential)
@@ -15,27 +15,29 @@ AXIOM_QUERY="${AXIOM_QUERY:-$HOME/.config/agents/skills/axiom-sre/scripts/axiom-
 DEPLOYMENT="${1:-}"
 DATASET="${2:-}"
 FIELD="${3:-}"
-DAYS="${4:-30}"
+QUERY_DAYS="${4:-30}"    # Query history lookback (axiom-history, cheap)
+INGEST_DAYS="${5:-1}"    # Ingest volume lookback (actual dataset, expensive)
 
 if [[ -z "$DEPLOYMENT" || -z "$DATASET" ]]; then
     cat << 'EOF'
-Usage: analyze-query-coverage <deployment> <dataset> [field] [days]
+Usage: analyze-query-coverage <deployment> <dataset> [field] [query_days] [ingest_days]
 
 Scores data by query coverage to find optimization opportunities.
+
+Arguments:
+  deployment   Axiom deployment name
+  dataset      Dataset to analyze
+  field        (optional) Specific field to analyze values for
+  query_days   (optional) Query history lookback, default 30 (cheap)
+  ingest_days  (optional) Ingest volume lookback, default 1 (expensive)
 
 Without field: Ranks columns by query frequency (find rarely-used columns)
 With field:    Ranks field values by query coverage (find rarely-queried subsets)
 
-Output shows:
-  - Volume: estimated ingest size
-  - Queries: how many queries reference this data  
-  - Coverage: % of total queries that use this data
-  - Score: opportunity score (high volume + low coverage = good candidate)
-
 Examples:
-  analyze-query-coverage prod k8s-logs              # Rank columns
+  analyze-query-coverage prod k8s-logs              # Rank columns (30d queries, 1d ingest)
   analyze-query-coverage prod k8s-logs app          # Rank app values
-  analyze-query-coverage prod traces service.name   # Rank services
+  analyze-query-coverage prod k8s-logs app 90 7     # 90d query history, 7d ingest volume
 EOF
     exit 1
 fi
@@ -47,7 +49,40 @@ command -v jq >/dev/null 2>&1 || { echo "Error: jq required" >&2; exit 1; }
 echo "=== Query Coverage Analysis ==="
 echo "Deployment: $DEPLOYMENT"
 echo "Dataset: $DATASET"
-echo "Query history: ${DAYS}d"
+echo ""
+
+# Preflight: Use axiom-audit for volume estimate (no scan of actual dataset)
+echo "--- Preflight: Checking volume via axiom-audit ---"
+VOLUME_INFO=$($AXIOM_QUERY "$DEPLOYMENT" "
+['axiom-audit']
+| where action == 'usageCalculated'
+| where ['properties.dataset'] == '$DATASET'
+| where _time > ago(24h)
+| summarize 
+    total_bytes = sum(toreal(['properties.hourly_ingest_bytes'])),
+    hours = dcount(bin(_time, 1h))
+| extend gb_per_day = round(total_bytes / hours * 24 / 1000000000, 1)
+| project gb_per_day
+" 2>&1 | grep -E "^gb_per_day=" || echo "gb_per_day=0")
+
+GB_PER_DAY=$(echo "$VOLUME_INFO" | sed 's/.*gb_per_day=\([^ ]*\).*/\1/')
+
+echo "Dataset: ~${GB_PER_DAY} GB/day"
+
+# Estimate scan size for ingest query
+if [[ "$GB_PER_DAY" != "0" ]]; then
+    ESTIMATED_GB=$(echo "$GB_PER_DAY * $INGEST_DAYS" | bc 2>/dev/null || echo "?")
+    echo "Ingest query will scan: ~${ESTIMATED_GB} GB (${INGEST_DAYS}d)"
+    
+    # Warn if scan is large (>500 GB)
+    if [[ "$ESTIMATED_GB" != "?" ]] && (( $(echo "$ESTIMATED_GB > 500" | bc -l 2>/dev/null || echo 0) )); then
+        echo "⚠️  Large scan! Consider reducing ingest_days"
+    fi
+else
+    echo "No volume data in axiom-audit - dataset may be new or name incorrect"
+fi
+
+echo "Query history: ${QUERY_DAYS}d (axiom-history, cheap)"
 echo ""
 
 # Create jq filter for AST traversal
@@ -90,7 +125,7 @@ JQEOF
 # Fetch and parse queries
 echo "Fetching query history from axiom-history..."
 PARSED_QUERIES=$($AXIOM_API "$DEPLOYMENT" POST "/v1/datasets/_apl?format=tabular" "{
-  \"apl\": \"['axiom-history'] | where _time > ago(${DAYS}d) | where kind == 'apl' | where dataset == '$DATASET' | extend parsed = parse_apl(['query.apl']) | project parsed\"
+  \"apl\": \"['axiom-history'] | where _time > ago(${QUERY_DAYS}d) | where kind == 'apl' | where dataset == '$DATASET' | extend parsed = parse_apl(['query.apl']) | project parsed\"
 }" 2>&1)
 
 QUERY_COUNT=$(echo "$PARSED_QUERIES" | jq -r '.tables[0].columns | length // 0')
@@ -99,7 +134,7 @@ echo "Found $QUERY_COUNT queries to analyze"
 if [[ "$QUERY_COUNT" -eq 0 ]]; then
     echo ""
     echo "No queries found. Either:"
-    echo "  - Dataset '$DATASET' hasn't been queried in ${DAYS} days"
+    echo "  - Dataset '$DATASET' hasn't been queried in ${QUERY_DAYS} days"
     echo "  - Dataset name is incorrect"
     echo ""
     echo "This means ALL data in this dataset is potentially unused!"
@@ -223,17 +258,17 @@ if [[ "$FILTERED_COUNT" -gt 0 ]]; then
     echo ""
 fi
 
-# Get top values by volume from dataset
-echo "--- Top Values by Ingest Volume (sampled) ---"
+# Get top values by volume from dataset (use same time range as query history)
+echo "--- Top Values by Ingest Volume (last ${INGEST_DAYS}d, sampled) ---"
 $AXIOM_QUERY "$DEPLOYMENT" "
 ['$DATASET']
-| where _time > ago(24h)
+| where _time > ago(${INGEST_DAYS}d)
 | sample 0.001
 | summarize sampled = count() by value = tostring(['$FIELD'])
-| extend est_events_24h = sampled * 1000
-| order by est_events_24h desc
+| extend est_events = sampled * 1000
+| order by est_events desc
 | take 20
-| project ['$FIELD'] = value, est_events_24h
+| project ['$FIELD'] = value, est_events
 "
 
 echo ""
