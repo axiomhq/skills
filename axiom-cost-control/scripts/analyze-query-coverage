@@ -1,0 +1,164 @@
+#!/bin/bash
+# Analyze query coverage to find never-queried subsets of a dataset
+#
+# Usage: analyze-query-coverage <deployment> <dataset> <field> [days]
+#
+# Uses parse_apl() to extract actual field/value pairs from query history,
+# then anti-joins to find high-volume values that are never queried.
+#
+# Designed for petabyte-scale - uses sampling and efficient not-in patterns.
+
+set -euo pipefail
+
+AXIOM_QUERY="${AXIOM_QUERY:-$HOME/.config/agents/skills/axiom-sre/scripts/axiom-query}"
+DEPLOYMENT="${1:-}"
+DATASET="${2:-}"
+FIELD="${3:-}"
+DAYS="${4:-7}"
+
+if [[ -z "$DEPLOYMENT" || -z "$DATASET" ]]; then
+    echo "Usage: analyze-query-coverage <deployment> <dataset> <field> [days]"
+    echo ""
+    echo "Finds field values that are ingested but never queried."
+    echo ""
+    echo "Examples:"
+    echo "  analyze-query-coverage prod k8s-logs kubernetes.labels.app"
+    echo "  analyze-query-coverage prod traces service.name 30"
+    echo ""
+    echo "If <field> is omitted, shows which fields are most commonly filtered on."
+    exit 1
+fi
+
+[[ -x "$AXIOM_QUERY" ]] || { echo "Error: axiom-query not found" >&2; exit 1; }
+
+echo "=== Query Coverage Analysis ==="
+echo "Deployment: $DEPLOYMENT"
+echo "Dataset: $DATASET"
+echo "Query history: ${DAYS}d"
+echo ""
+
+# If no field specified, show field usage summary
+if [[ -z "$FIELD" ]]; then
+    echo "--- Fields used in WHERE clauses (last ${DAYS}d) ---"
+    $AXIOM_QUERY "$DEPLOYMENT" "
+['axiom-history']
+| where _time > ago(${DAYS}d)
+| where kind == 'apl'
+| where dataset == '$DATASET'
+| extend parsed = parse_apl(['query.apl'])
+| extend operations = todynamic(tostring(parsed.body.operations))
+| mv-expand operations
+| where operations.kind == 'Where'
+| extend field = tostring(operations.predicate.left.name)
+| where isnotempty(field)
+| summarize queries = count() by field
+| order by queries desc
+| take 15
+"
+    echo ""
+    echo "--- Fields used in SUMMARIZE BY (last ${DAYS}d) ---"
+    $AXIOM_QUERY "$DEPLOYMENT" "
+['axiom-history']
+| where _time > ago(${DAYS}d)
+| where kind == 'apl'
+| where dataset == '$DATASET'
+| extend parsed = parse_apl(['query.apl'])
+| extend operations = todynamic(tostring(parsed.body.operations))
+| mv-expand operations
+| where operations.kind == 'Summarize'
+| extend groups = todynamic(tostring(operations.groups))
+| mv-expand groups
+| extend field = tostring(groups.expr.name)
+| where isnotempty(field)
+| summarize queries = count() by field
+| order by queries desc
+| take 15
+"
+    echo ""
+    echo "Re-run with a specific field to find never-queried values:"
+    echo "  $0 $DEPLOYMENT $DATASET <field>"
+    exit 0
+fi
+
+echo "Field: $FIELD"
+echo ""
+
+# Step 1: Extract queried values for this field
+echo "--- Step 1: Values of '$FIELD' that appear in queries ---"
+QUERIED_VALUES=$($AXIOM_QUERY "$DEPLOYMENT" "
+['axiom-history']
+| where _time > ago(${DAYS}d)
+| where kind == 'apl'
+| where dataset == '$DATASET'
+| extend parsed = parse_apl(['query.apl'])
+| extend operations = todynamic(tostring(parsed.body.operations))
+| mv-expand operations
+| where operations.kind == 'Where'
+| extend field = tostring(operations.predicate.left.name)
+| where field == '$FIELD'
+| extend value = tostring(operations.predicate.right.value)
+| where isnotempty(value)
+| summarize queries = count() by value
+| order by queries desc
+| take 100
+" 2>&1)
+
+echo "$QUERIED_VALUES"
+echo ""
+
+# Extract just the values for the anti-join
+VALUES_LIST=$(echo "$QUERIED_VALUES" | grep "^value=" | sed 's/value=\([^ ]*\).*/\1/' | head -50)
+VALUES_COUNT=$(echo "$VALUES_LIST" | grep -c . || echo 0)
+
+if [[ "$VALUES_COUNT" -eq 0 ]]; then
+    echo "No queries filter on '$FIELD' - all values are potential waste!"
+    echo ""
+    echo "--- All values of '$FIELD' in dataset (sampled) ---"
+    $AXIOM_QUERY "$DEPLOYMENT" "
+['$DATASET']
+| where _time > ago(24h)
+| sample 0.001
+| summarize sampled_events = count() by value = tostring(['$FIELD'])
+| extend est_events_24h = sampled_events * 1000
+| order by est_events_24h desc
+| take 20
+"
+    exit 0
+fi
+
+# Build the not-in clause
+# Escape single quotes in values
+NOT_IN_CLAUSE=$(echo "$VALUES_LIST" | while read -r v; do
+    escaped=$(echo "$v" | sed "s/'/''/g")
+    echo "'$escaped'"
+done | paste -sd, -)
+
+echo "--- Step 2: Values NOT in query filters (never-queried) ---"
+echo "Queried values: $VALUES_COUNT"
+echo "Checking for unqueried high-volume values..."
+echo ""
+
+$AXIOM_QUERY "$DEPLOYMENT" "
+['$DATASET']
+| where _time > ago(24h)
+| sample 0.001
+| extend field_value = tostring(['$FIELD'])
+| where isnotempty(field_value)
+| where field_value !in ($NOT_IN_CLAUSE)
+| summarize sampled_events = count() by field_value
+| extend est_events_24h = sampled_events * 1000
+| order by est_events_24h desc
+| take 20
+| project ['$FIELD'] = field_value, est_events_24h
+"
+
+echo ""
+echo "--- Recommendations ---"
+echo "Values shown above are ingested but NEVER appear in query filters."
+echo "Consider:"
+echo "  - Dropping these at source if truly unused"
+echo "  - Sampling (1:10 or 1:100) if occasionally needed"
+echo "  - Shorter retention if only needed for recent data"
+echo ""
+echo "To investigate a specific value:"
+echo "  axiom-query $DEPLOYMENT \"['$DATASET'] | where ['$FIELD'] == 'VALUE' | take 10\""

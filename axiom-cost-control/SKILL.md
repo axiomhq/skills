@@ -135,6 +135,32 @@ See `reference/monitor-strategy.md` for threshold derivation.
 
 **Work/GB = 0** means data ingested but never queried.
 
+### Drill Down: Find Never-Queried Subsets
+
+Dataset-level analysis is just the start. Use `analyze-query-coverage` to find specific field values that are ingested but never appear in query filters:
+
+```bash
+# See which fields are commonly filtered/grouped on
+scripts/analyze-query-coverage <deployment> <dataset>
+
+# Find values of a specific field that are never queried
+scripts/analyze-query-coverage <deployment> <dataset> <field>
+```
+
+This uses `parse_apl()` to analyze actual query history from `axiom-history`:
+1. Extracts all APL queries against the dataset
+2. Parses WHERE clauses and SUMMARIZE BY groups
+3. Builds set of queried field/values
+4. Anti-joins to find high-volume, never-queried values
+
+Example output:
+```
+kubernetes.labels.app=axiom-atlas est_events_24h=91466000  # Never filtered!
+kubernetes.labels.app=axiom-db est_events_24h=45871000     # Never filtered!
+```
+
+These represent massive savings opportunities - data being ingested but never used in queries.
+
 ### Find Noisy Applications
 
 ```apl
