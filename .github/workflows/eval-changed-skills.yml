@@ -130,6 +130,9 @@ jobs:
           AXIOM_TOKEN: ${{ secrets.AXIOM_TOKEN }}
           AXIOM_DATASET: ${{ secrets.AXIOM_DATASET }}
           AXIOM_URL: ${{ secrets.AXIOM_URL }}
+          AXIOM_PLAYGROUND_URL: ${{ secrets.AXIOM_PLAYGROUND_URL }}
+          AXIOM_PLAYGROUND_TOKEN: ${{ secrets.AXIOM_PLAYGROUND_TOKEN }}
+          AXIOM_PLAYGROUND_ORG_ID: ${{ secrets.AXIOM_PLAYGROUND_ORG_ID }}
         run: |
           echo "Running eval for skill: ${{ matrix.skill }}"
           

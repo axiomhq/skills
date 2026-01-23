@@ -2,6 +2,7 @@ import { Eval, Scorer } from "axiom/ai/evals";
 import { testCases } from "./cases";
 import { flag, pickFlags, getGitCommit, buildSkillMetadata } from "../../../eval-tooling/src/shared";
 import { runHarness, MODEL_ID, type HarnessType, type HarnessResult } from "../../../eval-tooling/src/harnesses";
+import { extractAplQuery, executeAplQuery } from "../../../eval-tooling/src/shared/axiom-query";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
@@ -115,6 +116,34 @@ const TimeFilterPresent = Scorer(
   }
 );
 
+/**
+ * Executes the generated APL query against Axiom Playground.
+ * Injects time range automatically since we don't expect models to know this detail.
+ * Returns 1 if query executes successfully, 0 if it fails.
+ */
+const ExecutesSuccessfully = Scorer(
+  "executes-successfully",
+  async ({ output }: { output: TaskOutput }) => {
+    const query = extractAplQuery(output.output);
+
+    if (!query) {
+      return 0;
+    }
+
+    const result = await executeAplQuery(query, {
+      injectTime: true,
+      timeRange: "ago(1h) .. now()",
+    });
+
+    if (!result.success) {
+      console.warn(`Query execution failed: ${result.error}`);
+      return 0;
+    }
+
+    return 1;
+  }
+);
+
 Eval("spl-translation", {
   data: async () =>
     testCases.map((tc) => ({
@@ -156,5 +185,11 @@ Eval("spl-translation", {
     };
   },
 
-  scorers: [ExactMatch, KeyOperatorsPresent, DatasetCorrect, TimeFilterPresent],
+  scorers: [
+    ExactMatch,
+    KeyOperatorsPresent,
+    DatasetCorrect,
+    TimeFilterPresent,
+    ExecutesSuccessfully,
+  ],
 });
