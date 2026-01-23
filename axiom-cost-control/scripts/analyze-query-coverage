@@ -1,35 +1,48 @@
 #!/bin/bash
-# Analyze query coverage to find never-queried subsets of a dataset
+# Analyze query coverage to score and rank unused data opportunities
 #
-# Usage: analyze-query-coverage <deployment> <dataset> <field> [days]
+# Usage: analyze-query-coverage <deployment> <dataset> [field] [days]
 #
-# Uses parse_apl() to extract actual field/value pairs from query history,
-# then anti-joins to find high-volume values that are never queried.
-#
-# Designed for petabyte-scale - uses sampling and efficient not-in patterns.
+# Outputs ranked opportunities with scores based on:
+#   - Ingest volume (high = more savings potential)
+#   - Query frequency (low = safer to drop)
+#   - Coverage ratio (% of queries that use this data)
 
 set -euo pipefail
 
+AXIOM_API="${AXIOM_API:-$HOME/.config/agents/skills/axiom-sre/scripts/axiom-api}"
 AXIOM_QUERY="${AXIOM_QUERY:-$HOME/.config/agents/skills/axiom-sre/scripts/axiom-query}"
 DEPLOYMENT="${1:-}"
 DATASET="${2:-}"
 FIELD="${3:-}"
-DAYS="${4:-7}"
+DAYS="${4:-30}"
 
 if [[ -z "$DEPLOYMENT" || -z "$DATASET" ]]; then
-    echo "Usage: analyze-query-coverage <deployment> <dataset> <field> [days]"
-    echo ""
-    echo "Finds field values that are ingested but never queried."
-    echo ""
-    echo "Examples:"
-    echo "  analyze-query-coverage prod k8s-logs kubernetes.labels.app"
-    echo "  analyze-query-coverage prod traces service.name 30"
-    echo ""
-    echo "If <field> is omitted, shows which fields are most commonly filtered on."
+    cat << 'EOF'
+Usage: analyze-query-coverage <deployment> <dataset> [field] [days]
+
+Scores data by query coverage to find optimization opportunities.
+
+Without field: Ranks columns by query frequency (find rarely-used columns)
+With field:    Ranks field values by query coverage (find rarely-queried subsets)
+
+Output shows:
+  - Volume: estimated ingest size
+  - Queries: how many queries reference this data  
+  - Coverage: % of total queries that use this data
+  - Score: opportunity score (high volume + low coverage = good candidate)
+
+Examples:
+  analyze-query-coverage prod k8s-logs              # Rank columns
+  analyze-query-coverage prod k8s-logs app          # Rank app values
+  analyze-query-coverage prod traces service.name   # Rank services
+EOF
     exit 1
 fi
 
+[[ -x "$AXIOM_API" ]] || { echo "Error: axiom-api not found" >&2; exit 1; }
 [[ -x "$AXIOM_QUERY" ]] || { echo "Error: axiom-query not found" >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "Error: jq required" >&2; exit 1; }
 
 echo "=== Query Coverage Analysis ==="
 echo "Deployment: $DEPLOYMENT"
@@ -37,128 +50,207 @@ echo "Dataset: $DATASET"
 echo "Query history: ${DAYS}d"
 echo ""
 
-# If no field specified, show field usage summary
+# Create jq filter for AST traversal
+JQ_FILTER=$(mktemp)
+trap "rm -f $JQ_FILTER" EXIT
+
+cat > "$JQ_FILTER" << 'JQEOF'
+# Recursively extract all column/field references from AST
+def extract_columns:
+  if type == "array" then .[] | extract_columns
+  elif type == "object" then
+    (if .kind == "Entity" and .name then .name else empty end),
+    (to_entries[] | .value | extract_columns)
+  else empty
+  end;
+
+# Extract filter predicates with field/op/value
+def extract_predicates:
+  if type != "object" then empty
+  elif .kind == "BinaryExpr" and (.op | IN("==", "!=", "contains", "!contains", "startswith", "endswith")) then
+    { field: (.left.name // null), op: .op, value: (.right.value // null) }
+  elif .kind == "BinaryExpr" and (.op | IN("and", "or")) then
+    (.left | extract_predicates), (.right | extract_predicates)
+  elif .kind == "InExpr" then
+    { field: (.left.name // null), op: "in", values: [.right.list[]?.value] }
+  elif .kind == "CallExpr" and .func.name == "not" then
+    .params[]?.expr | extract_predicates
+  else empty
+  end;
+
+# Main extraction
+{
+  all_columns: [.body | extract_columns] | unique,
+  where_predicates: [.body.operations[]? | select(.kind == "Where") | .predicate | extract_predicates],
+  summarize_groups: [.body.operations[]? | select(.kind == "Summarize") | .groups[]?.expr.name // .groups[]?.aliases[0]] | map(select(. != null)),
+  has_wildcard: ([.body.operations[]? | select(.kind == "Project") | .fields[]? | select(.kind == "Entity" and .name == "*")] | length > 0)
+}
+JQEOF
+
+# Fetch and parse queries
+echo "Fetching query history from axiom-history..."
+PARSED_QUERIES=$($AXIOM_API "$DEPLOYMENT" POST "/v1/datasets/_apl?format=tabular" "{
+  \"apl\": \"['axiom-history'] | where _time > ago(${DAYS}d) | where kind == 'apl' | where dataset == '$DATASET' | extend parsed = parse_apl(['query.apl']) | project parsed\"
+}" 2>&1)
+
+QUERY_COUNT=$(echo "$PARSED_QUERIES" | jq -r '.tables[0].columns | length // 0')
+echo "Found $QUERY_COUNT queries to analyze"
+
+if [[ "$QUERY_COUNT" -eq 0 ]]; then
+    echo ""
+    echo "No queries found. Either:"
+    echo "  - Dataset '$DATASET' hasn't been queried in ${DAYS} days"
+    echo "  - Dataset name is incorrect"
+    echo ""
+    echo "This means ALL data in this dataset is potentially unused!"
+    exit 0
+fi
+
+# Extract structured info from each query
+echo "Parsing AST and extracting usage patterns..."
+QUERY_SUMMARIES=$(echo "$PARSED_QUERIES" | jq -r '.tables[0].columns[][0]' | jq -f "$JQ_FILTER" -c 2>/dev/null | jq -s '.')
+
+# Aggregate column usage across all queries
+COLUMN_USAGE=$(echo "$QUERY_SUMMARIES" | jq '
+  . as $queries |
+  ($queries | length) as $total |
+  [
+    $queries[].all_columns[]
+  ] | group_by(.) | map({
+    column: .[0],
+    query_count: length,
+    coverage_pct: (100 * length / $total | floor)
+  }) | sort_by(-.query_count)
+')
+
+WILDCARD_COUNT=$(echo "$QUERY_SUMMARIES" | jq '[.[] | select(.has_wildcard)] | length')
+
+# If no field specified, show column usage ranking
 if [[ -z "$FIELD" ]]; then
-    echo "--- Fields used in WHERE clauses (last ${DAYS}d) ---"
-    $AXIOM_QUERY "$DEPLOYMENT" "
-['axiom-history']
-| where _time > ago(${DAYS}d)
-| where kind == 'apl'
-| where dataset == '$DATASET'
-| extend parsed = parse_apl(['query.apl'])
-| extend operations = todynamic(tostring(parsed.body.operations))
-| mv-expand operations
-| where operations.kind == 'Where'
-| extend field = tostring(operations.predicate.left.name)
-| where isnotempty(field)
-| summarize queries = count() by field
-| order by queries desc
-| take 15
-"
     echo ""
-    echo "--- Fields used in SUMMARIZE BY (last ${DAYS}d) ---"
-    $AXIOM_QUERY "$DEPLOYMENT" "
-['axiom-history']
-| where _time > ago(${DAYS}d)
-| where kind == 'apl'
-| where dataset == '$DATASET'
-| extend parsed = parse_apl(['query.apl'])
-| extend operations = todynamic(tostring(parsed.body.operations))
-| mv-expand operations
-| where operations.kind == 'Summarize'
-| extend groups = todynamic(tostring(operations.groups))
-| mv-expand groups
-| extend field = tostring(groups.expr.name)
-| where isnotempty(field)
-| summarize queries = count() by field
-| order by queries desc
-| take 15
-"
+    echo "--- Column Usage Ranking ---"
+    echo "Total queries: $QUERY_COUNT | Queries with wildcards: $WILDCARD_COUNT"
     echo ""
-    echo "Re-run with a specific field to find never-queried values:"
-    echo "  $0 $DEPLOYMENT $DATASET <field>"
+    echo "$COLUMN_USAGE" | jq -r '
+      .[:30][] | 
+      "\(.column)\tqueries=\(.query_count)\tcoverage=\(.coverage_pct)%"
+    ' | column -t -s$'\t'
+    
+    # Find columns that are never referenced
+    echo ""
+    echo "--- Columns Never Referenced in Queries ---"
+    echo "(Compare against dataset schema to find unused columns)"
+    echo ""
+    echo "To get dataset schema:"
+    echo "  axiom-query $DEPLOYMENT \"['$DATASET'] | take 1 | getschema\""
+    echo ""
+    echo "To analyze a specific field's values:"
+    echo "  $0 $DEPLOYMENT $DATASET <field_name>"
     exit 0
 fi
 
-echo "Field: $FIELD"
+echo "Analyzing field: $FIELD"
 echo ""
 
-# Step 1: Extract queried values for this field
-echo "--- Step 1: Values of '$FIELD' that appear in queries ---"
-QUERIED_VALUES=$($AXIOM_QUERY "$DEPLOYMENT" "
-['axiom-history']
-| where _time > ago(${DAYS}d)
-| where kind == 'apl'
-| where dataset == '$DATASET'
-| extend parsed = parse_apl(['query.apl'])
-| extend operations = todynamic(tostring(parsed.body.operations))
-| mv-expand operations
-| where operations.kind == 'Where'
-| extend field = tostring(operations.predicate.left.name)
-| where field == '$FIELD'
-| extend value = tostring(operations.predicate.right.value)
-| where isnotempty(value)
-| summarize queries = count() by value
-| order by queries desc
-| take 100
-" 2>&1)
+# For specific field analysis: check how queries reference this field
+FIELD_ANALYSIS=$(echo "$QUERY_SUMMARIES" | jq --arg f "$FIELD" '
+  . as $queries |
+  ($queries | length) as $total |
+  
+  # Queries that reference this field anywhere (in any column list)
+  [$queries[] | select(.all_columns | index($f))] as $refs |
+  ($refs | length) as $references_field |
+  
+  # Queries that have a where predicate on this field
+  [$queries[] | select([.where_predicates[]? | select(.field == $f)] | length > 0)] as $filtered |
+  ($filtered | length) as $filters_with_field |
+  
+  # Queries that group by this field
+  [$queries[] | select(.summarize_groups | index($f))] as $grouped |
+  ($grouped | length) as $groups_by_field |
+  
+  # Queries that reference field but dont have specific filter predicates
+  # (means ALL values of this field are potentially accessed)
+  ([$refs[] | select([.where_predicates[]? | select(.field == $f)] | length == 0)] | length) as $unfiltered_refs |
+  
+  # Extract all filtered values across all queries
+  [
+    $queries[].where_predicates[]? | 
+    select(.field == $f) |
+    if .values then .values[] else .value end
+  ] | map(select(. != null)) | unique as $filtered_values |
+  
+  {
+    total_queries: $total,
+    references_field: $references_field,
+    queries_with_filter: $filters_with_field,
+    groups_by_field: $groups_by_field,
+    unfiltered_references: $unfiltered_refs,
+    filtered_values: $filtered_values,
+    distinct_values_filtered: ($filtered_values | length),
+    field_coverage_pct: (if $total > 0 then (100 * $references_field / $total | floor) else 0 end)
+  }
+')
 
-echo "$QUERIED_VALUES"
+echo "--- Query Pattern Analysis for '$FIELD' ---"
+echo "$FIELD_ANALYSIS" | jq -r '
+  "Total queries:              \(.total_queries)",
+  "Queries referencing field:  \(.references_field) (\(.field_coverage_pct)%)",
+  "  - With value filters:     \(.queries_with_filter) queries (\(.distinct_values_filtered) distinct values)",
+  "  - Group by (summarize):   \(.groups_by_field)", 
+  "  - No filter (all values): \(.unfiltered_references)"
+'
+
+UNFILTERED=$(echo "$FIELD_ANALYSIS" | jq '.unfiltered_references')
+FILTERED_VALUES=$(echo "$FIELD_ANALYSIS" | jq -r '.filtered_values[]' 2>/dev/null | sort -u)
+FILTERED_COUNT=$(echo "$FILTERED_VALUES" | grep -c . 2>/dev/null || echo 0)
+
 echo ""
 
-# Extract just the values for the anti-join
-VALUES_LIST=$(echo "$QUERIED_VALUES" | grep "^value=" | sed 's/value=\([^ ]*\).*/\1/' | head -50)
-VALUES_COUNT=$(echo "$VALUES_LIST" | grep -c . || echo 0)
-
-if [[ "$VALUES_COUNT" -eq 0 ]]; then
-    echo "No queries filter on '$FIELD' - all values are potential waste!"
+if [[ "$UNFILTERED" -gt 0 ]]; then
+    echo "⚠️  WARNING: $UNFILTERED queries reference '$FIELD' without filtering."
+    echo "   This means ALL values of this field are technically 'used'."
+    echo "   However, these may be exploratory queries. Review before deciding."
     echo ""
-    echo "--- All values of '$FIELD' in dataset (sampled) ---"
-    $AXIOM_QUERY "$DEPLOYMENT" "
-['$DATASET']
-| where _time > ago(24h)
-| sample 0.001
-| summarize sampled_events = count() by value = tostring(['$FIELD'])
-| extend est_events_24h = sampled_events * 1000
-| order by est_events_24h desc
-| take 20
-"
-    exit 0
 fi
 
-# Build the not-in clause
-# Escape single quotes in values
-NOT_IN_CLAUSE=$(echo "$VALUES_LIST" | while read -r v; do
-    escaped=$(echo "$v" | sed "s/'/''/g")
-    echo "'$escaped'"
-done | paste -sd, -)
+if [[ "$FILTERED_COUNT" -gt 0 ]]; then
+    echo "--- Values explicitly filtered in queries ---"
+    echo "$FILTERED_VALUES" | head -30
+    if [[ "$FILTERED_COUNT" -gt 30 ]]; then
+        echo "... and $((FILTERED_COUNT - 30)) more"
+    fi
+    echo ""
+fi
 
-echo "--- Step 2: Values NOT in query filters (never-queried) ---"
-echo "Queried values: $VALUES_COUNT"
-echo "Checking for unqueried high-volume values..."
-echo ""
-
+# Get top values by volume from dataset
+echo "--- Top Values by Ingest Volume (sampled) ---"
 $AXIOM_QUERY "$DEPLOYMENT" "
 ['$DATASET']
 | where _time > ago(24h)
 | sample 0.001
-| extend field_value = tostring(['$FIELD'])
-| where isnotempty(field_value)
-| where field_value !in ($NOT_IN_CLAUSE)
-| summarize sampled_events = count() by field_value
-| extend est_events_24h = sampled_events * 1000
+| summarize sampled = count() by value = tostring(['$FIELD'])
+| extend est_events_24h = sampled * 1000
 | order by est_events_24h desc
 | take 20
-| project ['$FIELD'] = field_value, est_events_24h
+| project ['$FIELD'] = value, est_events_24h
 "
 
 echo ""
 echo "--- Recommendations ---"
-echo "Values shown above are ingested but NEVER appear in query filters."
-echo "Consider:"
-echo "  - Dropping these at source if truly unused"
-echo "  - Sampling (1:10 or 1:100) if occasionally needed"
-echo "  - Shorter retention if only needed for recent data"
-echo ""
-echo "To investigate a specific value:"
-echo "  axiom-query $DEPLOYMENT \"['$DATASET'] | where ['$FIELD'] == 'VALUE' | take 10\""
+if [[ "$UNFILTERED" -eq 0 && "$FILTERED_COUNT" -gt 0 ]]; then
+    echo "✅ All queries that reference '$FIELD' use specific filters."
+    echo "   Values NOT in the filter list above are candidates for dropping."
+    echo ""
+    echo "   To find high-volume values not in filter list, cross-reference:"
+    echo "   - Top values by volume (above)"
+    echo "   - Values in query filters"
+else
+    echo "📊 $UNFILTERED queries reference '$FIELD' without filtering."
+    echo "   This doesn't mean you can't optimize - review those queries:"
+    echo "   - Are they exploratory/ad-hoc? (may be acceptable to ignore)"
+    echo "   - Are they dashboards/alerts? (need the data)"
+    echo ""
+    echo "   Consider: even if some queries are unfiltered, high-volume values"
+    echo "   that are RARELY queried are still optimization candidates."
+fi
