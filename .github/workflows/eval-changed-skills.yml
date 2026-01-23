@@ -170,30 +170,27 @@ jobs:
       - name: Save eval report
         run: |
           mkdir -p eval-reports
+          report="eval-reports/${{ matrix.skill }}.md"
           
-          # Create report with metadata
-          cat > eval-reports/${{ matrix.skill }}.md << EOF
-### ${{ matrix.skill }}
-
-**commit:** \`${{ github.sha }}\`
-**branch:** \`${{ github.head_ref || github.ref_name }}\`
-EOF
+          echo "### ${{ matrix.skill }}" > "$report"
+          echo "" >> "$report"
+          echo "**commit:** \`${{ github.sha }}\`" >> "$report"
+          echo "**branch:** \`${{ github.head_ref || github.ref_name }}\`" >> "$report"
           
           if [ "${{ steps.baseline.outputs.has_baseline }}" = "true" ]; then
-            echo "**baseline:** \`${{ steps.baseline.outputs.baseline_id }}\`" >> eval-reports/${{ matrix.skill }}.md
+            echo "**baseline:** \`${{ steps.baseline.outputs.baseline_id }}\`" >> "$report"
           else
-            echo "**baseline:** _none (first eval)_" >> eval-reports/${{ matrix.skill }}.md
+            echo "**baseline:** _none (first eval)_" >> "$report"
           fi
           
-          echo "" >> eval-reports/${{ matrix.skill }}.md
-          echo '```' >> eval-reports/${{ matrix.skill }}.md
-          cat eval-tooling/report-section.txt >> eval-reports/${{ matrix.skill }}.md
-          echo '```' >> eval-reports/${{ matrix.skill }}.md
+          echo "" >> "$report"
+          echo '```' >> "$report"
+          cat eval-tooling/report-section.txt >> "$report"
+          echo '```' >> "$report"
           
-          # Add clickable link outside code block
           if [ -n "${{ steps.run-eval.outputs.eval_url }}" ]; then
-            echo "" >> eval-reports/${{ matrix.skill }}.md
-            echo "[view eval result](${{ steps.run-eval.outputs.eval_url }})" >> eval-reports/${{ matrix.skill }}.md
+            echo "" >> "$report"
+            echo "[view eval result](${{ steps.run-eval.outputs.eval_url }})" >> "$report"
           fi
 
       - name: Upload eval report
