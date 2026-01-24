@@ -1,8 +1,6 @@
 #!/bin/bash
 # Analyze query coverage to score and rank unused data opportunities
 #
-# Usage: analyze-query-coverage <deployment> <dataset> [field] [query_days] [ingest_days]
-#
 # Outputs ranked opportunities with scores based on:
 #   - Ingest volume (high = more savings potential)
 #   - Query frequency (low = safer to drop)
@@ -12,34 +10,65 @@ set -euo pipefail
 
 AXIOM_API="${AXIOM_API:-$HOME/.config/agents/skills/axiom-sre/scripts/axiom-api}"
 AXIOM_QUERY="${AXIOM_QUERY:-$HOME/.config/agents/skills/axiom-sre/scripts/axiom-query}"
-DEPLOYMENT="${1:-}"
-DATASET="${2:-}"
-FIELD="${3:-}"
-QUERY_DAYS="${4:-30}"    # Query history lookback (axiom-history, cheap)
-INGEST_DAYS="${5:-1}"    # Ingest volume lookback (actual dataset, expensive)
 
-if [[ -z "$DEPLOYMENT" || -z "$DATASET" ]]; then
+# Defaults
+DEPLOYMENT=""
+DATASET=""
+FIELD=""
+QUERY_DAYS="30"    # Query history lookback (axiom-history, cheap)
+INGEST_DAYS="1"    # Ingest volume lookback (actual dataset, expensive)
+
+usage() {
     cat << 'EOF'
-Usage: analyze-query-coverage <deployment> <dataset> [field] [query_days] [ingest_days]
+Usage: analyze-query-coverage -d <deployment> -D <dataset> [options]
 
 Scores data by query coverage to find optimization opportunities.
 
-Arguments:
-  deployment   Axiom deployment name
-  dataset      Dataset to analyze
-  field        (optional) Specific field to analyze values for
-  query_days   (optional) Query history lookback, default 30 (cheap)
-  ingest_days  (optional) Ingest volume lookback, default 1 (expensive)
+Required:
+  -d, --deployment NAME    Axiom deployment name
+  -D, --dataset NAME       Dataset to analyze
 
-Without field: Ranks columns by query frequency (find rarely-used columns)
-With field:    Ranks field values by query coverage (find rarely-queried subsets)
+Options:
+  -f, --field NAME         Specific field to analyze values for
+  -q, --query-days N       Query history lookback in days (default: 30, cheap)
+  -i, --ingest-days N      Ingest volume lookback in days (default: 1, expensive)
+  -h, --help               Show this help
+
+Without --field: Ranks columns by query frequency (find rarely-used columns)
+With --field:    Ranks field values by query coverage (find rarely-queried subsets)
 
 Examples:
-  analyze-query-coverage prod k8s-logs              # Rank columns (30d queries, 1d ingest)
-  analyze-query-coverage prod k8s-logs app          # Rank app values
-  analyze-query-coverage prod k8s-logs app 90 7     # 90d query history, 7d ingest volume
+  analyze-query-coverage -d prod -D k8s-logs
+  analyze-query-coverage -d prod -D k8s-logs -f app
+  analyze-query-coverage -d prod -D k8s-logs -f app -q 90 -i 7
 EOF
-    exit 1
+    exit "${1:-0}"
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -d|--deployment)
+            DEPLOYMENT="$2"; shift 2 ;;
+        -D|--dataset)
+            DATASET="$2"; shift 2 ;;
+        -f|--field)
+            FIELD="$2"; shift 2 ;;
+        -q|--query-days)
+            QUERY_DAYS="$2"; shift 2 ;;
+        -i|--ingest-days)
+            INGEST_DAYS="$2"; shift 2 ;;
+        -h|--help)
+            usage 0 ;;
+        -*)
+            echo "Unknown option: $1" >&2; usage 1 ;;
+        *)
+            echo "Unexpected argument: $1" >&2; usage 1 ;;
+    esac
+done
+
+if [[ -z "$DEPLOYMENT" || -z "$DATASET" ]]; then
+    echo "Error: --deployment and --dataset are required" >&2
+    usage 1
 fi
 
 [[ -x "$AXIOM_API" ]] || { echo "Error: axiom-api not found" >&2; exit 1; }
@@ -53,29 +82,20 @@ echo ""
 
 # Preflight: Use axiom-audit for volume estimate (no scan of actual dataset)
 echo "--- Preflight: Checking volume via axiom-audit ---"
-VOLUME_INFO=$($AXIOM_QUERY "$DEPLOYMENT" "
-['axiom-audit']
-| where action == 'usageCalculated'
-| where ['properties.dataset'] == '$DATASET'
-| where _time > ago(24h)
-| summarize 
-    total_bytes = sum(toreal(['properties.hourly_ingest_bytes'])),
-    hours = dcount(bin(_time, 1h))
-| extend gb_per_day = round(total_bytes / hours * 24 / 1000000000, 1)
-| project gb_per_day
-" 2>&1 | grep -E "^gb_per_day=" || echo "gb_per_day=0")
+VOLUME_JSON=$($AXIOM_API "$DEPLOYMENT" POST "/v1/datasets/_apl?format=tabular" "{
+  \"apl\": \"['axiom-audit'] | where action == 'usageCalculated' | where ['properties.dataset'] == '$DATASET' | where _time > ago(24h) | summarize total_bytes = sum(toreal(['properties.hourly_ingest_bytes'])), hours = dcount(bin(_time, 1h)) | extend gb_per_day = round(total_bytes / hours * 24 / 1000000000, 1) | project gb_per_day\"
+}" 2>&1)
 
-GB_PER_DAY=$(echo "$VOLUME_INFO" | sed 's/.*gb_per_day=\([^ ]*\).*/\1/')
+GB_PER_DAY=$(echo "$VOLUME_JSON" | jq -r '.tables[0].columns[0][0] // 0')
 
 echo "Dataset: ~${GB_PER_DAY} GB/day"
 
 # Estimate scan size for ingest query
-if [[ "$GB_PER_DAY" != "0" ]]; then
-    ESTIMATED_GB=$(echo "$GB_PER_DAY * $INGEST_DAYS" | bc 2>/dev/null || echo "?")
+if [[ "$GB_PER_DAY" != "0" && "$GB_PER_DAY" != "null" ]]; then
+    ESTIMATED_GB=$(jq -n "$GB_PER_DAY * $INGEST_DAYS | floor")
     echo "Ingest query will scan: ~${ESTIMATED_GB} GB (${INGEST_DAYS}d)"
     
-    # Warn if scan is large (>500 GB)
-    if [[ "$ESTIMATED_GB" != "?" ]] && (( $(echo "$ESTIMATED_GB > 500" | bc -l 2>/dev/null || echo 0) )); then
+    if [[ "$ESTIMATED_GB" -gt 500 ]]; then
         echo "⚠️  Large scan! Consider reducing ingest_days"
     fi
 else
@@ -85,51 +105,22 @@ fi
 echo "Query history: ${QUERY_DAYS}d (axiom-history, cheap)"
 echo ""
 
-# Create jq filter for AST traversal
-JQ_FILTER=$(mktemp)
-trap "rm -f $JQ_FILTER" EXIT
+# AST parser library
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+AST_PARSER="$SCRIPT_DIR/lib/ast-parser.jq"
+[[ -f "$AST_PARSER" ]] || { echo "Error: ast-parser.jq not found at $AST_PARSER" >&2; exit 1; }
 
-cat > "$JQ_FILTER" << 'JQEOF'
-# Recursively extract all column/field references from AST
-def extract_columns:
-  if type == "array" then .[] | extract_columns
-  elif type == "object" then
-    (if .kind == "Entity" and .name then .name else empty end),
-    (to_entries[] | .value | extract_columns)
-  else empty
-  end;
-
-# Extract filter predicates with field/op/value
-def extract_predicates:
-  if type != "object" then empty
-  elif .kind == "BinaryExpr" and (.op | IN("==", "!=", "contains", "!contains", "startswith", "endswith")) then
-    { field: (.left.name // null), op: .op, value: (.right.value // null) }
-  elif .kind == "BinaryExpr" and (.op | IN("and", "or")) then
-    (.left | extract_predicates), (.right | extract_predicates)
-  elif .kind == "InExpr" then
-    { field: (.left.name // null), op: "in", values: [.right.list[]?.value] }
-  elif .kind == "CallExpr" and .func.name == "not" then
-    .params[]?.expr | extract_predicates
-  else empty
-  end;
-
-# Main extraction
-{
-  all_columns: [.body | extract_columns] | unique,
-  where_predicates: [.body.operations[]? | select(.kind == "Where") | .predicate | extract_predicates],
-  summarize_groups: [.body.operations[]? | select(.kind == "Summarize") | .groups[]?.expr.name // .groups[]?.aliases[0]] | map(select(. != null)),
-  has_wildcard: ([.body.operations[]? | select(.kind == "Project") | .fields[]? | select(.kind == "Entity" and .name == "*")] | length > 0)
-}
-JQEOF
-
-# Fetch and parse queries
+# Fetch and parse queries - deduplicate first to reduce volume, then parse unique queries
 echo "Fetching query history from axiom-history..."
 PARSED_QUERIES=$($AXIOM_API "$DEPLOYMENT" POST "/v1/datasets/_apl?format=tabular" "{
-  \"apl\": \"['axiom-history'] | where _time > ago(${QUERY_DAYS}d) | where kind == 'apl' | where dataset == '$DATASET' | extend parsed = parse_apl(['query.apl']) | project parsed\"
+  \"apl\": \"['axiom-history'] | where _time > ago(${QUERY_DAYS}d) | where kind == 'apl' | where dataset == '$DATASET' | summarize count = count() by query_text = ['query.apl'] | extend parsed = parse_apl(query_text) | project parsed, count\",
+  \"limit\": 10000
 }" 2>&1)
 
-QUERY_COUNT=$(echo "$PARSED_QUERIES" | jq -r '.tables[0].columns | length // 0')
-echo "Found $QUERY_COUNT queries to analyze"
+UNIQUE_QUERIES=$(echo "$PARSED_QUERIES" | jq -r '.tables[0].columns[0] | length // 0')
+TOTAL_EXECUTIONS=$(echo "$PARSED_QUERIES" | jq -r '[.tables[0].columns[1][]] | add // 0')
+echo "Found $UNIQUE_QUERIES unique queries ($TOTAL_EXECUTIONS total executions)"
+QUERY_COUNT="$UNIQUE_QUERIES"
 
 if [[ "$QUERY_COUNT" -eq 0 ]]; then
     echo ""
@@ -141,9 +132,9 @@ if [[ "$QUERY_COUNT" -eq 0 ]]; then
     exit 0
 fi
 
-# Extract structured info from each query
+# Extract structured info from each query (column 0 = parsed AST)
 echo "Parsing AST and extracting usage patterns..."
-QUERY_SUMMARIES=$(echo "$PARSED_QUERIES" | jq -r '.tables[0].columns[][0]' | jq -f "$JQ_FILTER" -c 2>/dev/null | jq -s '.')
+QUERY_SUMMARIES=$(echo "$PARSED_QUERIES" | jq -r '.tables[0].columns[0][]' | jq -L "$SCRIPT_DIR/lib" 'include "ast-parser"; extract_query_info' -c 2>/dev/null | jq -s '.')
 
 # Aggregate column usage across all queries
 COLUMN_USAGE=$(echo "$QUERY_SUMMARIES" | jq '
@@ -160,27 +151,87 @@ COLUMN_USAGE=$(echo "$QUERY_SUMMARIES" | jq '
 
 WILDCARD_COUNT=$(echo "$QUERY_SUMMARIES" | jq '[.[] | select(.has_wildcard)] | length')
 
-# If no field specified, show column usage ranking
+# If no field specified, show column usage ranking with pruning analysis
 if [[ -z "$FIELD" ]]; then
     echo ""
     echo "--- Column Usage Ranking ---"
     echo "Total queries: $QUERY_COUNT | Queries with wildcards: $WILDCARD_COUNT"
     echo ""
-    echo "$COLUMN_USAGE" | jq -r '
-      .[:30][] | 
-      "\(.column)\tqueries=\(.query_count)\tcoverage=\(.coverage_pct)%"
-    ' | column -t -s$'\t'
     
-    # Find columns that are never referenced
+    # Phase 4: Column Pruning - Fetch schema via random sample (captures varied record shapes)
+    echo "Fetching dataset schema..."
+    SCHEMA_JSON=$($AXIOM_API "$DEPLOYMENT" POST "/v1/datasets/_apl?format=tabular" "{
+      \"apl\": \"['$DATASET'] | where _time > ago(${INGEST_DAYS}d) | sample 0.01 | getschema | project ColumnName\",
+      \"limit\": 50000
+    }" 2>&1)
+    
+    # Compare schema columns against used columns in jq
+    COLUMN_COMPARISON=$(echo "$SCHEMA_JSON" | jq --argjson used "$COLUMN_USAGE" '
+      [.tables[0].columns[0][]] as $schema |
+      [$used[].column] as $used_list |
+      {
+        schema_count: ($schema | length),
+        used_count: ($used_list | length),
+        unused: [$schema[] | select(. as $c | $used_list | index($c) | not)],
+        unused_count: ([$schema[] | select(. as $c | $used_list | index($c) | not)] | length)
+      }
+    ')
+    
+    SCHEMA_COUNT=$(echo "$COLUMN_COMPARISON" | jq -r '.schema_count')
+    USED_COUNT=$(echo "$COLUMN_COMPARISON" | jq -r '.used_count')
+    UNUSED_COUNT=$(echo "$COLUMN_COMPARISON" | jq -r '.unused_count')
+    
+    echo "Schema columns: $SCHEMA_COUNT | Used in queries: $USED_COUNT | Unused: $UNUSED_COUNT"
     echo ""
-    echo "--- Columns Never Referenced in Queries ---"
-    echo "(Compare against dataset schema to find unused columns)"
+    
+    if [[ "$WILDCARD_COUNT" -gt 0 ]]; then
+        echo "⚠️  WARNING: $WILDCARD_COUNT queries use wildcards (project * or implicit all)."
+        echo "   Cannot guarantee columns are unused - showing frequency for prioritization."
+        echo ""
+    fi
+    
+    # Phase 5: Scoring - Add opportunity score
+    echo "--- Column Opportunity Scores ---"
+    echo "(Score = 1 - coverage_ratio; higher = less queried = better candidate)"
     echo ""
-    echo "To get dataset schema:"
-    echo "  axiom-query $DEPLOYMENT \"['$DATASET'] | take 1 | getschema\""
+    
+    echo "$COLUMN_USAGE" | jq -r --argjson total "$QUERY_COUNT" '
+      "Column                                            Queries   Coverage    Score",
+      "------                                            -------   --------    -----",
+      (.[:30][] |
+        (.query_count / $total) as $cov |
+        ((1 - $cov) * 100 | floor / 100) as $score |
+        "\(.column | .[0:50] | . + " " * (50 - length)) \(.query_count | tostring | " " * (7 - length) + .)   \(.coverage_pct)%\(" " * (6 - (.coverage_pct | tostring | length)))  \($score)"
+      )
+    '
+    
     echo ""
-    echo "To analyze a specific field's values:"
-    echo "  $0 $DEPLOYMENT $DATASET <field_name>"
+    echo "--- Unused Columns (Never Referenced in ${QUERY_DAYS}d) ---"
+    if [[ "$UNUSED_COUNT" -eq 0 ]]; then
+        echo "✅ All schema columns have been referenced in queries."
+    else
+        LIMIT=50
+        [[ "$UNUSED_COUNT" -le 100 ]] && LIMIT="$UNUSED_COUNT"
+        echo "Found $UNUSED_COUNT unused columns. Showing first $LIMIT:"
+        echo ""
+        echo "$COLUMN_COMPARISON" | jq -r ".unused[:$LIMIT][]"
+        [[ "$UNUSED_COUNT" -gt "$LIMIT" ]] && echo "... and $((UNUSED_COUNT - LIMIT)) more"
+    fi
+    
+    echo ""
+    echo "--- Recommendations ---"
+    if [[ "$WILDCARD_COUNT" -gt 0 ]]; then
+        echo "📊 Review wildcard queries before pruning columns."
+        echo "   $WILDCARD_COUNT queries may access any column."
+    fi
+    
+    if [[ "$UNUSED_COUNT" -gt 0 ]]; then
+        echo "🎯 $UNUSED_COUNT columns were never referenced in ${QUERY_DAYS}d of query history."
+        echo "   These are strong candidates for column pruning."
+        echo ""
+        echo "   To analyze a specific unused column for value patterns:"
+        echo "   $0 -d $DEPLOYMENT -D $DATASET -f <column_name>"
+    fi
     exit 0
 fi
 
@@ -236,9 +287,9 @@ echo "$FIELD_ANALYSIS" | jq -r '
   "  - No filter (all values): \(.unfiltered_references)"
 '
 
-UNFILTERED=$(echo "$FIELD_ANALYSIS" | jq '.unfiltered_references')
+UNFILTERED=$(echo "$FIELD_ANALYSIS" | jq -r '.unfiltered_references // 0' | head -1)
 FILTERED_VALUES=$(echo "$FIELD_ANALYSIS" | jq -r '.filtered_values[]' 2>/dev/null | sort -u)
-FILTERED_COUNT=$(echo "$FILTERED_VALUES" | grep -c . 2>/dev/null || echo 0)
+FILTERED_COUNT=$(echo "$FILTERED_VALUES" | wc -l | tr -d ' ')
 
 echo ""
 
@@ -249,7 +300,8 @@ if [[ "$UNFILTERED" -gt 0 ]]; then
     echo ""
 fi
 
-if [[ "$FILTERED_COUNT" -gt 0 ]]; then
+# Only show if there are actually filtered values (not just empty lines)
+if [[ -n "$FILTERED_VALUES" ]] && [[ "$FILTERED_COUNT" -gt 0 ]]; then
     echo "--- Values explicitly filtered in queries ---"
     echo "$FILTERED_VALUES" | head -30
     if [[ "$FILTERED_COUNT" -gt 30 ]]; then
@@ -258,18 +310,37 @@ if [[ "$FILTERED_COUNT" -gt 0 ]]; then
     echo ""
 fi
 
-# Get top values by volume from dataset (use same time range as query history)
-echo "--- Top Values by Ingest Volume (last ${INGEST_DAYS}d, sampled) ---"
-$AXIOM_QUERY "$DEPLOYMENT" "
-['$DATASET']
-| where _time > ago(${INGEST_DAYS}d)
-| sample 0.001
-| summarize sampled = count() by value = tostring(['$FIELD'])
-| extend est_events = sampled * 1000
-| order by est_events desc
-| take 20
-| project ['$FIELD'] = value, est_events
-"
+# Phase 5: Get top values by volume and compute opportunity scores
+echo "--- Value Opportunity Scores (last ${INGEST_DAYS}d, sampled) ---"
+echo "(Score = est_volume × (1 - query_coverage); higher = better optimization candidate)"
+echo ""
+
+# Get top values by volume (JSON output for clean parsing)
+VOLUME_JSON=$($AXIOM_API "$DEPLOYMENT" POST "/v1/datasets/_apl?format=tabular" "{
+  \"apl\": \"['$DATASET'] | where _time > ago(${INGEST_DAYS}d) | sample 0.001 | summarize est_events = count() * 1000 by value = tostring(['$FIELD']) | order by est_events desc | take 50\"
+}" 2>&1)
+
+# Build filtered values as JSON array for jq
+FILTERED_JSON=$(echo "$FILTERED_VALUES" | jq -R -s 'split("\n") | map(select(length > 0))')
+
+# Cross-reference and score in jq
+echo "$VOLUME_JSON" | jq -r --argjson filtered "$FILTERED_JSON" '
+  .tables[0] as $t |
+  ($t.fields | to_entries | map({(.value.name): .key}) | add) as $idx |
+  $t.columns[$idx.value] as $values |
+  $t.columns[$idx.est_events] as $events |
+  
+  "Value                                      Est Events   Queried?        Score",
+  "-----                                      ----------   --------        -----",
+  (range($values | length) | . as $i |
+    (($values[$i] // "") | if . == "" then "(empty)" else . end) as $v |
+    ($events[$i] // 0) as $e |
+    (if ($filtered | index($v)) then "Yes" else "No" end) as $q |
+    (if $q == "Yes" then ($e / 10 | floor) else $e end) as $score |
+    (if $q == "No" and $e > 10000 then " ⚠️" else "" end) as $mark |
+    "\($v | tostring | .[0:40] | . + " " * (40 - length)) \($e | tostring | " " * (12 - length) + .) \($q | " " * (10 - length) + .) \($score | tostring | " " * (12 - length) + .)\($mark)"
+  )
+' | head -32
 
 echo ""
 echo "--- Recommendations ---"
