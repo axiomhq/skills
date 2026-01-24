@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-AXIOM_QUERY="${AXIOM_QUERY:-$HOME/.config/agents/skills/axiom-sre/scripts/axiom-query}"
+AXIOM_QUERY="${AXIOM_QUERY:-$HOME/.config/agents/skills/sre/scripts/axiom-query}"
 
 DEPLOYMENT=""
 AUDIT_DATASET=""

@@ -8,8 +8,8 @@
 
 set -euo pipefail
 
-AXIOM_API="${AXIOM_API:-$HOME/.config/agents/skills/axiom-sre/scripts/axiom-api}"
-AXIOM_QUERY="${AXIOM_QUERY:-$HOME/.config/agents/skills/axiom-sre/scripts/axiom-query}"
+AXIOM_API="${AXIOM_API:-$HOME/.config/agents/skills/sre/scripts/axiom-api}"
+AXIOM_QUERY="${AXIOM_QUERY:-$HOME/.config/agents/skills/sre/scripts/axiom-query}"
 
 # Defaults
 DEPLOYMENT=""

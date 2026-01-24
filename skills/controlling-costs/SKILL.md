@@ -60,21 +60,55 @@ scripts/update-glidepath -d <deployment> -t <threshold_tb>
 
 Run any script with `-h` for full usage.
 
+### 5. Load building-dashboards skill
+
+```
+skill: building-dashboards
+```
+
+Required for all dashboard operations. Once loaded, use its scripts:
+
+| Script | Purpose |
+|--------|---------|
+| `dashboard-list <deploy>` | Check for existing dashboards |
+| `dashboard-get <deploy> <id>` | Fetch dashboard JSON (for drift detection) |
+| `dashboard-create <deploy> <file>` | Create new dashboard |
+| `dashboard-update <deploy> <id> <file>` | Update existing dashboard |
+| `dashboard-delete <deploy> <id>` | Delete dashboard |
+
+**Before deploying:** Always run `dashboard-list` to check if cost control dashboard already exists.
+
 ### Other requirements
 
 - Access to `axiom-history` dataset (for Query Filter Patterns panel)
-- `building-dashboards` skill (for dashboard creation)
 - Tools: `jq`
 
 ## Workflow Overview
 
 ```
+0. CHECK     → Verify if dashboard/monitors already exist (drift detection)
 1. DISCOVER  → Baseline current usage (ingest, query, by dataset/org)
 2. DASHBOARD → Create visibility with cost control dashboard
 3. MONITOR   → Set up hybrid alerting (thresholds + anomaly)
 4. OPTIMIZE  → Find waste candidates, unused datasets, noisy apps
 5. TRACK     → Glidepath toward contract/budget targets
 ```
+
+## Phase 0: Check Existing Setup
+
+Before deploying anything, check what already exists:
+
+```bash
+# Check for existing cost control dashboard (building-dashboards skill)
+dashboard-list <deployment> | grep -i "cost"
+
+# Check for existing cost control monitors (axiom-sre skill)
+axiom-api <deployment> GET "/v1/monitors" | jq -r '.[] | select(.name | startswith("Cost Control:")) | "\(.id)\t\(.name)"'
+```
+
+**If dashboard/monitors exist:** Fetch and compare to detect drift:
+- `dashboard-get <deploy> <id>` to retrieve current config
+- Compare panel queries, thresholds, and filters against expected values
 
 ## Phase 1: Discovery
 
@@ -293,17 +327,29 @@ scripts/update-glidepath -d <deployment> -t <threshold_tb>
 
 ## Cleanup
 
-To delete monitors created by this skill:
+### Delete monitors
+
+Use axiom-sre's `axiom-api` script with the correct v1 endpoint:
 
 ```bash
 # List cost control monitors
-axiom-api <deployment> GET "/v2/monitors" | jq -r '.[] | select(.name | startswith("Cost Control:")) | "\(.id)\t\(.name)"'
+axiom-api <deployment> GET "/v1/monitors" | jq -r '.[] | select(.name | startswith("Cost Control:")) | "\(.id)\t\(.name)"'
 
 # Delete a monitor
-axiom-api <deployment> DELETE "/v2/monitors/<id>"
+axiom-api <deployment> DELETE "/v1/monitors/<id>"
 ```
 
-To delete the dashboard, use the building-dashboards skill or the Axiom UI.
+### Delete dashboard
+
+Use building-dashboards skill:
+
+```bash
+# Find cost control dashboard
+dashboard-list <deployment> | grep -i cost
+
+# Delete it
+dashboard-delete <deployment> <id>
+```
 
 **Note:** Running `create-monitors` multiple times creates duplicate monitors. Delete existing ones first if re-deploying.
 

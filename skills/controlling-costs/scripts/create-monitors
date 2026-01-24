@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-AXIOM_API="${AXIOM_API:-$HOME/.config/agents/skills/axiom-sre/scripts/axiom-api}"
+AXIOM_API="${AXIOM_API:-$HOME/.config/agents/skills/sre/scripts/axiom-api}"
 
 # Defaults
 DEPLOYMENT=""

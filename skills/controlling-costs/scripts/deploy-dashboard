@@ -5,7 +5,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AXIOM_API="${AXIOM_API:-$HOME/.config/agents/skills/axiom-sre/scripts/axiom-api}"
+AXIOM_API="${AXIOM_API:-$HOME/.config/agents/skills/sre/scripts/axiom-api}"
 TEMPLATE="$SCRIPT_DIR/../templates/dashboard.json"
 
 # Defaults
