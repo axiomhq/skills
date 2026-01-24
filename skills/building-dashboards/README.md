@@ -13,17 +13,15 @@ Designs and builds Axiom dashboards via API. Covers chart types, APL patterns, S
 ## Installation
 
 ```bash
-# Amp
-amp skill add axiomhq/skills/building-dashboards
-
-# npx (Claude Code, Cursor, Codex, and more)
-npx skills add axiomhq/skills -s building-dashboards
+npx skills add axiomhq/skills
 ```
 
 ## Prerequisites
 
 - `axiom-sre` skill (for API access and schema discovery)
 - Tools: `jq`, `curl`
+
+The install command above includes all skill dependencies.
 
 ## Configuration
 

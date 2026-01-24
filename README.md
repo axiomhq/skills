@@ -19,29 +19,11 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 
 ## Installation
 
-**Start with `sre`** - it's the foundation skill that others depend on for API access and includes interactive setup.
-
-### Amp
-
 ```bash
-amp skill add axiomhq/skills/sre              # Install first - has setup script
-amp skill add axiomhq/skills/spl-to-apl
-amp skill add axiomhq/skills/building-dashboards
-amp skill add axiomhq/skills/controlling-costs
-```
-
-### npx (Claude Code, Cursor, Codex, and more)
-
-```bash
-# Install all skills
 npx skills add axiomhq/skills
-
-# Install specific skill
-npx skills add axiomhq/skills -s sre          # Install first - has setup script
-npx skills add axiomhq/skills -s spl-to-apl
-npx skills add axiomhq/skills -s building-dashboards
-npx skills add axiomhq/skills -s controlling-costs
 ```
+
+This installs all skills. Skills have dependencies on each other (e.g., `controlling-costs` depends on `sre` and `building-dashboards`), so installing all is recommended.
 
 After installing, run the setup script to configure Axiom access:
 
