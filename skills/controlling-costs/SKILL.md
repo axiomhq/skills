@@ -65,7 +65,7 @@ Run any script with `-h` for full usage.
 
 - Access to `axiom-history` dataset (for Query Filter Patterns panel)
 - `building-dashboards` skill (for dashboard creation)
-- Tools: `jq`, `bc`
+- Tools: `jq`
 
 ## Workflow Overview
 
@@ -82,11 +82,11 @@ Run any script with `-h` for full usage.
 Run baseline queries to understand current state:
 
 ```bash
-# Get 30-day usage stats
-scripts/baseline-stats <deployment>
-
-# Or manually:
+# Get 30-day usage stats and Analysis Queue
+scripts/baseline-stats -d <deployment> -a <audit-dataset>
 ```
+
+Manual query for daily stats:
 
 ```apl
 ['axiom-audit']
@@ -114,7 +114,7 @@ Key metrics to capture:
 Deploy the cost control dashboard from `templates/dashboard.json`:
 
 ```bash
-scripts/deploy-dashboard <deployment>
+scripts/deploy-dashboard -d <deployment> -a <audit-dataset>
 ```
 
 Dashboard includes:
@@ -132,7 +132,7 @@ See `reference/dashboard-panels.md` for panel details.
 Deploy hybrid monitoring strategy:
 
 ```bash
-scripts/create-monitors <deployment>
+scripts/create-monitors -d <deployment> -a <audit-dataset>
 ```
 
 ### Three-Layer Strategy
@@ -153,55 +153,40 @@ scripts/create-monitors <deployment>
 
 See `reference/monitor-strategy.md` for threshold derivation.
 
-## Phase 4: Optimization (STRICT PROCEDURE)
+## Phase 4: Optimization
 
-**Follow these steps IN ORDER. Do not skip steps. Complete each dataset fully before moving to the next.**
-
----
-
-### STEP 4.1: Get Waste Candidates List
-
-Run this query to get datasets ranked by Work/GB (lowest first = most waste):
+Run baseline-stats to get your Analysis Queue:
 
 ```bash
 scripts/baseline-stats -d <deployment> -a <audit-dataset>
 ```
 
-Or manually:
-```apl
-['<audit-dataset>']
-| where action == 'usageCalculated'
-| where _time > ago(30d)
-| summarize 
-    total_bytes = sum(['properties.hourly_ingest_bytes']),
-    query_gbms = sum(['properties.hourly_billable_query_gbms'])
-  by dataset = tostring(['properties.dataset'])
-| extend ingest_gb = total_bytes / 1000000000
-| where ingest_gb > 10
-| extend work_per_gb = query_gbms / ingest_gb
-| order by work_per_gb asc
-| take 20
-```
+The script outputs a prioritized queue of datasets to analyze:
 
-**CHECKPOINT:** You now have a ranked list. Work/GB meanings:
-- **= 0** → Never queried (🔴 drop candidate)
-- **< 100** → Rarely queried (🟡 analyze further)
-- **> 1000** → Actively used (🟢 but may have unqueried subsets)
+| Priority | Meaning | Action |
+|----------|---------|--------|
+| **P0⛔** | Top 3 by ingest OR >10% of total | MANDATORY — do not skip |
+| **P1** | Never queried (query_gbms = 0) | Strong drop candidate |
+| **P2** | Rarely queried (Work/GB < 100) | Likely waste |
+| **P3** | Top 10 by ingest | Check for unqueried subsets |
+
+**Work/GB** = query cost (GB·ms) / ingest (GB). Lower = less queried relative to size.
+
+**Rules:**
+1. Work top-to-bottom. Do not reorder.
+2. Complete each dataset fully before moving to next.
+3. You are NOT done until all ⛔ entries are analyzed.
+4. **Minimum:** ALL P0 + ALL P1 + all datasets with `top5_ingest` in Reasons column.
 
 ---
 
-### STEP 4.2: Analyze Each Dataset (IN ORDER)
+### STEP 4.1: Analyze Each Dataset (IN ORDER)
 
-**Process datasets in this priority order:**
-1. Work/GB = 0 (never queried)
-2. Work/GB < 100 (rarely queried)
-3. Highest ingest volume (even if actively queried)
-
-**For EACH dataset, complete ALL sub-steps before moving to the next dataset.**
+**For EACH dataset in the queue, complete ALL sub-steps before moving to the next.**
 
 ---
 
-#### STEP 4.2.1: Run Column Analysis
+#### STEP 4.1.1: Run Column Analysis
 
 ```bash
 scripts/analyze-query-coverage -d <deployment> -D <dataset> -a <audit-dataset>
@@ -217,7 +202,7 @@ scripts/analyze-query-coverage -d <deployment> -D <dataset> -a <audit-dataset>
 
 ---
 
-#### STEP 4.2.2: Run Field Value Analysis
+#### STEP 4.1.2: Run Field Value Analysis
 
 Pick a field from the "Suggested fields for value analysis" list (usually app/service identifier):
 
@@ -234,11 +219,11 @@ scripts/analyze-query-coverage -d <deployment> -D <dataset> -a <audit-dataset> -
 
 ---
 
-#### STEP 4.2.3: Handle Empty Values (REQUIRED if present)
+#### STEP 4.1.3: Handle Empty Values (REQUIRED if present)
 
 **If the script shows `(empty)` with >5% volume, you MUST drill down:**
 
-1. Look at the column usage list from Step 4.2.1
+1. Look at the column usage list from Step 4.1.1
 2. Pick an alternative field (e.g., `kubernetes.namespace_name`, `kubernetes.container_name`)
 3. Run field value analysis on that field:
 
@@ -252,7 +237,7 @@ scripts/analyze-query-coverage -d <deployment> -D <dataset> -a <audit-dataset> -
 
 ---
 
-#### STEP 4.2.4: Document Dataset Recommendations
+#### STEP 4.1.4: Document Dataset Recommendations
 
 Before moving to next dataset, record:
 - [ ] Dataset name and 30d ingest volume
@@ -264,7 +249,7 @@ Before moving to next dataset, record:
 
 ---
 
-### STEP 4.3: Compile Final Report
+### STEP 4.2: Compile Final Report
 
 After analyzing ALL priority datasets, use `reference/analysis-report-template.md` to format findings:
 - Executive summary with total potential savings
@@ -304,7 +289,7 @@ Update the Reduction Glidepath monitor threshold weekly:
 
 ```bash
 # Update glidepath threshold
-scripts/update-glidepath <deployment> <new_threshold_tb>
+scripts/update-glidepath -d <deployment> -t <threshold_tb>
 ```
 
 ## Cleanup
