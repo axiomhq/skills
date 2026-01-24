@@ -26,6 +26,21 @@ npx skills add axiomhq/skills -s controlling-costs
 - Access to `axiom-audit` and `axiom-history` datasets
 - Tools: `jq`, `bc`
 
+## Configuration
+
+Create `~/.axiom.toml` with your Axiom deployment(s):
+
+```toml
+[deployments.prod]
+url = "https://api.axiom.co"
+token = "xaat-your-api-token"
+org_id = "your-org-id"
+```
+
+Get your org_id from Settings → Organization, and create an API token at Settings → API Tokens.
+
+**Tip:** Run `scripts/setup` from the `axiom-sre` skill for interactive configuration.
+
 ## Usage
 
 ```bash

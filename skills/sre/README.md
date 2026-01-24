@@ -22,8 +22,30 @@ npx skills add axiomhq/skills -s sre
 ## Prerequisites
 
 - Access to Axiom deployment(s)
-- Config in `~/.axiom.toml` with url, token, org_id per deployment
 - Tools: `jq`, `curl`
+
+## Setup
+
+Run the interactive setup to configure Axiom access and initialize memory:
+
+```bash
+scripts/setup
+```
+
+This will:
+1. Create the memory system for storing patterns and learnings
+2. Guide you through creating `~/.axiom.toml` if it doesn't exist
+
+**To configure manually**, create `~/.axiom.toml`:
+
+```toml
+[deployments.prod]
+url = "https://api.axiom.co"
+token = "xaat-your-api-token"
+org_id = "your-org-id"
+```
+
+Get your org_id from Settings → Organization, and create an API token at Settings → API Tokens.
 
 ## Usage
 

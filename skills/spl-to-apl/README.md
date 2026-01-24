@@ -39,7 +39,20 @@ npx skills add axiomhq/skills -s spl-to-apl
 3. **Field escaping** - Use `['field.with.dots']` for dotted fields
 4. **Case sensitivity** - Use `_cs` variants for faster queries (`has_cs`, `contains_cs`)
 
+## Configuration
+
+This skill translates queries but doesn't execute them directly. To run translated queries, configure `~/.axiom.toml`:
+
+```toml
+[deployments.prod]
+url = "https://api.axiom.co"
+token = "xaat-your-api-token"
+org_id = "your-org-id"
+```
+
+Get your org_id from Settings → Organization, and create an API token at Settings → API Tokens.
+
 ## Related Skills
 
-- `axiom-sre` - For running translated queries
+- `axiom-sre` - For running translated queries (includes interactive setup)
 - `building-dashboards` - For creating dashboards from translated queries

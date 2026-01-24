@@ -23,8 +23,22 @@ npx skills add axiomhq/skills -s building-dashboards
 ## Prerequisites
 
 - `axiom-sre` skill (for API access and schema discovery)
-- Config in `~/.axiom.toml` with url, token, org_id
 - Tools: `jq`, `curl`
+
+## Configuration
+
+Create `~/.axiom.toml` with your Axiom deployment(s):
+
+```toml
+[deployments.prod]
+url = "https://api.axiom.co"
+token = "xaat-your-api-token"
+org_id = "your-org-id"
+```
+
+Get your org_id from Settings → Organization, and create an API token at Settings → API Tokens.
+
+**Tip:** Run `scripts/setup` from the `axiom-sre` skill for interactive configuration.
 
 ## Usage
 
