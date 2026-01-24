@@ -17,6 +17,7 @@ DATASET=""
 FIELD=""
 QUERY_DAYS="30"    # Query history lookback (axiom-history, cheap)
 INGEST_DAYS="1"    # Ingest volume lookback (actual dataset, expensive)
+AUDIT_DATASET="axiom-audit"  # Audit dataset for volume estimates
 
 usage() {
     cat << 'EOF'
@@ -32,6 +33,7 @@ Options:
   -f, --field NAME         Specific field to analyze values for
   -q, --query-days N       Query history lookback in days (default: 30, cheap)
   -i, --ingest-days N      Ingest volume lookback in days (default: 1, expensive)
+  -a, --audit-dataset NAME Audit dataset name (default: axiom-audit)
   -h, --help               Show this help
 
 Without --field: Ranks columns by query frequency (find rarely-used columns)
@@ -57,6 +59,8 @@ while [[ $# -gt 0 ]]; do
             QUERY_DAYS="$2"; shift 2 ;;
         -i|--ingest-days)
             INGEST_DAYS="$2"; shift 2 ;;
+        -a|--audit-dataset)
+            AUDIT_DATASET="$2"; shift 2 ;;
         -h|--help)
             usage 0 ;;
         -*)
@@ -80,10 +84,10 @@ echo "Deployment: $DEPLOYMENT"
 echo "Dataset: $DATASET"
 echo ""
 
-# Preflight: Use axiom-audit for volume estimate (no scan of actual dataset)
-echo "--- Preflight: Checking volume via axiom-audit ---"
+# Preflight: Use audit dataset for volume estimate (no scan of actual dataset)
+echo "--- Preflight: Checking volume via $AUDIT_DATASET ---"
 VOLUME_JSON=$($AXIOM_API "$DEPLOYMENT" POST "/v1/datasets/_apl?format=tabular" "{
-  \"apl\": \"['axiom-audit'] | where action == 'usageCalculated' | where ['properties.dataset'] == '$DATASET' | where _time > ago(24h) | summarize total_bytes = sum(toreal(['properties.hourly_ingest_bytes'])), hours = dcount(bin(_time, 1h)) | extend gb_per_day = round(total_bytes / hours * 24 / 1000000000, 1) | project gb_per_day\"
+  \"apl\": \"['$AUDIT_DATASET'] | where action == 'usageCalculated' | where ['properties.dataset'] == '$DATASET' | where _time > ago(24h) | summarize total_bytes = sum(toreal(['properties.hourly_ingest_bytes'])), hours = dcount(bin(_time, 1h)) | extend gb_per_day = round(total_bytes / hours * 24 / 1000000000, 1) | project gb_per_day\"
 }" 2>&1)
 
 GB_PER_DAY=$(echo "$VOLUME_JSON" | jq -r '.tables[0].columns[0][0] // 0')
@@ -99,7 +103,7 @@ if [[ "$GB_PER_DAY" != "0" && "$GB_PER_DAY" != "null" ]]; then
         echo "⚠️  Large scan! Consider reducing ingest_days"
     fi
 else
-    echo "No volume data in axiom-audit - dataset may be new or name incorrect"
+    echo "No volume data in $AUDIT_DATASET - dataset may be new or name incorrect"
 fi
 
 echo "Query history: ${QUERY_DAYS}d (axiom-history, cheap)"
