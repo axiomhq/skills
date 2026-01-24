@@ -12,7 +12,11 @@ Analyzes Axiom query patterns to find unused data, then builds dashboards and mo
 ## Installation
 
 ```bash
+# Amp
 amp skill add axiomhq/skills/controlling-costs
+
+# npx (Claude Code, Cursor, Codex, and more)
+npx skills add axiomhq/skills -s controlling-costs
 ```
 
 ## Prerequisites
