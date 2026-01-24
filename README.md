@@ -35,6 +35,28 @@ npx skills add axiomhq/skills -s building-dashboards
 npx skills add axiomhq/skills -s controlling-costs
 ```
 
+## Configuration
+
+Most skills require access to Axiom. Create `~/.axiom.toml` with your deployment(s):
+
+```toml
+[deployments.prod]
+url = "https://api.axiom.co"
+token = "xaat-your-api-token"
+org_id = "your-org-id"
+
+[deployments.staging]
+url = "https://api.axiom.co"
+token = "xaat-your-staging-token"
+org_id = "your-staging-org-id"
+```
+
+**To get these values:**
+1. **org_id**: Settings → Organization → Copy the org ID (or from URL: `app.axiom.co/{org_id}/...`)
+2. **token**: Settings → API Tokens → Create new token with query permissions
+
+The deployment name (e.g., `prod`, `staging`) is passed to scripts: `scripts/axiom-query prod "..."`
+
 ## License
 
 MIT License - see [LICENSE](LICENSE)
