@@ -84,7 +84,7 @@ else
   echo ""
   echo "You'll need:"
   echo "  1. org_id:  Settings → Organization (or from URL: app.axiom.co/{org_id}/...)"
-  echo "  2. token:   Settings → API Tokens → Create token with query permissions"
+  echo "  2. token:   Settings → Profile → Personal Access Tokens (use a PAT, not API token)"
   echo ""
   
   # Check if we're in an interactive terminal

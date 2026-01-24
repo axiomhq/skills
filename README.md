@@ -53,7 +53,7 @@ org_id = "your-staging-org-id"
 
 **To get these values:**
 1. **org_id**: Settings → Organization → Copy the org ID (or from URL: `app.axiom.co/{org_id}/...`)
-2. **token**: Settings → API Tokens → Create new token with query permissions
+2. **token**: Settings → Profile → Personal Access Tokens → Create token (use a Personal Access Token, not an API token, for full query access)
 
 The deployment name (e.g., `prod`, `staging`) is passed to scripts: `scripts/axiom-query prod "..."`
 
