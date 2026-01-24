@@ -1,6 +1,6 @@
 ---
-name: axiom-cost-control
-description: Builds Axiom cost control dashboards and monitors for usage optimization. Use when asked to reduce Axiom costs, track ingest/query spend, find unused datasets, or set up cost alerting.
+name: controlling-costs
+description: Analyzes Axiom query patterns to find unused data, then builds dashboards and monitors for cost optimization. Use when asked to reduce Axiom costs, find unused columns or field values, identify data waste, or track ingest spend.
 ---
 
 # Axiom Cost Control
