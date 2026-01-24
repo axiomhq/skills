@@ -1,7 +1,6 @@
 ---
 name: axiom-sre
 description: Expert SRE investigator for incidents and debugging. Uses hypothesis-driven methodology and systematic triage. Can query Axiom observability when available. Use for incident response, root cause analysis, production debugging, or log investigation.
-skill_path: .
 ---
 
 > **Note:** All script paths in this skill (e.g., `scripts/axiom-query`) are relative to this skill's folder: `~/.config/agents/skills/axiom-sre/`. Run them with full path or cd into the skill folder first.
