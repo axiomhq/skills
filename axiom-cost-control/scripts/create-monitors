@@ -2,13 +2,14 @@
 # Create 5 hybrid cost control monitors
 # Strategy: Budget guardrails (threshold) + Spike attribution (anomaly) + Glidepath (threshold)
 #
-# Usage: create-monitors <deployment> [notifier_id] [contract_tb] [glidepath_tb]
+# Usage: create-monitors <deployment> [notifier_id] [contract_tb] [glidepath_tb] [audit_dataset]
 #
 # Arguments:
-#   deployment   - Axiom deployment name (required)
-#   notifier_id  - Notifier ID for alerts (optional, monitors created without alerts if omitted)
-#   contract_tb  - Daily contract limit in TB (default: 167 = 5 PB/month)
-#   glidepath_tb - Initial glidepath target in TB (default: contract_tb * 1.5)
+#   deployment    - Axiom deployment name (required)
+#   notifier_id   - Notifier ID for alerts (optional, monitors created without alerts if omitted)
+#   contract_tb   - Daily contract limit in TB (default: 167 = 5 PB/month)
+#   glidepath_tb  - Initial glidepath target in TB (default: contract_tb * 1.5)
+#   audit_dataset - Audit dataset name (default: axiom-audit)
 
 set -euo pipefail
 
@@ -17,6 +18,7 @@ DEPLOYMENT="${1:-staging}"
 NOTIFIER_ID="${2:-}"
 CONTRACT_TB="${3:-167}"
 GLIDEPATH_TB="${4:-}"
+AUDIT_DATASET="${5:-axiom-audit}"
 
 # Validate dependencies
 command -v jq >/dev/null 2>&1 || { echo "Error: jq required" >&2; exit 1; }
@@ -66,7 +68,7 @@ $AXIOM_API "$DEPLOYMENT" POST "/v2/monitors" "$(cat <<EOF
   "name": "Cost Control: Last 24h Ingest vs Contract",
   "description": "Budget guardrail. Last 24h ingest vs ${CONTRACT_TB} TB/day contract. Alert at >${CRIT_TB} TB (1.5x).",
   "type": "Threshold",
-  "aplQuery": "['axiom-audit']\n| where action == \"usageCalculated\"\n| summarize total_24h_tb = sum(toreal(['properties.hourly_ingest_bytes'])) / 1000000000000",
+  "aplQuery": "['$AUDIT_DATASET']\n| where action == \"usageCalculated\"\n| summarize total_24h_tb = sum(toreal(['properties.hourly_ingest_bytes'])) / 1000000000000",
   "operator": "AboveOrEqual",
   "threshold": $CRIT_TB,
   "intervalMinutes": 60,
@@ -92,7 +94,7 @@ $AXIOM_API "$DEPLOYMENT" POST "/v2/monitors" "$(cat <<EOF
   "name": "Cost Control: Per-Dataset Spike Detection",
   "description": "Spike attribution. Anomaly detection per dataset, above only.",
   "type": "AnomalyDetection",
-  "aplQuery": "['axiom-audit']\n| where action == \"usageCalculated\"\n| summarize hourly_ingest_tb = sum(toreal(['properties.hourly_ingest_bytes'])) / 1000000000000 by bin(_time, 1h), dataset = tostring(['properties.dataset'])",
+  "aplQuery": "['$AUDIT_DATASET']\n| where action == \"usageCalculated\"\n| summarize hourly_ingest_tb = sum(toreal(['properties.hourly_ingest_bytes'])) / 1000000000000 by bin(_time, 1h), dataset = tostring(['properties.dataset'])",
   "operator": "Above",
   "tolerance": 3,
   "intervalMinutes": 15,
@@ -117,7 +119,7 @@ $AXIOM_API "$DEPLOYMENT" POST "/v2/monitors" "$(cat <<EOF
   "name": "Cost Control: Top Dataset Dominance",
   "description": "Alerts when any dataset exceeds 40% of hourly ingest. Catches concentration/runaway datasets.",
   "type": "Threshold",
-  "aplQuery": "['axiom-audit']\n| where action == \"usageCalculated\"\n| summarize hourly_bytes = sum(toreal(['properties.hourly_ingest_bytes'])) by bin(_time, 1h), dataset = tostring(['properties.dataset'])\n| top 1 by hourly_bytes\n| extend hourly_tb = hourly_bytes / 1000000000000",
+  "aplQuery": "['$AUDIT_DATASET']\n| where action == \"usageCalculated\"\n| summarize hourly_bytes = sum(toreal(['properties.hourly_ingest_bytes'])) by bin(_time, 1h), dataset = tostring(['properties.dataset'])\n| top 1 by hourly_bytes\n| extend hourly_tb = hourly_bytes / 1000000000000",
   "operator": "AboveOrEqual",
   "threshold": $DOMINANCE_THRESH,
   "intervalMinutes": 60,
@@ -139,7 +141,7 @@ $AXIOM_API "$DEPLOYMENT" POST "/v2/monitors" "$(cat <<EOF
   "name": "Cost Control: Query Cost Spike",
   "description": "Hourly anomaly on query GB·ms. Detects unusual query cost spikes.",
   "type": "AnomalyDetection",
-  "aplQuery": "['axiom-audit']\n| where action == \"usageCalculated\"\n| summarize hourly_query_gbms = sum(toreal(['properties.hourly_billable_query_gbms'])) by bin(_time, 1h)",
+  "aplQuery": "['$AUDIT_DATASET']\n| where action == \"usageCalculated\"\n| summarize hourly_query_gbms = sum(toreal(['properties.hourly_billable_query_gbms'])) by bin(_time, 1h)",
   "operator": "Above",
   "tolerance": 3,
   "intervalMinutes": 15,
@@ -165,7 +167,7 @@ $AXIOM_API "$DEPLOYMENT" POST "/v2/monitors" "$(cat <<EOF
   "name": "Cost Control: Reduction Glidepath",
   "description": "Tracks progress toward ${CONTRACT_TB} TB/day contract. Current target: ${GLIDEPATH_TB} TB/day. Update weekly with update-glidepath script.",
   "type": "Threshold",
-  "aplQuery": "['axiom-audit']\n| where action == \"usageCalculated\"\n| summarize daily_ingest_tb = sum(toreal(['properties.hourly_ingest_bytes'])) / 1000000000000 by bin(_time, 1d)",
+  "aplQuery": "['$AUDIT_DATASET']\n| where action == \"usageCalculated\"\n| summarize daily_ingest_tb = sum(toreal(['properties.hourly_ingest_bytes'])) / 1000000000000 by bin(_time, 1d)",
   "operator": "AboveOrEqual",
   "threshold": $GLIDEPATH_TB,
   "intervalMinutes": 360,

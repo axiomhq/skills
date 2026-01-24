@@ -1,10 +1,11 @@
 #!/bin/bash
 # Get baseline usage statistics for cost control planning
-# Usage: baseline-stats <deployment>
+# Usage: baseline-stats <deployment> [audit-dataset]
 
 set -euo pipefail
 
 DEPLOYMENT="${1:-staging}"
+AUDIT_DATASET="${2:-axiom-audit}"
 AXIOM_QUERY="${AXIOM_QUERY:-$HOME/.config/agents/skills/axiom-sre/scripts/axiom-query}"
 
 # Validate dependencies
@@ -13,12 +14,13 @@ command -v jq >/dev/null 2>&1 || { echo "Error: jq required" >&2; exit 1; }
 
 echo "=== Axiom Cost Control: Baseline Stats ==="
 echo "Deployment: $DEPLOYMENT"
+echo "Audit dataset: $AUDIT_DATASET"
 echo "Time range: Last 30 days"
 echo ""
 
 echo "--- Daily Ingest Statistics (TB) ---"
 $AXIOM_QUERY "$DEPLOYMENT" "
-['axiom-audit']
+['$AUDIT_DATASET']
 | where action == 'usageCalculated'
 | where _time > ago(30d)
 | summarize daily_bytes = sum(toreal(['properties.hourly_ingest_bytes'])) by bin(_time, 1d)
@@ -36,7 +38,7 @@ $AXIOM_QUERY "$DEPLOYMENT" "
 echo ""
 echo "--- Top 10 Datasets by Ingest (GB) ---"
 $AXIOM_QUERY "$DEPLOYMENT" "
-['axiom-audit']
+['$AUDIT_DATASET']
 | where action == 'usageCalculated'
 | where _time > ago(30d)
 | summarize total_bytes = sum(toreal(['properties.hourly_ingest_bytes'])) by dataset = tostring(['properties.dataset'])
@@ -49,7 +51,7 @@ $AXIOM_QUERY "$DEPLOYMENT" "
 echo ""
 echo "--- Top 10 Datasets by Query Cost (GB·ms) ---"
 $AXIOM_QUERY "$DEPLOYMENT" "
-['axiom-audit']
+['$AUDIT_DATASET']
 | where action == 'usageCalculated'
 | where _time > ago(30d)
 | summarize total_gbms = sum(toreal(['properties.hourly_billable_query_gbms'])) by dataset = tostring(['properties.dataset'])
@@ -63,7 +65,7 @@ $AXIOM_QUERY "$DEPLOYMENT" "
 echo ""
 echo "--- Waste Candidates (Low Query Activity) ---"
 $AXIOM_QUERY "$DEPLOYMENT" "
-['axiom-audit']
+['$AUDIT_DATASET']
 | where action == 'usageCalculated'
 | where _time > ago(30d)
 | summarize 
