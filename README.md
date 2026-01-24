@@ -22,10 +22,17 @@ amp skill add axiomhq/skills/building-dashboards
 amp skill add axiomhq/skills/controlling-costs
 ```
 
-### Claude Code
+### npx (Claude Code, Cursor, Codex, and more)
 
 ```bash
-git clone https://github.com/axiomhq/skills.git ~/.claude/skills/axiom-skills
+# Install all skills
+npx skills add axiomhq/skills
+
+# Install specific skill
+npx skills add axiomhq/skills -s sre
+npx skills add axiomhq/skills -s spl-to-apl
+npx skills add axiomhq/skills -s building-dashboards
+npx skills add axiomhq/skills -s controlling-costs
 ```
 
 ## License
