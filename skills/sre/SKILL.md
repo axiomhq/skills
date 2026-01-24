@@ -81,6 +81,19 @@ If same entry exists in multiple tiers: Personal overrides Org.
 
 ### Writing Memory
 
+Use `scripts/mem-write` to save entries:
+
+```bash
+# Personal tier (default)
+scripts/mem-write facts "dataset-location" "Primary logs in k8s-logs-dev dataset"
+
+# With type and tags
+scripts/mem-write --type pattern --tags "db,timeout" patterns "conn-pool" "Connection pool exhaustion signature"
+
+# Org tier
+scripts/mem-write --org axiom patterns "timeout-pattern" "How to detect timeouts"
+```
+
 | Trigger | Target | Example |
 |---------|--------|---------|
 | "remember this" | Personal | "Remember I prefer to DM @alice" |

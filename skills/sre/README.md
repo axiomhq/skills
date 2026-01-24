@@ -52,8 +52,11 @@ scripts/setup
 | `axiom-link` | Generate shareable query URLs |
 | `axiom-deployments` | List configured deployments |
 | `setup` | Initialize memory system |
+| `mem-write` | Write entries to memory KB |
 | `mem-sync` | Sync org memory from git |
 | `mem-digest` | Consolidate journal to KB |
+| `mem-doctor` | Health check all memory tiers |
+| `mem-share` | Push org memory changes |
 
 ## Key Principles
 
