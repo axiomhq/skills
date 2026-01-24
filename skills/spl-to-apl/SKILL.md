@@ -1,6 +1,7 @@
 ---
 name: spl-to-apl
 description: Translates Splunk SPL queries to Axiom APL. Provides command mappings, function equivalents, and syntax transformations. Use when migrating from Splunk, converting SPL queries, or learning APL equivalents of SPL patterns.
+skill_path: .
 ---
 
 # SPL to APL Translator
