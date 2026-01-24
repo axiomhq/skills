@@ -8,26 +8,64 @@ skill_path: .
 
 End-to-end workflow for Axiom usage optimization: dashboards, monitors, and waste identification.
 
-## Prerequisites
+## Pre-flight Checks (REQUIRED)
 
-- `axiom-sre` skill (for querying)
-- `building-dashboards` skill (for dashboard creation)
-- Access to `axiom-audit` dataset in target org
-- Access to `axiom-history` dataset (for Query Filter Patterns panel)
-- Tools: `jq`, `bc`
+**Complete ALL checks before starting any workflow.**
 
-### Verify Data Availability
+### 1. Load axiom-sre skill
 
-Before starting, confirm you have the required events:
+```
+skill: axiom-sre
+```
+
+All APL queries in this skill MUST use the axiom-sre workflow, NOT direct CLI commands.
+
+### 2. Verify audit dataset access
+
+This skill CANNOT work without audit data. Run:
 
 ```apl
 ['axiom-audit']
-| where _time > ago(24h)
+| where _time > ago(1h)
 | summarize count() by action
 | where action in ('usageCalculated', 'runAPLQueryCost')
 ```
 
-You need `usageCalculated` events (hourly usage metrics) and `runAPLQueryCost` events (query cost tracking).
+**If dataset not found:** STOP and ask:
+
+> "The `axiom-audit` dataset is not accessible. What is the audit dataset name for this deployment? (Common: `axiom-audit-logs-view`, `audit-logs`)
+>
+> Without audit data, this skill cannot proceed."
+
+**If dataset exists but no `usageCalculated` events:** STOP - wrong dataset.
+
+### 3. Confirm deployment and audit dataset with user
+
+Before proceeding, confirm:
+- Deployment: `<deployment>`
+- Audit dataset: `<audit-dataset>`
+
+### 4. Pass audit dataset to all scripts
+
+All scripts use named flags:
+
+```bash
+scripts/baseline-stats -d <deployment> -a <audit-dataset>
+scripts/deploy-dashboard -d <deployment> -a <audit-dataset> [-n <name>]
+scripts/create-monitors -d <deployment> -a <audit-dataset> [-c <contract_tb>] [-g <glidepath_tb>] [-n <notifier_id>]
+scripts/analyze-query-coverage -d <deployment> -D <dataset> -a <audit-dataset>
+scripts/update-glidepath -d <deployment> -t <threshold_tb>
+```
+
+**Do NOT pipe script output to `head` or `tail`** - scripts produce complete reports that should run to completion. Truncating output causes SIGPIPE (exit 141).
+
+Run any script with `-h` for full usage.
+
+### Other requirements
+
+- Access to `axiom-history` dataset (for Query Filter Patterns panel)
+- `building-dashboards` skill (for dashboard creation)
+- Tools: `jq`, `bc`
 
 ## Workflow Overview
 
@@ -115,32 +153,23 @@ scripts/create-monitors <deployment>
 
 See `reference/monitor-strategy.md` for threshold derivation.
 
-## Phase 4: Optimization
+## Phase 4: Optimization (STRICT PROCEDURE)
 
-### Optimization Philosophy
+**Follow these steps IN ORDER. Do not skip steps. Complete each dataset fully before moving to the next.**
 
-**Why parse fields from body?**
-Axiom's columnar storage compresses structured fields much better than raw text. When you parse fields out of `body` (like `app`, `level`, `error_code`), you get:
-- **Better compression**: Columnar storage can dedupe and encode structured values efficiently
-- **Faster queries**: Less I/O because queries only read needed columns
-- **Lower costs**: Smaller storage footprint and faster scans
+---
 
-**The duplication problem**: If a dataset has BOTH the raw `body` AND parsed fields containing the same data, that's storage waste. Look for:
-- `attributes.*` fields that duplicate info in `body`
-- `resource.*` fields that repeat container/pod info from log lines
-- Multiple fields with the same semantic value (e.g., `app` vs `kubernetes.labels.app`)
+### STEP 4.1: Get Waste Candidates List
 
-**System fields are not redundant**: Fields starting with `_` are Axiom system fields:
-- `_time` - Event timestamp (required)
-- `_sysTime` - When Axiom received the event (for debugging ingest lag)
-- `_rowId` - Internal row identifier
+Run this query to get datasets ranked by Work/GB (lowest first = most waste):
 
-These serve different purposes and should NOT be flagged as optimization candidates.
+```bash
+scripts/baseline-stats -d <deployment> -a <audit-dataset>
+```
 
-### Find Unused Datasets
-
+Or manually:
 ```apl
-['axiom-audit']
+['<audit-dataset>']
 | where action == 'usageCalculated'
 | where _time > ago(30d)
 | summarize 
@@ -154,102 +183,113 @@ These serve different purposes and should NOT be flagged as optimization candida
 | take 20
 ```
 
-**Work/GB = 0** means data ingested but never queried.
+**CHECKPOINT:** You now have a ranked list. Work/GB meanings:
+- **= 0** → Never queried (🔴 drop candidate)
+- **< 100** → Rarely queried (🟡 analyze further)
+- **> 1000** → Actively used (🟢 but may have unqueried subsets)
 
-### Drill Down: Find Never-Queried Subsets
+---
 
-Dataset-level analysis is just the start. Use `analyze-query-coverage` to find specific field values that are ingested but never appear in query filters:
+### STEP 4.2: Analyze Each Dataset (IN ORDER)
 
-```bash
-# See which fields are commonly filtered/grouped on
-scripts/analyze-query-coverage <deployment> <dataset>
+**Process datasets in this priority order:**
+1. Work/GB = 0 (never queried)
+2. Work/GB < 100 (rarely queried)
+3. Highest ingest volume (even if actively queried)
 
-# Find values of a specific field that are never queried
-scripts/analyze-query-coverage <deployment> <dataset> <field>
-```
+**For EACH dataset, complete ALL sub-steps before moving to the next dataset.**
 
-This uses `parse_apl()` to analyze actual query history from `axiom-history`:
-1. Extracts all APL queries against the dataset
-2. Parses WHERE clauses and SUMMARIZE BY groups
-3. Builds set of queried field/values
-4. Anti-joins to find high-volume, never-queried values
+---
 
-Example output:
-```
-kubernetes.labels.app=axiom-atlas est_events_24h=91466000  # Never filtered!
-kubernetes.labels.app=axiom-db est_events_24h=45871000     # Never filtered!
-```
-
-These represent massive savings opportunities - data being ingested but never used in queries.
-
-### Find High-Volume Unqueried Values (Key Optimization)
-
-For multi-tenant datasets like Kubernetes logs, the biggest wins come from finding **specific values that log heavily but are never queried**. Common cardinality fields to analyze:
-
-| Dataset Type | Key Fields to Analyze |
-|--------------|----------------------|
-| Kubernetes logs | `resource.k8s.pod.labels.app`, `resource.k8s.namespace.name`, `resource.k8s.container.name` |
-| Application logs | `app`, `service`, `component` |
-| Infrastructure | `host`, `instance`, `region` |
+#### STEP 4.2.1: Run Column Analysis
 
 ```bash
-# Find apps that log heavily but are never filtered for
-scripts/analyze-query-coverage -d prod -D kube_logs -f resource.k8s.pod.labels.app
-
-# Output shows:
-# - Which app values are explicitly queried (safe to keep)
-# - Which apps log millions of events but are NEVER in query filters
-# - Opportunity score combining volume × (1 - query coverage)
+scripts/analyze-query-coverage -d <deployment> -D <dataset> -a <audit-dataset>
 ```
 
-**What to look for:**
-- Apps with high `Est Events` but `Queried? = No` → candidates for log level reduction or exclusion
-- Apps with `⚠️` marker → high volume AND never queried (strongest candidates)
-- Compare against business criticality before dropping
+**CHECKPOINT:** Script will show:
+- Total queries against this dataset
+- Column usage ranking
+- Unused columns list
+- Suggested fields for value analysis
 
-**Actions for high-volume unqueried apps:**
-1. **Reduce log level** at source (warn+ only)
-2. **Sample** high-volume apps at ingest (keep 10%)
-3. **Exclude entirely** from this dataset if truly unused
-4. **Move to cold tier** if occasionally needed but not time-critical
+**If 0 queries found:** Dataset is completely unused → recommend dropping. Move to next dataset.
 
-### Find Noisy Applications
+---
 
-```apl
-['axiom-audit']
-| where action == 'usageCalculated'
-| where _time > ago(7d)
-| summarize 
-    this_week = sumif(['properties.hourly_ingest_bytes'], _time >= ago(7d)),
-    last_week = sumif(['properties.hourly_ingest_bytes'], _time < ago(7d) and _time >= ago(14d))
-  by dataset = tostring(['properties.dataset'])
-| extend delta_gb = (this_week - last_week) / 1000000000
-| extend delta_pct = 100.0 * (this_week - last_week) / last_week
-| where delta_gb > 100
-| order by delta_gb desc
-| take 10
+#### STEP 4.2.2: Run Field Value Analysis
+
+Pick a field from the "Suggested fields for value analysis" list (usually app/service identifier):
+
+```bash
+scripts/analyze-query-coverage -d <deployment> -D <dataset> -a <audit-dataset> -f <field>
 ```
 
-### Find Expensive Queries
+**CHECKPOINT:** Script will show:
+- Values explicitly queried (safe to keep)
+- Values with high volume but never queried (⚠️ markers)
+- Potential reduction percentage
 
-```apl
-['axiom-audit']
-| where action == 'runAPLQueryCost'
-| where ['properties.query_cost_gbms'] > 1000000
-| extend User = coalesce(['actor.email'], ['actor.name'], '[unknown]')
-| project _time, User, cost_gbms = ['properties.query_cost_gbms'], query = substring(['properties.query_string'], 0, 100)
-| order by cost_gbms desc
-| take 20
+**Record findings:** Note the top unqueried values and their volume.
+
+---
+
+#### STEP 4.2.3: Handle Empty Values (REQUIRED if present)
+
+**If the script shows `(empty)` with >5% volume, you MUST drill down:**
+
+1. Look at the column usage list from Step 4.2.1
+2. Pick an alternative field (e.g., `kubernetes.namespace_name`, `kubernetes.container_name`)
+3. Run field value analysis on that field:
+
+```bash
+scripts/analyze-query-coverage -d <deployment> -D <dataset> -a <audit-dataset> -f <alternative-field>
 ```
 
-### Optimization Actions
+**CHECKPOINT:** You should now understand WHAT the empty-label events are (e.g., "kube-system namespace pods without app labels").
+
+**Record findings:** Note what the empty values represent.
+
+---
+
+#### STEP 4.2.4: Document Dataset Recommendations
+
+Before moving to next dataset, record:
+- [ ] Dataset name and 30d ingest volume
+- [ ] Work/GB score
+- [ ] Top unqueried values and their volume
+- [ ] Empty value explanation (if applicable)
+- [ ] Recommended action (drop/sample/reduce log level/keep)
+- [ ] Estimated savings
+
+---
+
+### STEP 4.3: Compile Final Report
+
+After analyzing ALL priority datasets, use `reference/analysis-report-template.md` to format findings:
+- Executive summary with total potential savings
+- Per-dataset findings table
+- Prioritized recommendations (immediate/short-term/long-term)
+
+---
+
+### Reference: Optimization Actions
 
 | Signal | Action |
 |--------|--------|
 | Work/GB = 0 | Drop dataset or stop ingesting |
-| Low Work/GB + High Ingest | Partition, sample, or filter at source |
+| High-volume unqueried values | Reduce log level or sample at source |
+| Empty field values from system namespaces | Filter at ingest or accept as necessary |
 | WoW spike | Investigate recent deploys |
-| Single dataset >40% | Review if necessary |
+
+### Reference: Common Fields by Dataset Type
+
+| Dataset Type | Primary Field | Alternative Fields |
+|--------------|---------------|-------------------|
+| Kubernetes logs | `kubernetes.labels.app` | `kubernetes.namespace_name`, `kubernetes.container_name` |
+| Application logs | `app` or `service` | `level`, `logger`, `component` |
+| Infrastructure | `host` | `region`, `instance`, `service` |
+| Traces | `service.name` | `span.kind`, `http.route` |
 
 ## Phase 5: Glidepath Tracking
 

@@ -1,12 +1,55 @@
 #!/bin/bash
 # Get baseline usage statistics for cost control planning
-# Usage: baseline-stats <deployment> [audit-dataset]
+# Usage: baseline-stats -d <deployment> -a <audit-dataset>
 
 set -euo pipefail
 
-DEPLOYMENT="${1:-staging}"
-AUDIT_DATASET="${2:-axiom-audit}"
 AXIOM_QUERY="${AXIOM_QUERY:-$HOME/.config/agents/skills/axiom-sre/scripts/axiom-query}"
+
+# Defaults
+DEPLOYMENT=""
+AUDIT_DATASET=""
+
+usage() {
+    cat << 'EOF'
+Usage: baseline-stats -d <deployment> -a <audit-dataset>
+
+Get 30-day baseline usage statistics for cost control planning.
+
+Required:
+  -d, --deployment NAME    Axiom deployment name
+  -a, --audit-dataset NAME Audit dataset name (e.g., axiom-audit, axiom-audit-logs-view)
+
+Example:
+  baseline-stats -d prod -a axiom-audit-logs-view
+EOF
+    exit 1
+}
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -d|--deployment)
+            DEPLOYMENT="$2"
+            shift 2
+            ;;
+        -a|--audit-dataset)
+            AUDIT_DATASET="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            ;;
+        *)
+            echo "Error: Unknown option $1" >&2
+            usage
+            ;;
+    esac
+done
+
+# Validate required args
+[[ -z "$DEPLOYMENT" ]] && { echo "Error: -d/--deployment required" >&2; usage; }
+[[ -z "$AUDIT_DATASET" ]] && { echo "Error: -a/--audit-dataset required" >&2; usage; }
 
 # Validate dependencies
 command -v jq >/dev/null 2>&1 || { echo "Error: jq required" >&2; exit 1; }
@@ -86,4 +129,4 @@ echo "Based on the statistics above:"
 echo "  Warning threshold: p90 + 1×stddev"
 echo "  Critical threshold: p95 + 2×stddev (or contract limit)"
 echo ""
-echo "Run 'scripts/create-monitors $DEPLOYMENT' to deploy monitors."
+echo "Run 'scripts/create-monitors -d $DEPLOYMENT -a $AUDIT_DATASET' to deploy monitors."

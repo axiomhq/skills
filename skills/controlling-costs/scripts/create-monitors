@@ -2,23 +2,76 @@
 # Create 5 hybrid cost control monitors
 # Strategy: Budget guardrails (threshold) + Spike attribution (anomaly) + Glidepath (threshold)
 #
-# Usage: create-monitors <deployment> [notifier_id] [contract_tb] [glidepath_tb] [audit_dataset]
-#
-# Arguments:
-#   deployment    - Axiom deployment name (required)
-#   notifier_id   - Notifier ID for alerts (optional, monitors created without alerts if omitted)
-#   contract_tb   - Daily contract limit in TB (default: 167 = 5 PB/month)
-#   glidepath_tb  - Initial glidepath target in TB (default: contract_tb * 1.5)
-#   audit_dataset - Audit dataset name (default: axiom-audit)
+# Usage: create-monitors -d <deployment> -a <audit-dataset> [options]
 
 set -euo pipefail
 
 AXIOM_API="${AXIOM_API:-$HOME/.config/agents/skills/axiom-sre/scripts/axiom-api}"
-DEPLOYMENT="${1:-staging}"
-NOTIFIER_ID="${2:-}"
-CONTRACT_TB="${3:-167}"
-GLIDEPATH_TB="${4:-}"
-AUDIT_DATASET="${5:-axiom-audit}"
+
+# Defaults
+DEPLOYMENT=""
+AUDIT_DATASET=""
+NOTIFIER_ID=""
+CONTRACT_TB="167"
+GLIDEPATH_TB=""
+
+usage() {
+    cat << 'EOF'
+Usage: create-monitors -d <deployment> -a <audit-dataset> [options]
+
+Create 5 hybrid cost control monitors.
+
+Required:
+  -d, --deployment NAME    Axiom deployment name
+  -a, --audit-dataset NAME Audit dataset name (e.g., axiom-audit, axiom-audit-logs-view)
+
+Optional:
+  -n, --notifier ID        Notifier ID for alerts (omit for no alerts)
+  -c, --contract TB        Daily contract limit in TB (default: 167 = 5 PB/month)
+  -g, --glidepath TB       Initial glidepath target in TB (default: contract × 1.5)
+
+Example:
+  create-monitors -d prod -a axiom-audit-logs-view -c 333 -n "abc123"
+EOF
+    exit 1
+}
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -d|--deployment)
+            DEPLOYMENT="$2"
+            shift 2
+            ;;
+        -a|--audit-dataset)
+            AUDIT_DATASET="$2"
+            shift 2
+            ;;
+        -n|--notifier)
+            NOTIFIER_ID="$2"
+            shift 2
+            ;;
+        -c|--contract)
+            CONTRACT_TB="$2"
+            shift 2
+            ;;
+        -g|--glidepath)
+            GLIDEPATH_TB="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            ;;
+        *)
+            echo "Error: Unknown option $1" >&2
+            usage
+            ;;
+    esac
+done
+
+# Validate required args
+[[ -z "$DEPLOYMENT" ]] && { echo "Error: -d/--deployment required" >&2; usage; }
+[[ -z "$AUDIT_DATASET" ]] && { echo "Error: -a/--audit-dataset required" >&2; usage; }
 
 # Validate dependencies
 command -v jq >/dev/null 2>&1 || { echo "Error: jq required" >&2; exit 1; }
@@ -26,7 +79,7 @@ command -v bc >/dev/null 2>&1 || { echo "Error: bc required" >&2; exit 1; }
 [[ -x "$AXIOM_API" ]] || { echo "Error: axiom-api not found at $AXIOM_API" >&2; exit 1; }
 
 # Validate numeric inputs
-[[ "$CONTRACT_TB" =~ ^[0-9]+([.][0-9]+)?$ ]] || { echo "Error: contract_tb must be numeric" >&2; exit 1; }
+[[ "$CONTRACT_TB" =~ ^[0-9]+([.][0-9]+)?$ ]] || { echo "Error: --contract must be numeric" >&2; exit 1; }
 
 # Helper: evaluate with bc -l, round to 3 decimals
 bc_round() { bc -l <<< "scale=3; $1" | sed 's/^\./0./'; }
@@ -49,6 +102,7 @@ fi
 
 echo "=== Creating Cost Control Monitors ==="
 echo "Deployment: $DEPLOYMENT"
+echo "Audit dataset: $AUDIT_DATASET"
 echo "Contract: $CONTRACT_TB TB/day"
 echo "Warning threshold: $WARN_TB TB (1.1x)"
 echo "Critical threshold: $CRIT_TB TB (1.5x)"
