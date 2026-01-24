@@ -26,7 +26,24 @@ for arg in "$@"; do
   esac
 done
 
-echo "=== axiom-sre Memory Setup ==="
+echo "=== axiom-sre Setup ==="
+echo ""
+
+# Check dependencies
+MISSING=""
+command -v jq >/dev/null 2>&1 || MISSING="$MISSING jq"
+command -v curl >/dev/null 2>&1 || MISSING="$MISSING curl"
+
+if [[ -n "$MISSING" ]]; then
+  echo "⚠ Missing required tools:$MISSING"
+  echo ""
+  echo "Install with:"
+  echo "  macOS:  brew install$MISSING"
+  echo "  Ubuntu: sudo apt install$MISSING"
+  echo ""
+  exit 1
+fi
+echo "✓ Dependencies: jq, curl"
 echo ""
 
 # --- Migrate legacy personal memory ---
@@ -110,7 +127,18 @@ EOF
         echo ""
         echo "✓ Created $AXIOM_CONFIG"
         echo ""
-        echo "Test with: scripts/axiom-query ${DEPLOY_NAME} \"['axiom-audit'] | take 1\""
+        
+        # Test the connection
+        echo "Testing connection..."
+        if "$SCRIPT_DIR/axiom-api" "$DEPLOY_NAME" GET "/v1/datasets" >/dev/null 2>&1; then
+          echo "✓ Connection successful!"
+          echo ""
+          echo "Try: scripts/axiom-query ${DEPLOY_NAME} \"['axiom-audit'] | take 1\""
+        else
+          echo "⚠ Connection test failed. Check your token and org_id."
+          echo ""
+          echo "Debug with: scripts/axiom-api ${DEPLOY_NAME} GET '/v1/datasets'"
+        fi
       else
         echo "Skipped - missing org_id or token"
       fi

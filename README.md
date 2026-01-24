@@ -11,12 +11,20 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 | [building-dashboards](skills/building-dashboards/) | Design and build Axiom dashboards from intent, templates, or Splunk migrations |
 | [controlling-costs](skills/controlling-costs/) | Analyze query patterns to find unused data and optimize Axiom costs |
 
+## Requirements
+
+- **jq** - JSON processor (`brew install jq` or `apt install jq`)
+- **curl** - HTTP client (usually pre-installed)
+- **bc** - Calculator, needed by controlling-costs (`brew install bc` or `apt install bc`)
+
 ## Installation
+
+**Start with `sre`** - it's the foundation skill that others depend on for API access and includes interactive setup.
 
 ### Amp
 
 ```bash
-amp skill add axiomhq/skills/sre
+amp skill add axiomhq/skills/sre              # Install first - has setup script
 amp skill add axiomhq/skills/spl-to-apl
 amp skill add axiomhq/skills/building-dashboards
 amp skill add axiomhq/skills/controlling-costs
@@ -29,10 +37,16 @@ amp skill add axiomhq/skills/controlling-costs
 npx skills add axiomhq/skills
 
 # Install specific skill
-npx skills add axiomhq/skills -s sre
+npx skills add axiomhq/skills -s sre          # Install first - has setup script
 npx skills add axiomhq/skills -s spl-to-apl
 npx skills add axiomhq/skills -s building-dashboards
 npx skills add axiomhq/skills -s controlling-costs
+```
+
+After installing, run the setup script to configure Axiom access:
+
+```bash
+~/.config/agents/skills/sre/scripts/setup
 ```
 
 ## Configuration
