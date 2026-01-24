@@ -51,15 +51,15 @@ run_test "Function name excluded from columns" \
     '{"body":{"source":{"kind":"Dataset","name":{"kind":"Entity","name":"ds"}},"operations":[{"kind":"Where","predicate":{"kind":"CallExpr","func":{"kind":"Entity","name":"isnotempty"},"params":[{"kind":"CallParamScalar","expr":{"kind":"Entity","name":"field"}}]}}]}}' \
     '.all_columns | index("isnotempty") | not'
 
-# Test 5: IndexExpr bracket access - base column
-run_test "IndexExpr base column" \
-    '{"body":{"source":{"kind":"Dataset","name":{"kind":"Entity","name":"ds"}},"operations":[{"kind":"Extend","fields":[{"kind":"NamedExpression","expr":{"kind":"IndexExpr","left":{"kind":"Entity","name":"attributes.custom"},"index":{"kind":"String","value":"auth.orgid"}}}]}]}}' \
-    '.all_columns | index("attributes.custom") != null'
+# Test 5: IndexExpr bracket access - full path with string literal index
+run_test "IndexExpr full path with string index" \
+    '{"body":{"source":{"kind":"Dataset","name":{"kind":"Entity","name":"ds"}},"operations":[{"kind":"Extend","fields":[{"kind":"NamedExpression","expr":{"kind":"IndexExpr","left":{"kind":"Entity","name":"attributes"},"index":{"kind":"Literal","value":"custom.field"}}}]}]}}' \
+    '.all_columns | index("attributes.custom.field") != null'
 
-# Test 6: IndexExpr bracket access - only base column extracted, not index keys (JSON paths)
-run_test "IndexExpr extracts base only not index key" \
-    '{"body":{"source":{"kind":"Dataset","name":{"kind":"Entity","name":"ds"}},"operations":[{"kind":"Extend","fields":[{"kind":"NamedExpression","expr":{"kind":"IndexExpr","left":{"kind":"Entity","name":"data"},"index":{"kind":"String","value":"nested.field"}}}]}]}}' \
-    '(.all_columns | index("data") != null) and (.all_columns | index("nested.field") | not)'
+# Test 6: IndexExpr bracket access - extracts full dotted path
+run_test "IndexExpr extracts full dotted path" \
+    '{"body":{"source":{"kind":"Dataset","name":{"kind":"Entity","name":"ds"}},"operations":[{"kind":"Extend","fields":[{"kind":"NamedExpression","expr":{"kind":"IndexExpr","left":{"kind":"Entity","name":"resource"},"index":{"kind":"Literal","value":"k8s.namespace.name"}}}]}]}}' \
+    '.all_columns | index("resource.k8s.namespace.name") != null'
 
 # Test 7: No project = has_wildcard true
 run_test "No project clause = wildcard" \
@@ -163,10 +163,10 @@ run_test "Unary NOT predicate" \
     '{"body":{"source":{"kind":"Dataset","name":{"kind":"Entity","name":"ds"}},"operations":[{"kind":"Where","predicate":{"kind":"CallExpr","func":{"kind":"Entity","name":"not"},"params":[{"kind":"CallParamScalar","expr":{"kind":"BinaryExpr","left":{"kind":"Entity","name":"field"},"op":"contains","right":{"kind":"String","value":"test"}}}]}}]}}' \
     '.all_columns | index("field") != null'
 
-# Test 27: Nested IndexExpr (props["a"]["b"]) - only extract base column, not JSON path keys
-run_test "Nested IndexExpr extracts base only" \
-    '{"body":{"source":{"kind":"Dataset","name":{"kind":"Entity","name":"ds"}},"operations":[{"kind":"Where","predicate":{"kind":"BinaryExpr","left":{"kind":"IndexExpr","left":{"kind":"IndexExpr","left":{"kind":"Entity","name":"props"},"index":{"kind":"String","value":"a"}},"index":{"kind":"String","value":"b"}},"op":"==","right":{"kind":"String","value":"c"}}}]}}' \
-    '(.all_columns | index("props") != null) and (.all_columns | index("a") | not) and (.all_columns | index("b") | not)'
+# Test 27: Nested IndexExpr (props["a"]["b"]) - extracts full path
+run_test "Nested IndexExpr extracts full path" \
+    '{"body":{"source":{"kind":"Dataset","name":{"kind":"Entity","name":"ds"}},"operations":[{"kind":"Where","predicate":{"kind":"BinaryExpr","left":{"kind":"IndexExpr","left":{"kind":"IndexExpr","left":{"kind":"Entity","name":"props"},"index":{"kind":"Literal","value":"a"}},"index":{"kind":"Literal","value":"b"}},"op":"==","right":{"kind":"String","value":"c"}}}]}}' \
+    '.all_columns | index("props.a.b") != null'
 
 # Test 28: Function with multiple column args (coalesce)
 run_test "Function with multiple column args" \
@@ -233,30 +233,57 @@ run_test "Multiple chained aliases all excluded" \
     '{"statements":[],"body":{"source":{"kind":"Dataset","name":{"kind":"Entity","name":"ds"}},"operations":[{"kind":"Extend","fields":[{"kind":"NamedExpression","expr":{"kind":"Entity","name":"status"},"aliases":[{"kind":"Entity","name":"s"}]}]},{"kind":"Extend","fields":[{"kind":"NamedExpression","expr":{"kind":"Entity","name":"error"},"aliases":[{"kind":"Entity","name":"e"}]}]},{"kind":"Project","fields":[{"kind":"NamedExpression","expr":{"kind":"Entity","name":"s"},"aliases":[]},{"kind":"NamedExpression","expr":{"kind":"Entity","name":"e"},"aliases":[]}]}]}}' \
     '(.all_columns | index("status") != null) and (.all_columns | index("error") != null) and (.all_columns | index("s") | not) and (.all_columns | index("e") | not)'
 
-# Test 41: SelectorExpr (data.field) only extracts base, not selector property
-run_test "SelectorExpr extracts base only" \
-    '{"statements":[],"body":{"source":{"kind":"Dataset","name":{"kind":"Entity","name":"ds"}},"operations":[{"kind":"Where","predicate":{"kind":"CallExpr","func":{"kind":"Entity","name":"isnotnull"},"params":[{"kind":"CallParamScalar","expr":{"kind":"SelectorExpr","left":{"kind":"Entity","name":"attributes.request"},"selector":{"kind":"Entity","name":"conversation_id"}}}]}}]}}' \
-    '(.all_columns | index("attributes.request") != null) and (.all_columns | index("conversation_id") | not)'
+# Test 41: SelectorExpr (data.field) extracts full path
+run_test "SelectorExpr extracts full path" \
+    '{"statements":[],"body":{"source":{"kind":"Dataset","name":{"kind":"Entity","name":"ds"}},"operations":[{"kind":"Where","predicate":{"kind":"CallExpr","func":{"kind":"Entity","name":"isnotnull"},"params":[{"kind":"CallParamScalar","expr":{"kind":"SelectorExpr","left":{"kind":"Entity","name":"attributes"},"selector":{"name":"conversation_id"}}}]}}]}}' \
+    '.all_columns | index("attributes.conversation_id") != null'
 
 # Test 42: Implicit summarize alias (count_ from count()) excluded
 run_test "Implicit summarize alias count_ excluded" \
     '{"statements":[],"body":{"source":{"kind":"Dataset","name":{"kind":"Entity","name":"ds"}},"operations":[{"kind":"Summarize","groups":[{"kind":"NamedExpression","expr":{"kind":"Entity","name":"app"},"aliases":[]}],"aggs":[{"kind":"NamedExpression","expr":{"kind":"CallExpr","func":{"kind":"Entity","name":"count"},"params":[]},"aliases":[]}]},{"kind":"SortBy","clauses":[{"kind":"FieldSort","field":{"kind":"Entity","name":"count_"},"direction":"desc"}]}]}}' \
     '(.all_columns | index("app") != null) and (.all_columns | index("count_") | not)'
 
-# Test 43: IndexExpr on derived column excludes index key
-run_test "IndexExpr on derived column excludes index key" \
-    '{"statements":[],"body":{"source":{"kind":"Dataset","name":{"kind":"Entity","name":"ds"}},"operations":[{"kind":"Extend","fields":[{"kind":"NamedExpression","expr":{"kind":"CallExpr","func":{"kind":"Entity","name":"parse_json"},"params":[{"kind":"CallParamScalar","expr":{"kind":"Entity","name":"body"}}]},"aliases":[{"kind":"Entity","name":"parsed"}]}]},{"kind":"Where","predicate":{"kind":"BinaryExpr","left":{"kind":"IndexExpr","left":{"kind":"Entity","name":"parsed"},"index":{"kind":"String","value":"field"}},"op":"==","right":{"kind":"String","value":"x"}}}]}}' \
-    '(.all_columns | index("body") != null) and (.all_columns | index("parsed") | not) and (.all_columns | index("field") | not)'
+# Test 43: IndexExpr on derived column - derived alias excluded, but full path for non-derived
+run_test "IndexExpr on derived column excludes derived alias" \
+    '{"statements":[],"body":{"source":{"kind":"Dataset","name":{"kind":"Entity","name":"ds"}},"operations":[{"kind":"Extend","fields":[{"kind":"NamedExpression","expr":{"kind":"CallExpr","func":{"kind":"Entity","name":"parse_json"},"params":[{"kind":"CallParamScalar","expr":{"kind":"Entity","name":"body"}}]},"aliases":[{"kind":"Entity","name":"parsed"}]}]},{"kind":"Where","predicate":{"kind":"BinaryExpr","left":{"kind":"IndexExpr","left":{"kind":"Entity","name":"parsed"},"index":{"kind":"Literal","value":"field"}},"op":"==","right":{"kind":"String","value":"x"}}}]}}' \
+    '(.all_columns | index("body") != null) and (.all_columns | index("parsed") | not)'
 
-# Test 44: IndexExpr on any column only extracts base, not index key (JSON path access)
-run_test "IndexExpr on any column extracts base only" \
-    '{"statements":[],"body":{"source":{"kind":"Dataset","name":{"kind":"Entity","name":"ds"}},"operations":[{"kind":"Where","predicate":{"kind":"BinaryExpr","left":{"kind":"IndexExpr","left":{"kind":"Entity","name":"attributes"},"index":{"kind":"String","value":"status"}},"op":"==","right":{"kind":"String","value":"ok"}}}]}}' \
-    '(.all_columns | index("attributes") != null) and (.all_columns | index("status") | not)'
+# Test 44: IndexExpr on any column extracts full path
+run_test "IndexExpr on any column extracts full path" \
+    '{"statements":[],"body":{"source":{"kind":"Dataset","name":{"kind":"Entity","name":"ds"}},"operations":[{"kind":"Where","predicate":{"kind":"BinaryExpr","left":{"kind":"IndexExpr","left":{"kind":"Entity","name":"attributes"},"index":{"kind":"Literal","value":"status"}},"op":"==","right":{"kind":"String","value":"ok"}}}]}}' \
+    '.all_columns | index("attributes.status") != null'
 
 # Test 45: Let scalar variables are excluded when used in predicates
 run_test "Let scalar variable excluded" \
     '{"statements":[{"kind":"LetScalar","name":{"kind":"Entity","name":"threshold"},"value":{"kind":"Long","value":100}}],"body":{"source":{"kind":"Dataset","name":{"kind":"Entity","name":"ds"}},"operations":[{"kind":"Where","predicate":{"kind":"BinaryExpr","left":{"kind":"Entity","name":"count"},"op":">","right":{"kind":"Entity","name":"threshold"}}}]}}' \
     '(.all_columns | index("count") != null) and (.all_columns | index("threshold") | not)'
+
+# === Oracle-identified critical bug fixes (field path extraction) ===
+
+# Test 46: Full path extraction in predicate - resource['k8s.namespace.name']
+run_test "Predicate with IndexExpr full path" \
+    '{"body":{"operations":[{"kind":"Where","predicate":{"kind":"BinaryExpr","op":"==","left":{"kind":"IndexExpr","left":{"kind":"Entity","name":"resource"},"index":{"kind":"Literal","value":"k8s.namespace.name"}},"right":{"kind":"Literal","value":"prod"}}}]}}' \
+    '.where_predicates[0].field == "resource.k8s.namespace.name"'
+
+# Test 47: Full path extraction in predicate - SelectorExpr a.b.c
+run_test "Predicate with SelectorExpr full path" \
+    '{"body":{"operations":[{"kind":"Where","predicate":{"kind":"BinaryExpr","op":"==","left":{"kind":"SelectorExpr","left":{"kind":"SelectorExpr","left":{"kind":"Entity","name":"resource"},"selector":{"name":"k8s"}},"selector":{"name":"namespace"}},"right":{"kind":"Literal","value":"prod"}}}]}}' \
+    '.where_predicates[0].field == "resource.k8s.namespace"'
+
+# Test 48: Summarize group by with full path
+run_test "Summarize group by full path" \
+    '{"body":{"operations":[{"kind":"Summarize","aggs":[],"groups":[{"expr":{"kind":"IndexExpr","left":{"kind":"Entity","name":"resource"},"index":{"kind":"Literal","value":"k8s.pod.labels.app"}}}]}]}}' \
+    '.summarize_groups | index("resource.k8s.pod.labels.app") != null'
+
+# Test 49: InExpr with full path
+run_test "InExpr with full path field" \
+    '{"body":{"operations":[{"kind":"Where","predicate":{"kind":"InExpr","left":{"kind":"SelectorExpr","left":{"kind":"Entity","name":"app"},"selector":{"name":"name"}},"right":{"list":[{"value":"a"},{"value":"b"}]}}}]}}' \
+    '.where_predicates[0].field == "app.name"'
+
+# Test 50: CallExpr wrapper with nested path - tolower(resource.k8s.name)
+run_test "CallExpr with nested SelectorExpr" \
+    '{"body":{"operations":[{"kind":"Where","predicate":{"kind":"BinaryExpr","op":"==","left":{"kind":"CallExpr","func":{"name":"tolower"},"params":[{"expr":{"kind":"SelectorExpr","left":{"kind":"Entity","name":"resource"},"selector":{"name":"name"}}}]},"right":{"kind":"Literal","value":"prod"}}}]}}' \
+    '.where_predicates[0].field == "resource.name"'
 
 echo ""
 echo "=== Results ==="

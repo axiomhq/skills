@@ -116,6 +116,26 @@ See `reference/monitor-strategy.md` for threshold derivation.
 
 ## Phase 4: Optimization
 
+### Optimization Philosophy
+
+**Why parse fields from body?**
+Axiom's columnar storage compresses structured fields much better than raw text. When you parse fields out of `body` (like `app`, `level`, `error_code`), you get:
+- **Better compression**: Columnar storage can dedupe and encode structured values efficiently
+- **Faster queries**: Less I/O because queries only read needed columns
+- **Lower costs**: Smaller storage footprint and faster scans
+
+**The duplication problem**: If a dataset has BOTH the raw `body` AND parsed fields containing the same data, that's storage waste. Look for:
+- `attributes.*` fields that duplicate info in `body`
+- `resource.*` fields that repeat container/pod info from log lines
+- Multiple fields with the same semantic value (e.g., `app` vs `kubernetes.labels.app`)
+
+**System fields are not redundant**: Fields starting with `_` are Axiom system fields:
+- `_time` - Event timestamp (required)
+- `_sysTime` - When Axiom received the event (for debugging ingest lag)
+- `_rowId` - Internal row identifier
+
+These serve different purposes and should NOT be flagged as optimization candidates.
+
 ### Find Unused Datasets
 
 ```apl
@@ -160,6 +180,37 @@ kubernetes.labels.app=axiom-db est_events_24h=45871000     # Never filtered!
 ```
 
 These represent massive savings opportunities - data being ingested but never used in queries.
+
+### Find High-Volume Unqueried Values (Key Optimization)
+
+For multi-tenant datasets like Kubernetes logs, the biggest wins come from finding **specific values that log heavily but are never queried**. Common cardinality fields to analyze:
+
+| Dataset Type | Key Fields to Analyze |
+|--------------|----------------------|
+| Kubernetes logs | `resource.k8s.pod.labels.app`, `resource.k8s.namespace.name`, `resource.k8s.container.name` |
+| Application logs | `app`, `service`, `component` |
+| Infrastructure | `host`, `instance`, `region` |
+
+```bash
+# Find apps that log heavily but are never filtered for
+scripts/analyze-query-coverage -d prod -D kube_logs -f resource.k8s.pod.labels.app
+
+# Output shows:
+# - Which app values are explicitly queried (safe to keep)
+# - Which apps log millions of events but are NEVER in query filters
+# - Opportunity score combining volume × (1 - query coverage)
+```
+
+**What to look for:**
+- Apps with high `Est Events` but `Queried? = No` → candidates for log level reduction or exclusion
+- Apps with `⚠️` marker → high volume AND never queried (strongest candidates)
+- Compare against business criticality before dropping
+
+**Actions for high-volume unqueried apps:**
+1. **Reduce log level** at source (warn+ only)
+2. **Sample** high-volume apps at ingest (keep 10%)
+3. **Exclude entirely** from this dataset if truly unused
+4. **Move to cold tier** if occasionally needed but not time-critical
 
 ### Find Noisy Applications
 

@@ -22,6 +22,25 @@ def selector_to_implicit_name:
   else null
   end;
 
+# Extract full field path from expression
+# Handles: Entity, SelectorExpr (a.b.c), IndexExpr (a['b']), CallExpr wrappers (tolower(x))
+def expr_to_field_path:
+  if .kind == "Entity" then .name
+  elif .kind == "SelectorExpr" then
+    "\(.left | expr_to_field_path).\(.selector.name)"
+  elif .kind == "IndexExpr" then
+    # a['b'] -> a.b (index is typically a string literal for field access)
+    (.left | expr_to_field_path) as $base |
+    if .index.kind == "Literal" and (.index.value | type) == "string" then
+      "\($base).\(.index.value)"
+    else $base
+    end
+  elif .kind == "CallExpr" then
+    # Unwrap function calls like tolower(field) -> field
+    (.params[0]?.expr | expr_to_field_path) // null
+  else null
+  end;
+
 # Extract aliases from a single operation
 def extract_op_aliases:
   (
@@ -81,12 +100,14 @@ def extract_columns_with_exclusions($exclude):
     elif .kind == "Parse" then (.lhs | extract_columns_with_exclusions($exclude))
     # Skip CallExpr function names but recurse into params for column args
     elif .kind == "CallExpr" then (.params[]? | extract_columns_with_exclusions($exclude))
-    # Handle IndexExpr: data['field'] -> only extract base column, not index keys (which are JSON paths)
+    # Handle IndexExpr: data['field'] -> extract full path
     elif .kind == "IndexExpr" then
-      (.left | extract_columns_with_exclusions($exclude))
-    # Handle SelectorExpr: data.field -> only extract base, not the selector (property access)
+      (. | expr_to_field_path) as $path |
+      if $path and ($path | IN($exclude[]) | not) then $path else empty end
+    # Handle SelectorExpr: data.field -> extract full path
     elif .kind == "SelectorExpr" then
-      (.left | extract_columns_with_exclusions($exclude))
+      (. | expr_to_field_path) as $path |
+      if $path and ($path | IN($exclude[]) | not) then $path else empty end
     # NamedExpression: only recurse into .expr, skip .aliases (output names, not input refs)
     elif .kind == "NamedExpression" then (.expr | extract_columns_with_exclusions($exclude))
     # Extract Entity names as column references, but filter out excluded symbols
@@ -107,15 +128,14 @@ def extract_columns:
 def extract_predicates:
   if type != "object" then empty
   elif .kind == "BinaryExpr" and (.op | IN("==", "!=", "contains", "!contains", "startswith", "endswith", "!startswith", "contains_cs", ">", "<", ">=", "<=")) then
-    # Handle function calls on left side: tolower(field) == 'x'
-    (if .left.kind == "CallExpr" then .left.params[0]?.expr.name 
-     elif .left.kind == "IndexExpr" then .left.left.name
-     else .left.name end) as $field |
+    # Use expr_to_field_path to get full dotted path
+    (.left | expr_to_field_path) as $field |
     { field: ($field // null), op: .op, value: (.right.value // null) }
   elif .kind == "BinaryExpr" and (.op | IN("and", "or")) then
     (.left | extract_predicates), (.right | extract_predicates)
   elif .kind == "InExpr" then
-    { field: (.left.name // null), op: "in", values: [.right.list[]?.value] }
+    # Use expr_to_field_path for 'in' expressions too
+    { field: (.left | expr_to_field_path), op: "in", values: [.right.list[]?.value] }
   elif .kind == "CallExpr" and .func.name == "not" then
     .params[]?.expr | extract_predicates
   else empty
@@ -128,9 +148,7 @@ def extract_query_info:
     all_columns: [.body | extract_columns_with_exclusions($exclude)] | unique,
     where_predicates: [.body.operations[]? | select(.kind == "Where") | .predicate | extract_predicates],
     summarize_groups: [.body.operations[]? | select(.kind == "Summarize") | .groups[]?.expr | 
-      if .kind == "Entity" then .name 
-      elif .kind == "CallExpr" then (.params[0]?.expr.name // null)
-      else null end
+      expr_to_field_path
     ] | map(select(. != null)),
     # Wildcard if: explicit "project *" OR no project operation at all (implicit all columns)
     has_wildcard: (
