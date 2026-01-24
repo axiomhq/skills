@@ -5,387 +5,232 @@ description: Analyzes Axiom query patterns to find unused data, then builds dash
 
 # Axiom Cost Control
 
-End-to-end workflow for Axiom usage optimization: dashboards, monitors, and waste identification.
+Dashboards, monitors, and waste identification for Axiom usage optimization.
 
-## Pre-flight Checks (REQUIRED)
+## Before You Start
 
-**Complete ALL checks before starting any workflow.**
+1. Load required skills:
+   ```
+   skill: axiom-sre
+   skill: building-dashboards
+   ```
+   
+   Building-dashboards provides: `dashboard-list`, `dashboard-get`, `dashboard-create`, `dashboard-update`, `dashboard-delete`
 
-### 1. Load axiom-sre skill
+2. Find the audit dataset. Try `axiom-audit` first:
+   ```apl
+   ['axiom-audit']
+   | where _time > ago(1h)
+   | summarize count() by action
+   | where action in ('usageCalculated', 'runAPLQueryCost')
+   ```
+   - If not found → ask user. Common names: `axiom-audit-logs-view`, `audit-logs`
+   - If found but no `usageCalculated` events → wrong dataset, ask user
 
-```
-skill: axiom-sre
-```
+3. Verify `axiom-history` access (required for Phase 4):
+   ```apl
+   ['axiom-history'] | where _time > ago(1h) | take 1
+   ```
+   If not found, Phase 4 optimization will not work.
 
-All APL queries in this skill MUST use the axiom-sre workflow, NOT direct CLI commands.
+4. Confirm with user:
+   - Deployment name?
+   - Audit dataset name?
+   - Contract limit in TB/day? (required for Phase 3 monitors)
 
-### 2. Verify audit dataset access
+5. Replace `<deployment>` and `<audit-dataset>` in all commands below.
 
-This skill CANNOT work without audit data. Run:
+**Tips:**
+- Run any script with `-h` for full usage
+- Do NOT pipe script output to `head` or `tail` — causes SIGPIPE errors
+- Requires `jq` for JSON parsing
+- Use axiom-sre's `axiom-query` for ad-hoc APL, not direct CLI
 
-```apl
-['axiom-audit']
-| where _time > ago(1h)
-| summarize count() by action
-| where action in ('usageCalculated', 'runAPLQueryCost')
-```
+## Which Phases to Run
 
-**If dataset not found:** STOP and ask:
+| User request | Run these phases |
+|--------------|------------------|
+| "reduce costs" / "find waste" | 0 → 1 → 4 |
+| "set up cost control" | 0 → 1 → 2 → 3 |
+| "deploy dashboard" | 0 → 2 |
+| "create monitors" | 0 → 3 |
+| "check for drift" | 0 only |
 
-> "The `axiom-audit` dataset is not accessible. What is the audit dataset name for this deployment? (Common: `axiom-audit-logs-view`, `audit-logs`)
->
-> Without audit data, this skill cannot proceed."
-
-**If dataset exists but no `usageCalculated` events:** STOP - wrong dataset.
-
-### 3. Confirm deployment and audit dataset with user
-
-Before proceeding, confirm:
-- Deployment: `<deployment>`
-- Audit dataset: `<audit-dataset>`
-
-### 4. Pass audit dataset to all scripts
-
-All scripts use named flags:
-
-```bash
-scripts/baseline-stats -d <deployment> -a <audit-dataset>
-scripts/deploy-dashboard -d <deployment> -a <audit-dataset> [-n <name>]
-scripts/create-monitors -d <deployment> -a <audit-dataset> [-c <contract_tb>] [-g <glidepath_tb>] [-n <notifier_id>]
-scripts/analyze-query-coverage -d <deployment> -D <dataset> -a <audit-dataset>
-scripts/update-glidepath -d <deployment> -t <threshold_tb>
-```
-
-**Do NOT pipe script output to `head` or `tail`** - scripts produce complete reports that should run to completion. Truncating output causes SIGPIPE (exit 141).
-
-Run any script with `-h` for full usage.
-
-### 5. Load building-dashboards skill
-
-```
-skill: building-dashboards
-```
-
-Required for all dashboard operations. Once loaded, use its scripts:
-
-| Script | Purpose |
-|--------|---------|
-| `dashboard-list <deploy>` | Check for existing dashboards |
-| `dashboard-get <deploy> <id>` | Fetch dashboard JSON (for drift detection) |
-| `dashboard-create <deploy> <file>` | Create new dashboard |
-| `dashboard-update <deploy> <id> <file>` | Update existing dashboard |
-| `dashboard-delete <deploy> <id>` | Delete dashboard |
-
-**Before deploying:** Always run `dashboard-list` to check if cost control dashboard already exists.
-
-### Other requirements
-
-- Access to `axiom-history` dataset (for Query Filter Patterns panel)
-- Tools: `jq`
-
-## Workflow Overview
-
-```
-0. CHECK     → Verify if dashboard/monitors already exist (drift detection)
-1. DISCOVER  → Baseline current usage (ingest, query, by dataset/org)
-2. DASHBOARD → Create visibility with cost control dashboard
-3. MONITOR   → Set up hybrid alerting (thresholds + anomaly)
-4. OPTIMIZE  → Find waste candidates, unused datasets, noisy apps
-5. TRACK     → Glidepath toward contract/budget targets
-```
+---
 
 ## Phase 0: Check Existing Setup
 
-Before deploying anything, check what already exists:
-
 ```bash
-# Check for existing cost control dashboard (building-dashboards skill)
-dashboard-list <deployment> | grep -i "cost"
+# Existing dashboard?
+dashboard-list <deployment> | grep -i cost
 
-# Check for existing cost control monitors (axiom-sre skill)
-axiom-api <deployment> GET "/v1/monitors" | jq -r '.[] | select(.name | startswith("Cost Control:")) | "\(.id)\t\(.name)"'
+# Existing monitors?
+axiom-api <deployment> GET "/v2/monitors" | jq -r '.[] | select(.name | startswith("Cost Control:")) | "\(.id)\t\(.name)"'
 ```
 
-**If dashboard/monitors exist:** Fetch and compare to detect drift:
-- `dashboard-get <deploy> <id>` to retrieve current config
-- Compare panel queries, thresholds, and filters against expected values
+If found, fetch with `dashboard-get` and compare to `templates/dashboard.json` for drift.
+
+---
 
 ## Phase 1: Discovery
 
-Run baseline queries to understand current state:
-
 ```bash
-# Get 30-day usage stats and Analysis Queue
 scripts/baseline-stats -d <deployment> -a <audit-dataset>
 ```
 
-Manual query for daily stats:
+Captures daily ingest stats and produces the **Analysis Queue** (needed for Phase 4).
 
-```apl
-['axiom-audit']
-| where action == 'usageCalculated'
-| where _time > ago(30d)
-| summarize daily_bytes = sum(toreal(['properties.hourly_ingest_bytes'])) by bin(_time, 1d)
-| extend daily_tb = daily_bytes / 1000000000000
-| summarize 
-    avg_tb = round(avg(daily_tb), 2),
-    p50_tb = round(percentile(daily_tb, 50), 2),
-    p90_tb = round(percentile(daily_tb, 90), 2),
-    p95_tb = round(percentile(daily_tb, 95), 2),
-    max_tb = round(max(daily_tb), 2),
-    stddev_tb = round(stdev(daily_tb), 2)
-```
-
-Key metrics to capture:
-- **Daily ingest TB** (avg, p90, p95, max)
-- **Top datasets** by ingest volume
-- **Query cost GB·ms** by user/dataset
-- **Contract limit** (if known)
+---
 
 ## Phase 2: Dashboard
-
-Deploy the cost control dashboard from `templates/dashboard.json`:
 
 ```bash
 scripts/deploy-dashboard -d <deployment> -a <audit-dataset>
 ```
 
-Dashboard includes:
-- Total ingest, daily burn rate, 30-day projection
-- % over contract, required cut %
-- Top datasets by ingest and query cost
-- Week-over-week movers
-- Waste candidates (low query activity)
-- Top users by query cost
+Creates dashboard with: ingest trends, burn rate, projections, waste candidates, top users. See `reference/dashboard-panels.md` for details.
 
-See `reference/dashboard-panels.md` for panel details.
+---
 
 ## Phase 3: Monitors
 
-Deploy hybrid monitoring strategy:
+**Contract is required.** You must have the contract limit from preflight step 4.
 
 ```bash
-scripts/create-monitors -d <deployment> -a <audit-dataset>
+scripts/create-monitors -d <deployment> -a <audit-dataset> -c <contract_tb> [-n <notifier_id>]
 ```
 
-### Three-Layer Strategy
+Creates 5 monitors (use `-n` to attach notifier):
 
-| Layer | Type | Purpose |
-|-------|------|---------|
-| **Budget Guardrails** | Threshold (24h) | Contract compliance |
-| **Spike Attribution** | Anomaly (per-dataset) | Change detection |
-| **Reduction Glidepath** | Threshold (weekly updates) | Track reduction progress |
-
-### Monitors Created
-
-1. **Last 24h Ingest vs Contract** - Threshold @ 1.5x contract
-2. **Per-Dataset Spike Detection** - Anomaly, grouped by dataset
-3. **Top Dataset Dominance** - Threshold @ 40% of hourly contract
-4. **Query Cost Spike** - Anomaly on query GB·ms
-5. **Reduction Glidepath** - Threshold, update weekly
+1. **Last 24h Ingest vs Contract** — threshold @ 1.5x contract
+2. **Per-Dataset Spike Detection** — anomaly, grouped by dataset
+3. **Top Dataset Dominance** — threshold @ 40% of hourly contract
+4. **Query Cost Spike** — anomaly on GB·ms
+5. **Reduction Glidepath** — threshold, update weekly
 
 See `reference/monitor-strategy.md` for threshold derivation.
 
+---
+
 ## Phase 4: Optimization
 
-Run baseline-stats to get your Analysis Queue:
+### Get the Analysis Queue
 
-```bash
-scripts/baseline-stats -d <deployment> -a <audit-dataset>
-```
+Run `scripts/baseline-stats` if not already done. It outputs a prioritized list:
 
-The script outputs a prioritized queue of datasets to analyze:
+| Priority | Meaning |
+|----------|---------|
+| P0⛔ | Top 3 by ingest OR >10% of total — MANDATORY |
+| P1 | Never queried — strong drop candidate |
+| P2 | Rarely queried (Work/GB < 100) — likely waste |
 
-| Priority | Meaning | Action |
-|----------|---------|--------|
-| **P0⛔** | Top 3 by ingest OR >10% of total | MANDATORY — do not skip |
-| **P1** | Never queried (query_gbms = 0) | Strong drop candidate |
-| **P2** | Rarely queried (Work/GB < 100) | Likely waste |
-| **P3** | Top 10 by ingest | Check for unqueried subsets |
+**Work/GB** = query cost (GB·ms) / ingest (GB). Lower = less value from data.
 
-**Work/GB** = query cost (GB·ms) / ingest (GB). Lower = less queried relative to size.
+### Analyze datasets in order
 
-**Rules:**
-1. Work top-to-bottom. Do not reorder.
-2. Complete each dataset fully before moving to next.
-3. You are NOT done until all ⛔ entries are analyzed.
-4. **Minimum:** ALL P0 + ALL P1 + all datasets with `top5_ingest` in Reasons column.
+Work top-to-bottom. For each dataset:
 
----
-
-### STEP 4.1: Analyze Each Dataset (IN ORDER)
-
-**For EACH dataset in the queue, complete ALL sub-steps before moving to the next.**
-
----
-
-#### STEP 4.1.1: Run Column Analysis
-
+**Step 1: Column analysis**
 ```bash
 scripts/analyze-query-coverage -d <deployment> -D <dataset> -a <audit-dataset>
 ```
 
-**CHECKPOINT:** Script will show:
-- Total queries against this dataset
-- Column usage ranking
-- Unused columns list
-- Suggested fields for value analysis
+If 0 queries → recommend DROP, move to next.
 
-**If 0 queries found:** Dataset is completely unused → recommend dropping. Move to next dataset.
+**Step 2: Field value analysis**
 
----
-
-#### STEP 4.1.2: Run Field Value Analysis
-
-Pick a field from the "Suggested fields for value analysis" list (usually app/service identifier):
-
+Pick a field from suggested list (usually `app`, `service`, or `kubernetes.labels.app`):
 ```bash
 scripts/analyze-query-coverage -d <deployment> -D <dataset> -a <audit-dataset> -f <field>
 ```
 
-**CHECKPOINT:** Script will show:
-- Values explicitly queried (safe to keep)
-- Values with high volume but never queried (⚠️ markers)
-- Potential reduction percentage
+Note values with high volume but never queried (⚠️ markers).
 
-**Record findings:** Note the top unqueried values and their volume.
+**Step 3: Handle empty values**
+
+If `(empty)` has >5% volume, you MUST drill down with alternative field (e.g., `kubernetes.namespace_name`).
+
+**Step 4: Record recommendation**
+
+For each dataset, note: name, ingest volume, Work/GB, top unqueried values, action (DROP/SAMPLE/KEEP), estimated savings.
+
+### Done when
+
+All P0⛔ and P1 datasets analyzed. Then compile report using `reference/analysis-report-template.md`.
 
 ---
 
-#### STEP 4.1.3: Handle Empty Values (REQUIRED if present)
+## Phase 5: Glidepath
 
-**If the script shows `(empty)` with >5% volume, you MUST drill down:**
-
-1. Look at the column usage list from Step 4.1.1
-2. Pick an alternative field (e.g., `kubernetes.namespace_name`, `kubernetes.container_name`)
-3. Run field value analysis on that field:
+Update threshold weekly as reductions take effect:
 
 ```bash
-scripts/analyze-query-coverage -d <deployment> -D <dataset> -a <audit-dataset> -f <alternative-field>
+scripts/update-glidepath -d <deployment> -t <threshold_tb>
 ```
-
-**CHECKPOINT:** You should now understand WHAT the empty-label events are (e.g., "kube-system namespace pods without app labels").
-
-**Record findings:** Note what the empty values represent.
-
----
-
-#### STEP 4.1.4: Document Dataset Recommendations
-
-Before moving to next dataset, record:
-- [ ] Dataset name and 30d ingest volume
-- [ ] Work/GB score
-- [ ] Top unqueried values and their volume
-- [ ] Empty value explanation (if applicable)
-- [ ] Recommended action (drop/sample/reduce log level/keep)
-- [ ] Estimated savings
-
----
-
-### STEP 4.2: Compile Final Report
-
-After analyzing ALL priority datasets, use `reference/analysis-report-template.md` to format findings:
-- Executive summary with total potential savings
-- Per-dataset findings table
-- Prioritized recommendations (immediate/short-term/long-term)
-
----
-
-### Reference: Optimization Actions
-
-| Signal | Action |
-|--------|--------|
-| Work/GB = 0 | Drop dataset or stop ingesting |
-| High-volume unqueried values | Reduce log level or sample at source |
-| Empty field values from system namespaces | Filter at ingest or accept as necessary |
-| WoW spike | Investigate recent deploys |
-
-### Reference: Common Fields by Dataset Type
-
-| Dataset Type | Primary Field | Alternative Fields |
-|--------------|---------------|-------------------|
-| Kubernetes logs | `kubernetes.labels.app` | `kubernetes.namespace_name`, `kubernetes.container_name` |
-| Application logs | `app` or `service` | `level`, `logger`, `component` |
-| Infrastructure | `host` | `region`, `instance`, `service` |
-| Traces | `service.name` | `span.kind`, `http.route` |
-
-## Phase 5: Glidepath Tracking
-
-Update the Reduction Glidepath monitor threshold weekly:
 
 | Week | Target |
 |------|--------|
 | 1 | Current p95 |
 | 2 | -25% |
 | 3 | -50% |
-| 4 | Contract limit |
+| 4 | Contract |
 
-```bash
-# Update glidepath threshold
-scripts/update-glidepath -d <deployment> -t <threshold_tb>
-```
+---
 
 ## Cleanup
 
-### Delete monitors
-
-Use axiom-sre's `axiom-api` script with the correct v1 endpoint:
-
 ```bash
-# List cost control monitors
-axiom-api <deployment> GET "/v1/monitors" | jq -r '.[] | select(.name | startswith("Cost Control:")) | "\(.id)\t\(.name)"'
+# Delete monitors
+axiom-api <deployment> GET "/v2/monitors" | jq -r '.[] | select(.name | startswith("Cost Control:")) | "\(.id)\t\(.name)"'
+axiom-api <deployment> DELETE "/v2/monitors/<id>"
 
-# Delete a monitor
-axiom-api <deployment> DELETE "/v1/monitors/<id>"
-```
-
-### Delete dashboard
-
-Use building-dashboards skill:
-
-```bash
-# Find cost control dashboard
+# Delete dashboard
 dashboard-list <deployment> | grep -i cost
-
-# Delete it
 dashboard-delete <deployment> <id>
 ```
 
-**Note:** Running `create-monitors` multiple times creates duplicate monitors. Delete existing ones first if re-deploying.
+**Note:** Running `create-monitors` twice creates duplicates. Delete existing monitors first if re-deploying.
 
-## Quick Reference
+---
 
-### Key Fields in axiom-audit
+## Reference
+
+### Audit Dataset Fields
 
 | Field | Description |
 |-------|-------------|
-| `action` | Event type (`usageCalculated`, `runAPLQueryCost`) |
+| `action` | `usageCalculated` or `runAPLQueryCost` |
 | `properties.hourly_ingest_bytes` | Hourly ingest in bytes |
-| `properties.hourly_billable_query_gbms` | Hourly query cost in GB·ms |
+| `properties.hourly_billable_query_gbms` | Hourly query cost |
 | `properties.dataset` | Dataset name |
-| `properties.query_cost_gbms` | Per-query cost |
 | `resource.id` | Org ID |
 | `actor.email` | User email |
 
-### Units and Inputs
+### Common Fields for Value Analysis
 
-**Scripts use TB/day:**
-- `create-monitors`: contract_tb parameter is TB/day
-- `update-glidepath`: threshold is TB/day
+| Dataset type | Primary field | Alternatives |
+|--------------|---------------|--------------|
+| Kubernetes logs | `kubernetes.labels.app` | `kubernetes.namespace_name`, `kubernetes.container_name` |
+| Application logs | `app` or `service` | `level`, `logger`, `component` |
+| Infrastructure | `host` | `region`, `instance` |
+| Traces | `service.name` | `span.kind`, `http.route` |
 
-**Dashboard uses GB/month:**
-- The "Contract (GB/mo)" filter expects total monthly GB
-- 5 PB/month = 5,000,000 GB/month
+### Units & Conversions
 
-**Unit Conversions (decimal):**
-- **TB** = bytes / 1,000,000,000,000
-- **GB** = bytes / 1,000,000,000
-- **PB/month → TB/day**: divide by 30, multiply by 1000
-
-### Contract Math
+- Scripts use **TB/day**
+- Dashboard filter uses **GB/month**
 
 | Contract | TB/day | GB/month |
 |----------|--------|----------|
 | 5 PB/month | 167 | 5,000,000 |
 | 10 PB/month | 333 | 10,000,000 |
 | 15 PB/month | 500 | 15,000,000 |
+
+### Optimization Actions
+
+| Signal | Action |
+|--------|--------|
+| Work/GB = 0 | Drop or stop ingesting |
+| High-volume unqueried values | Sample or reduce log level |
+| Empty values from system namespaces | Filter at ingest or accept |
+| WoW spike | Check recent deploys |
