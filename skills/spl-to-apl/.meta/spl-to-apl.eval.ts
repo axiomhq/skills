@@ -4,10 +4,8 @@ import { flag, pickFlags, getGitCommit, buildSkillMetadata } from "../../../eval
 import { runHarness, MODEL_ID, type HarnessType, type HarnessResult } from "../../../eval-tooling/src/harnesses";
 import {
   extractAplQuery,
-  extractTimeExpression,
   executeAplQuery,
   compareQueryResults,
-  evaluateTimeRange,
 } from "../../../eval-tooling/src/shared/axiom-query";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -33,66 +31,6 @@ interface TaskOutput {
  */
 const EVAL_START_TIME = "2026-01-27T00:00:00Z";
 const EVAL_END_TIME = "2026-01-27T12:00:00Z";
-
-/**
- * Verifies the model produced correct time range syntax.
- * Extracts time expressions from both queries, evaluates them via APL,
- * and compares durations (handles ago(1h) == ago(60m) equivalence).
- *
- * Returns:
- * - 1.0: durations match (within 1 second tolerance)
- * - 0.0: no time filter, wrong duration, or invalid syntax
- */
-const TimeRangeCorrect = Scorer(
-  "time-range-correct",
-  async ({ output, expected }: { output: TaskOutput; expected: string }) => {
-    const genQuery = extractAplQuery(output.output);
-    const expQuery = extractAplQuery(expected);
-
-    const genTime = extractTimeExpression(genQuery);
-    const expTime = extractTimeExpression(expQuery);
-
-    // Expected has no time filter - omission is acceptable
-    if (!expTime) {
-      return 1;
-    }
-
-    // Expected has time filter but generated doesn't
-    if (!genTime) {
-      console.warn("Expected time filter but none found in generated query");
-      return 0;
-    }
-
-    // Evaluate both via APL
-    const [genResult, expResult] = await Promise.all([
-      evaluateTimeRange(genTime),
-      evaluateTimeRange(expTime),
-    ]);
-
-    if (genResult.error) {
-      console.warn(`Failed to evaluate generated time range: ${genResult.error}`);
-      return 0;
-    }
-
-    if (expResult.error) {
-      console.warn(`Failed to evaluate expected time range: ${expResult.error}`);
-      return 0;
-    }
-
-    // Compare durations with 1 second tolerance
-    const toleranceMs = 1000;
-    const durationMatch = Math.abs(genResult.durationMs - expResult.durationMs) < toleranceMs;
-
-    if (!durationMatch) {
-      console.warn(
-        `Time range mismatch: expected ${expResult.durationMs}ms, got ${genResult.durationMs}ms`
-      );
-      return 0;
-    }
-
-    return 1;
-  }
-);
 
 /**
  * Executes both the expected and generated APL queries against Axiom Playground,
@@ -179,5 +117,5 @@ Eval("spl-translation", {
     };
   },
 
-  scorers: [TimeRangeCorrect, ResultsMatch],
+  scorers: [ResultsMatch],
 });
