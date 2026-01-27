@@ -1,18 +1,13 @@
-/**
- * Axiom Query Executor
- *
- * Executes APL queries against Axiom API for validation.
- * Used by eval scorers to verify generated queries actually work.
- */
+export interface DatasetSchema {
+  fields: Array<{ name: string; type: string }>;
+}
 
 export interface AxiomQueryResult {
   success: boolean;
   rowCount: number;
   error?: string;
   elapsedMs?: number;
-  /** Column names from the result */
   columns?: string[];
-  /** Raw result data for comparison */
   data?: unknown[][];
 }
 
@@ -37,13 +32,10 @@ function getAxiomPlaygroundConfig(): AxiomConfig | null {
   };
 }
 
-/**
- * Extract APL query from model output, removing code fences
- */
+/** model output often wrapped in markdown fences; strip them for execution */
 export function extractAplQuery(output: string): string {
   let query = output.trim();
 
-  // Remove code fences (```apl, ```kusto, ```, etc.)
   const fenceMatch = query.match(/^```\w*\s*\n([\s\S]*?)\n```\s*$/);
   if (fenceMatch?.[1]) {
     query = fenceMatch[1];
@@ -58,15 +50,7 @@ export interface TimeExpression {
   raw: string;
 }
 
-/**
- * Extract time range expression from APL query.
- * Handles patterns like:
- * - _time between (ago(1h) .. now())
- * - _time between (datetime(2024-01-01) .. datetime(2024-01-02))
- * - _time >= ago(1h)
- */
 export function extractTimeExpression(query: string): TimeExpression | null {
-  // Pattern: _time between (start .. end)
   const betweenMatch = query.match(
     /_time\s+between\s*\(\s*([^.]+?)\s*\.\.\s*([^)]+?)\s*\)/i
   );
@@ -78,7 +62,6 @@ export function extractTimeExpression(query: string): TimeExpression | null {
     };
   }
 
-  // Pattern: _time >= expr (assumes end is now())
   const gteMatch = query.match(/_time\s*>=\s*([^\s|]+)/i);
   if (gteMatch?.[1]) {
     return {
@@ -88,7 +71,6 @@ export function extractTimeExpression(query: string): TimeExpression | null {
     };
   }
 
-  // Pattern: _time > expr (assumes end is now())
   const gtMatch = query.match(/_time\s*>\s*([^\s|]+)/i);
   if (gtMatch?.[1]) {
     return {
@@ -102,35 +84,28 @@ export function extractTimeExpression(query: string): TimeExpression | null {
 }
 
 /**
- * Strip existing time filter from APL query.
- * Used before injecting a controlled time range.
+ * API startTime/endTime controls time range; in-query time filters would
+ * double-filter or conflict. remove them so API params are authoritative.
+ *
+ * WARNING: only handles standalone `| where _time ...` clauses.
+ * combined predicates like `| where _time >= ago(1h) and status == 500`
+ * will have the entire where clause removed, dropping the status filter.
  */
 export function stripTimeFilter(query: string): string {
   return query
-    // Remove: | where _time between (...) - handles nested parens like ago(1h)
     .replace(/\|\s*where\s+_time\s+between\s*\([^()]*(?:\([^()]*\)[^()]*)*\)\s*/gi, "")
-    // Remove: | where _time >= ... (up to next pipe or end)
     .replace(/\|\s*where\s+_time\s*>=\s*[^|]+/gi, "")
-    // Remove: | where _time > ... (up to next pipe or end)
     .replace(/\|\s*where\s+_time\s*>\s*[^|]+/gi, "")
-    // Clean up any double pipes left behind
     .replace(/\|\s*\|/g, "|")
     .trim();
 }
 
-/**
- * Inject time range into APL query, replacing any existing time filter.
- * Adds `| where _time between (...)` after the dataset reference.
- */
 export function injectTimeRange(
   query: string,
   timeRange: string = "ago(1h) .. now()"
 ): string {
-  // Strip any existing time filter first
   const stripped = stripTimeFilter(query);
 
-  // Find the dataset reference and inject time filter after it
-  // Pattern: ['dataset-name'] or ["dataset-name"] or plain identifier
   const datasetMatch = stripped.match(/^\s*(\[['"][^'"]+['"]\]|[a-zA-Z_][\w-]*)/);
   if (datasetMatch) {
     const datasetPart = datasetMatch[0];
@@ -138,21 +113,20 @@ export function injectTimeRange(
     return `${datasetPart}\n| where _time between (${timeRange})${rest}`;
   }
 
-  // Fallback: return stripped query (no dataset found to inject after)
   return stripped;
 }
 
 export interface ExecuteOptions {
-  /** Start time as ISO8601 string */
+  /** ISO8601 */
   startTime?: string;
-  /** End time as ISO8601 string */
+  /** ISO8601 */
   endTime?: string;
 }
 
 /**
- * Execute an APL query against Axiom Playground.
- * Time range is passed via API parameters, not injected into the query string.
- * Returns success/failure and row count.
+ * time via API params avoids fragile regex parsing of expressions like
+ * ago(1h) vs ago(60m). also ensures expected and generated queries
+ * execute over identical windows regardless of what the model outputs.
  */
 export async function executeAplQuery(
   query: string,
@@ -168,7 +142,6 @@ export async function executeAplQuery(
     };
   }
 
-  // Strip any existing time filter from the query - API params will control time
   const cleanQuery = stripTimeFilter(query);
 
   try {
@@ -183,7 +156,6 @@ export async function executeAplQuery(
 
     const startTime = performance.now();
 
-    // Build request body with time range as API parameters
     const body: Record<string, unknown> = { apl: cleanQuery };
     if (options.startTime) {
       body.startTime = options.startTime;
@@ -227,8 +199,7 @@ export async function executeAplQuery(
       }[];
     };
 
-    // Extract from tabular response
-    // Response format: { tables: [{ fields: [{name: ...}], columns: [[...], [...], ...] }] }
+    // tabular response: { tables: [{ fields: [{name}], columns: [[col0], [col1], ...] }] }
     const table = result.tables?.[0];
     const columns = table?.fields?.map((f) => f.name) ?? [];
     const data = table?.columns ?? [];
@@ -250,18 +221,10 @@ export async function executeAplQuery(
   }
 }
 
-/**
- * Compare two query results for equivalence.
- * Returns a score between 0 and 1:
- * - 1.0: exact match (same columns, same data)
- * - 0.5-0.99: partial match (same columns, different row counts or data)
- * - 0.0: no match (different columns or one failed)
- */
 export function compareQueryResults(
   expected: AxiomQueryResult,
   actual: AxiomQueryResult
 ): { score: number; reason: string } {
-  // Both must succeed
   if (!expected.success || !actual.success) {
     return {
       score: 0,
@@ -271,11 +234,10 @@ export function compareQueryResults(
     };
   }
 
-  // Compare columns (order matters for aggregations)
   const expectedCols = expected.columns ?? [];
   const actualCols = actual.columns ?? [];
 
-  // Check if columns match (ignoring order for now, could be stricter)
+  // order-insensitive — queries may return same data in different column order
   const expectedColSet = new Set(expectedCols);
   const actualColSet = new Set(actualCols);
   const missingCols = expectedCols.filter((c) => !actualColSet.has(c));
@@ -288,9 +250,7 @@ export function compareQueryResults(
     };
   }
 
-  // Columns match, compare row counts
   if (expected.rowCount !== actual.rowCount) {
-    // Partial credit for same columns but different counts
     const ratio = Math.min(expected.rowCount, actual.rowCount) / 
                   Math.max(expected.rowCount, actual.rowCount);
     return {
@@ -299,12 +259,10 @@ export function compareQueryResults(
     };
   }
 
-  // Same columns and row count - compare actual data
   const expectedData = expected.data ?? [];
   const actualData = actual.data ?? [];
 
-  // Simple comparison: stringify and compare
-  // This handles the columnar format where data[colIndex][rowIndex]
+  // columnar format: data[colIndex][rowIndex]
   const expectedStr = JSON.stringify(expectedData);
   const actualStr = JSON.stringify(actualData);
 
@@ -312,38 +270,54 @@ export function compareQueryResults(
     return { score: 1, reason: "exact match" };
   }
 
-  // Same shape but different values
   return {
     score: 0.75,
     reason: "same structure but different values",
   };
 }
 
-/**
- * Evaluate a time range expression via APL and return duration in milliseconds.
- * Uses Axiom to parse expressions like ago(1h), now(), datetime(...).
- */
-export async function evaluateTimeRange(
-  timeExpr: TimeExpression
-): Promise<{ durationMs: number; error?: string }> {
-  // Use APL print to evaluate the time expressions
-  const query = `print start = ${timeExpr.start}, end = ${timeExpr.end}, duration = ${timeExpr.end} - ${timeExpr.start}`;
+const schemaCache = new Map<string, DatasetSchema>();
 
+/**
+ * fetch dataset schema via APL getschema operator.
+ * useful for providing type context to translation prompts.
+ * results are cached in memory for the duration of the process.
+ */
+export async function getDatasetSchema(
+  datasetName: string
+): Promise<DatasetSchema | null> {
+  const cached = schemaCache.get(datasetName);
+  if (cached) return cached;
+
+  const query = `['${datasetName}'] | getschema`;
   const result = await executeAplQuery(query);
 
-  if (!result.success) {
-    return { durationMs: 0, error: result.error };
+  if (!result.success || !result.columns || !result.data) {
+    return null;
   }
 
-  // Tabular format: columns[2] is duration, columns[2][0] is the value
-  // Duration comes back as timespan in nanoseconds
-  const durationCol = result.data?.[2];
-  const durationNs = durationCol?.[0];
+  const nameColIdx = result.columns.indexOf("ColumnName");
+  const typeColIdx = result.columns.indexOf("ColumnType");
 
-  if (typeof durationNs !== "number") {
-    return { durationMs: 0, error: "failed to parse duration from result" };
+  if (nameColIdx === -1 || typeColIdx === -1) {
+    return null;
   }
 
-  // Convert nanoseconds to milliseconds
-  return { durationMs: durationNs / 1_000_000 };
+  const names = result.data[nameColIdx] as string[];
+  const types = result.data[typeColIdx] as string[];
+
+  const fields = names.map((name, i) => ({
+    name,
+    type: types[i] ?? "unknown",
+  }));
+
+  const schema = { fields };
+  schemaCache.set(datasetName, schema);
+  return schema;
+}
+
+/** format schema for inclusion in prompts */
+export function formatSchemaForPrompt(schema: DatasetSchema): string {
+  const lines = schema.fields.map((f) => `  ${f.name}: ${f.type}`);
+  return lines.join("\n");
 }

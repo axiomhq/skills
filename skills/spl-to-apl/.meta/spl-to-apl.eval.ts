@@ -6,6 +6,8 @@ import {
   extractAplQuery,
   executeAplQuery,
   compareQueryResults,
+  getDatasetSchema,
+  formatSchemaForPrompt,
 } from "../../../eval-tooling/src/shared/axiom-query";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -32,17 +34,7 @@ interface TaskOutput {
 const EVAL_START_TIME = "2026-01-27T00:00:00Z";
 const EVAL_END_TIME = "2026-01-27T12:00:00Z";
 
-/**
- * Executes both the expected and generated APL queries against Axiom Playground,
- * then compares the results. Time filters are replaced with a static range
- * to ensure reproducible comparison.
- *
- * Returns a score between 0 and 1:
- * - 1.0: exact match (same columns, same data)
- * - 0.5-0.99: partial match (same structure, different data)
- * - 0.25: column mismatch
- * - 0.0: query failed to execute
- */
+/** runs both queries against axiom, compares results. see compareQueryResults for scoring. */
 const ResultsMatch = Scorer(
   "results-match",
   async ({ output, expected }: { output: TaskOutput; expected: string }) => {
@@ -76,10 +68,15 @@ const ResultsMatch = Scorer(
   }
 );
 
+interface EvalInput {
+  spl: string;
+  dataset: string;
+}
+
 Eval("spl-translation", {
   data: async () =>
     testCases.map((tc) => ({
-      input: tc.spl,
+      input: { spl: tc.spl, dataset: tc.dataset ?? "sample-http-logs" } as EvalInput,
       expected: tc.expectedApl,
       metadata: {
         id: tc.id,
@@ -100,15 +97,20 @@ Eval("spl-translation", {
     skill: skillMetadata,
   },
 
-  task: async ({ input }: { input: string }): Promise<TaskOutput> => {
+  task: async ({ input }: { input: EvalInput }): Promise<TaskOutput> => {
     const harnessType = flag("harnessType") as HarnessType;
 
-    const result = await runHarness(input, harnessType, {
+    const schema = await getDatasetSchema(input.dataset);
+    const schemaContext = schema
+      ? `\n\nTarget dataset schema (${input.dataset}):\n${formatSchemaForPrompt(schema)}`
+      : "";
+
+    const result = await runHarness(input.spl, harnessType, {
       skillDir: SKILL_DIR,
       systemPromptPrefix:
         "You are an expert at translating Splunk SPL queries to Axiom APL queries.",
       systemPromptSuffix:
-        "Translate the following SPL query to APL. Output ONLY the APL query, no explanation.",
+        `Translate the following SPL query to APL. Output ONLY the APL query, no explanation.${schemaContext}`,
     });
 
     return {
