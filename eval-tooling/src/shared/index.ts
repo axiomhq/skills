@@ -18,7 +18,6 @@ export {
   stripTimeFilter,
   executeAplQuery,
   compareQueryResults,
-  getDatasetSchema,
-  formatSchemaForPrompt,
+  evaluateTimeRange,
 } from "./axiom-query";
-export type { AxiomQueryResult, TimeExpression, ExecuteOptions, DatasetSchema } from "./axiom-query";
+export type { AxiomQueryResult, TimeExpression, ExecuteOptions } from "./axiom-query";
