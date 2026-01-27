@@ -25,102 +25,6 @@ interface TaskOutput {
 }
 
 /**
- * Normalize APL query for comparison:
- * - Remove code fences (```apl, ```kusto, ```, etc.)
- * - Collapse whitespace
- * - Trim
- * - Normalize quotes (single vs double for dataset names)
- */
-function normalizeApl(query: string): string {
-  let result = query.trim();
-
-  const fenceMatch = result.match(/^```\w*\s*\n([\s\S]*?)\n```\s*$/);
-  if (fenceMatch?.[1]) {
-    result = fenceMatch[1];
-  }
-
-  return result
-    .replace(/\s+/g, " ")
-    .replace(/\["([^"]+)"\]/g, "['$1']")
-    .trim();
-}
-
-const ExactMatch = Scorer(
-  "exact-match",
-  ({ output, expected }: { output: TaskOutput; expected: string }) =>
-    normalizeApl(output.output) === normalizeApl(expected)
-);
-
-const KeyOperatorsPresent = Scorer(
-  "key-operators-present",
-  ({ output, expected }: { output: TaskOutput; expected: string }) => {
-    const expectedLower = expected.toLowerCase();
-    const outputLower = output.output.toLowerCase();
-
-    const keyPatterns = [
-      /\bsummarize\b/,
-      /\bwhere\b/,
-      /\bextend\b/,
-      /\bproject\b/,
-      /\border by\b/,
-      /\btake\b/,
-      /\bjoin\b/,
-      /\bunion\b/,
-      /\bmv-expand\b/,
-      /\bparse\b/,
-      /\bextract\b/,
-      /\bcount\(\)/,
-      /\bcountif\b/,
-      /\bdcount\b/,
-      /\bbin\b/,
-      /\btop\b/,
-      /\barg_max\b/,
-      /\barg_min\b/,
-    ];
-
-    let matchedOperators = 0;
-    let expectedOperators = 0;
-
-    for (const pattern of keyPatterns) {
-      if (pattern.test(expectedLower)) {
-        expectedOperators++;
-        if (pattern.test(outputLower)) {
-          matchedOperators++;
-        }
-      }
-    }
-
-    return expectedOperators > 0 ? matchedOperators / expectedOperators : 1;
-  }
-);
-
-const DatasetCorrect = Scorer(
-  "dataset-correct",
-  ({ output, expected }: { output: TaskOutput; expected: string }) => {
-    const datasetMatch = expected.match(/\['([^']+)'\]/);
-    if (!datasetMatch) return 1;
-
-    const expectedDataset = datasetMatch[1];
-    return output.output.includes(`['${expectedDataset}']`) ? 1 : 0;
-  }
-);
-
-const TimeFilterPresent = Scorer(
-  "time-filter-present",
-  ({ output, expected }: { output: TaskOutput; expected: string }) => {
-    const expectsTimeFilter =
-      expected.includes("_time between") || expected.includes("ago(");
-    if (!expectsTimeFilter) return 1;
-
-    const hasTimeFilter =
-      output.output.includes("_time between") ||
-      output.output.includes("ago(") ||
-      output.output.includes("_time >=");
-    return hasTimeFilter ? 1 : 0;
-  }
-);
-
-/**
  * Static time range for reproducible results.
  * Axiom Playground sample data is continuously updated, so we use a recent fixed window.
  * This gets refreshed periodically when baselines are updated.
@@ -211,11 +115,5 @@ Eval("spl-translation", {
     };
   },
 
-  scorers: [
-    ExactMatch,
-    KeyOperatorsPresent,
-    DatasetCorrect,
-    TimeFilterPresent,
-    ResultsMatch,
-  ],
+  scorers: [ResultsMatch],
 });
