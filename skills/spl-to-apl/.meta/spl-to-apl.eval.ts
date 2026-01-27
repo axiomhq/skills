@@ -100,10 +100,15 @@ Eval("spl-translation", {
   task: async ({ input }: { input: EvalInput }): Promise<TaskOutput> => {
     const harnessType = flag("harnessType") as HarnessType;
 
-    const schema = await getDatasetSchema(input.dataset);
-    const schemaContext = schema
-      ? `\n\nTarget dataset schema (${input.dataset}):\n${formatSchemaForPrompt(schema)}`
-      : "";
+    let schemaContext = "";
+    try {
+      const schema = await getDatasetSchema(input.dataset);
+      if (schema) {
+        schemaContext = `\n\nTarget dataset schema (${input.dataset}):\n${formatSchemaForPrompt(schema)}`;
+      }
+    } catch (e) {
+      console.warn(`Failed to fetch schema for ${input.dataset}:`, e);
+    }
 
     const result = await runHarness(input.spl, harnessType, {
       skillDir: SKILL_DIR,

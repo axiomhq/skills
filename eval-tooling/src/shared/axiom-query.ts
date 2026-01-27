@@ -164,14 +164,20 @@ export async function executeAplQuery(
       body.endTime = options.endTime;
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
     const response = await fetch(
       `${config.url}/v1/datasets/_apl?format=tabular`,
       {
         method: "POST",
         headers,
         body: JSON.stringify(body),
+        signal: controller.signal,
       }
     );
+
+    clearTimeout(timeoutId);
 
     const elapsedMs = Math.round(performance.now() - startTime);
 
