@@ -19,8 +19,8 @@ interface AxiomConfig {
 }
 
 function getAxiomPlaygroundConfig(): AxiomConfig | null {
-  const url = process.env.AXIOM_PLAYGROUND_URL;
-  const token = process.env.AXIOM_PLAYGROUND_TOKEN;
+  const url = process.env.AXIOM_PLAY_URL;
+  const token = process.env.AXIOM_PLAY_TOKEN;
 
   if (!url || !token) {
     return null;
@@ -29,7 +29,7 @@ function getAxiomPlaygroundConfig(): AxiomConfig | null {
   return {
     url,
     token,
-    orgId: process.env.AXIOM_PLAYGROUND_ORG_ID,
+    orgId: process.env.AXIOM_PLAY_ORG_ID,
   };
 }
 
@@ -92,8 +92,7 @@ export async function executeAplQuery(
     return {
       success: false,
       rowCount: 0,
-      error:
-        "AXIOM_PLAYGROUND_URL and AXIOM_PLAYGROUND_TOKEN not configured",
+      error: "AXIOM_PLAY_URL and AXIOM_PLAY_TOKEN not configured",
     };
   }
 
