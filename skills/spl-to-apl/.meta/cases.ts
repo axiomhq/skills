@@ -1,16 +1,26 @@
 import type { TranslationCase } from "../../../eval-tooling/src/shared/types";
 
 /**
- * Test cases from skills/spl-to-apl/tests/test-queries.md
- * These are validated against Axiom Playground (play.axiom.co) with real datasets.
+ * Test cases validated against Axiom Playground (play.axiom.co) with real datasets.
  *
  * Datasets used:
  * - sample-http-logs: HTTP request logs with status, uri, method, req_duration_ms, geo.*, id fields
  * - otel-demo-traces: OpenTelemetry trace spans with service.name, duration, status_code fields
  *
- * Note: Time filters are not included in expected APL because the source SPL queries don't
- * specify time ranges. In Splunk, time is typically set via UI picker, not in the query.
- * The eval harness injects time via API startTime/endTime params for execution.
+ * Source attribution:
+ * - DOCS: Based on https://axiom.co/docs/apl/guides/splunk-cheat-sheet
+ * - EXTENDED: Patterns beyond docs, validated manually against Axiom Playground
+ *
+ * Extended patterns not in docs:
+ * - perc50/perc95/perc99 → percentile() (docs don't cover percentiles)
+ * - dc() → dcount() (docs don't explicitly show this)
+ * - timechart → bin(_time, ...) + summarize (docs don't cover timechart)
+ * - iplocation → pre-computed geo.* fields (dataset-specific, not a translation)
+ * - if() nested → case() (docs show if → iff(), we use case() for nested conditionals)
+ * - toint(status) casting (dataset quirk: status is string in sample-http-logs)
+ *
+ * Note: Time filters not included - SPL queries don't specify time (set via UI).
+ * The eval harness injects time via API startTime/endTime params.
  */
 export const testCases: TranslationCase[] = [
   // === sample-http-logs dataset ===
@@ -22,6 +32,7 @@ export const testCases: TranslationCase[] = [
 | summarize count() by status`,
     category: "aggregation",
     dataset: "sample-http-logs",
+    // DOCS: stats count by → summarize count() by
   },
   {
     id: "top-10-uris",
@@ -32,6 +43,7 @@ export const testCases: TranslationCase[] = [
 | top 10 by count_`,
     category: "aggregation",
     dataset: "sample-http-logs",
+    // DOCS: top → top N by (docs show head → top)
   },
   {
     id: "error-rate-over-time",
@@ -43,6 +55,7 @@ export const testCases: TranslationCase[] = [
     category: "timeseries",
     dataset: "sample-http-logs",
     notes: "status field is string in sample-http-logs, needs toint()",
+    // EXTENDED: timechart → bin(_time) + summarize, countif, toint casting
   },
   {
     id: "request-duration-percentiles",
@@ -56,6 +69,7 @@ export const testCases: TranslationCase[] = [
   by method`,
     category: "aggregation",
     dataset: "sample-http-logs",
+    // EXTENDED: perc50/perc95/perc99 → percentile()
   },
   {
     id: "geo-distribution",
@@ -68,6 +82,8 @@ export const testCases: TranslationCase[] = [
     category: "geo",
     dataset: "sample-http-logs",
     notes: "sample-http-logs has pre-computed geo.country and geo.city fields",
+    // EXTENDED: iplocation → uses pre-computed geo.* fields (dataset-specific)
+    // DOCS: sort → order by, head → take
   },
   {
     id: "unique-users-per-endpoint",
@@ -78,6 +94,8 @@ export const testCases: TranslationCase[] = [
 | order by unique_users desc`,
     category: "aggregation",
     dataset: "sample-http-logs",
+    // EXTENDED: dc() → dcount()
+    // DOCS: sort → order by
   },
   {
     id: "conditional-severity",
@@ -93,6 +111,8 @@ export const testCases: TranslationCase[] = [
     category: "conditional",
     dataset: "sample-http-logs",
     notes: "status field is string in sample-http-logs, needs toint()",
+    // EXTENDED: nested if() → case() (docs show if → iff() for simple cases)
+    // DOCS: eval → extend
   },
 
   // === otel-demo-traces dataset ===
@@ -107,6 +127,8 @@ export const testCases: TranslationCase[] = [
   by ['service.name']`,
     category: "aggregation",
     dataset: "otel-demo-traces",
+    // EXTENDED: avg(), perc95 → percentile()
+    // DOCS: stats → summarize
   },
   {
     id: "error-spans-over-time",
@@ -117,6 +139,8 @@ export const testCases: TranslationCase[] = [
 | summarize count() by bin(_time, 1m), ['service.name']`,
     category: "timeseries",
     dataset: "otel-demo-traces",
+    // EXTENDED: timechart span=Nm count by field → bin(_time, Nm) + summarize
+    // DOCS: field="value" filter → where field == "value"
   },
 ];
 
