@@ -9,7 +9,7 @@ import { runPromptInjection, type PromptInjectionOptions } from "./prompt-inject
 import { runToolSimulation, type ToolSimulationOptions } from "./tool-simulation";
 import type { HarnessResult } from "./types";
 
-export const MODEL_ID = "anthropic/claude-opus-4.5";
+export const MODEL_ID = "google/gemini-2.5-flash";
 
 export type HarnessType = "prompt-injection" | "tool-simulation";
 
