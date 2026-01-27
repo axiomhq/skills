@@ -24,7 +24,7 @@ import matter from "gray-matter";
 import type { HarnessResult } from "./types";
 import { buildSkillMetadata, parseModelId } from "../shared/metadata";
 
-const MODEL_ID = "google/gemini-2.5-flash";
+const MODEL_ID = "anthropic/claude-opus-4.5";
 const model = wrapAISDKModel(gateway(MODEL_ID));
 
 export interface PromptInjectionOptions {
