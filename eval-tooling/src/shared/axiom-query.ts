@@ -107,10 +107,10 @@ export function extractTimeExpression(query: string): TimeExpression | null {
  */
 export function stripTimeFilter(query: string): string {
   return query
-    // Remove: | where _time between (...)
-    .replace(/\|\s*where\s+_time\s+between\s*\([^)]+\)\s*/gi, "")
+    // Remove: | where _time between (...) - handles nested parens like ago(1h)
+    .replace(/\|\s*where\s+_time\s+between\s*\([^()]*(?:\([^()]*\)[^()]*)*\)\s*/gi, "")
     // Remove: | where _time >= ... (up to next pipe or end)
-    .replace(/\|\s*where\s+_time\s*>=?\s*[^|]+/gi, "")
+    .replace(/\|\s*where\s+_time\s*>=\s*[^|]+/gi, "")
     // Remove: | where _time > ... (up to next pipe or end)
     .replace(/\|\s*where\s+_time\s*>\s*[^|]+/gi, "")
     // Clean up any double pipes left behind
