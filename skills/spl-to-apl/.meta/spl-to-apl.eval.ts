@@ -52,15 +52,15 @@ const TimeRangeCorrect = Scorer(
     const genTime = extractTimeExpression(genQuery);
     const expTime = extractTimeExpression(expQuery);
 
-    // No time filter in generated query
-    if (!genTime) {
-      console.warn("No time filter found in generated query");
-      return 0;
-    }
-
-    // Expected has no time filter - any is acceptable
+    // Expected has no time filter - omission is acceptable
     if (!expTime) {
       return 1;
+    }
+
+    // Expected has time filter but generated doesn't
+    if (!genTime) {
+      console.warn("Expected time filter but none found in generated query");
+      return 0;
     }
 
     // Evaluate both via APL
