@@ -7,6 +7,21 @@ description: Translates Splunk SPL queries to Axiom APL. Provides command mappin
 
 Expert translator from Splunk Processing Language (SPL) to Axiom Processing Language (APL). 
 
+## Before Translating
+
+**Always fetch the target dataset schema first.** Field types in Axiom may differ from Splunk (e.g., `status` stored as string requires `toint(status)` for numeric comparisons).
+
+```apl
+['dataset-name'] | getschema
+```
+
+Use the schema to:
+- Cast fields to correct types (`toint()`, `toreal()`, `tostring()`)
+- Identify pre-computed fields (e.g., `geo.country` instead of `iplocation`)
+- Verify field names match exactly (case-sensitive)
+
+---
+
 ## Critical Differences
 
 1. **Time is explicit in APL:** SPL time pickers don't translate — add `where _time between (ago(1h) .. now())`
