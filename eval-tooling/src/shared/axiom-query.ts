@@ -142,13 +142,21 @@ export function injectTimeRange(
   return stripped;
 }
 
+export interface ExecuteOptions {
+  /** Start time as ISO8601 string */
+  startTime?: string;
+  /** End time as ISO8601 string */
+  endTime?: string;
+}
+
 /**
  * Execute an APL query against Axiom Playground.
+ * Time range is passed via API parameters, not injected into the query string.
  * Returns success/failure and row count.
  */
 export async function executeAplQuery(
   query: string,
-  options: { injectTime?: boolean; timeRange?: string } = {}
+  options: ExecuteOptions = {}
 ): Promise<AxiomQueryResult> {
   const config = getAxiomPlaygroundConfig();
 
@@ -160,10 +168,8 @@ export async function executeAplQuery(
     };
   }
 
-  let finalQuery = query;
-  if (options.injectTime !== false) {
-    finalQuery = injectTimeRange(query, options.timeRange);
-  }
+  // Strip any existing time filter from the query - API params will control time
+  const cleanQuery = stripTimeFilter(query);
 
   try {
     const headers: Record<string, string> = {
@@ -177,12 +183,21 @@ export async function executeAplQuery(
 
     const startTime = performance.now();
 
+    // Build request body with time range as API parameters
+    const body: Record<string, unknown> = { apl: cleanQuery };
+    if (options.startTime) {
+      body.startTime = options.startTime;
+    }
+    if (options.endTime) {
+      body.endTime = options.endTime;
+    }
+
     const response = await fetch(
       `${config.url}/v1/datasets/_apl?format=tabular`,
       {
         method: "POST",
         headers,
-        body: JSON.stringify({ apl: finalQuery }),
+        body: JSON.stringify(body),
       }
     );
 
@@ -314,7 +329,7 @@ export async function evaluateTimeRange(
   // Use APL print to evaluate the time expressions
   const query = `print start = ${timeExpr.start}, end = ${timeExpr.end}, duration = ${timeExpr.end} - ${timeExpr.start}`;
 
-  const result = await executeAplQuery(query, { injectTime: false });
+  const result = await executeAplQuery(query);
 
   if (!result.success) {
     return { durationMs: 0, error: result.error };

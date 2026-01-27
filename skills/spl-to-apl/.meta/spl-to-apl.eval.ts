@@ -31,7 +31,8 @@ interface TaskOutput {
  * Axiom Playground sample data is continuously updated, so we use a recent fixed window.
  * This gets refreshed periodically when baselines are updated.
  */
-const EVAL_TIME_RANGE = "datetime(2026-01-27T00:00:00Z) .. datetime(2026-01-27T12:00:00Z)";
+const EVAL_START_TIME = "2026-01-27T00:00:00Z";
+const EVAL_END_TIME = "2026-01-27T12:00:00Z";
 
 /**
  * Verifies the model produced correct time range syntax.
@@ -115,16 +116,15 @@ const ResultsMatch = Scorer(
       return 0;
     }
 
-    // Run both queries with the same static time range
-    // injectTimeRange now strips existing time filters before injecting
+    // Run both queries with the same static time range via API params
     const [expectedResult, actualResult] = await Promise.all([
       executeAplQuery(expectedQuery, {
-        injectTime: true,
-        timeRange: EVAL_TIME_RANGE,
+        startTime: EVAL_START_TIME,
+        endTime: EVAL_END_TIME,
       }),
       executeAplQuery(generatedQuery, {
-        injectTime: true,
-        timeRange: EVAL_TIME_RANGE,
+        startTime: EVAL_START_TIME,
+        endTime: EVAL_END_TIME,
       }),
     ]);
 
