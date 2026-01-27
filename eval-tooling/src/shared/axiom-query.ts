@@ -10,6 +10,10 @@ export interface AxiomQueryResult {
   rowCount: number;
   error?: string;
   elapsedMs?: number;
+  /** Column names from the result */
+  columns?: string[];
+  /** Raw result data for comparison */
+  data?: unknown[][];
 }
 
 interface AxiomConfig {
@@ -142,19 +146,24 @@ export async function executeAplQuery(
     }
 
     const result = (await response.json()) as {
-      tables?: { columns?: unknown[][] }[];
+      tables?: { 
+        fields?: { name: string }[];
+        columns?: unknown[][];
+      }[];
     };
 
-    // Extract row count from tabular response
-    // Response format: { tables: [{ columns: [[...], [...], ...] }] }
-    let rowCount = 0;
-    if (result.tables?.[0]?.columns?.[0]) {
-      rowCount = result.tables[0].columns[0].length;
-    }
+    // Extract from tabular response
+    // Response format: { tables: [{ fields: [{name: ...}], columns: [[...], [...], ...] }] }
+    const table = result.tables?.[0];
+    const columns = table?.fields?.map((f) => f.name) ?? [];
+    const data = table?.columns ?? [];
+    const rowCount = data[0]?.length ?? 0;
 
     return {
       success: true,
       rowCount,
+      columns,
+      data,
       elapsedMs,
     };
   } catch (error) {
@@ -164,4 +173,73 @@ export async function executeAplQuery(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+/**
+ * Compare two query results for equivalence.
+ * Returns a score between 0 and 1:
+ * - 1.0: exact match (same columns, same data)
+ * - 0.5-0.99: partial match (same columns, different row counts or data)
+ * - 0.0: no match (different columns or one failed)
+ */
+export function compareQueryResults(
+  expected: AxiomQueryResult,
+  actual: AxiomQueryResult
+): { score: number; reason: string } {
+  // Both must succeed
+  if (!expected.success || !actual.success) {
+    return {
+      score: 0,
+      reason: expected.success
+        ? `generated query failed: ${actual.error}`
+        : `expected query failed: ${expected.error}`,
+    };
+  }
+
+  // Compare columns (order matters for aggregations)
+  const expectedCols = expected.columns ?? [];
+  const actualCols = actual.columns ?? [];
+
+  // Check if columns match (ignoring order for now, could be stricter)
+  const expectedColSet = new Set(expectedCols);
+  const actualColSet = new Set(actualCols);
+  const missingCols = expectedCols.filter((c) => !actualColSet.has(c));
+  const extraCols = actualCols.filter((c) => !expectedColSet.has(c));
+
+  if (missingCols.length > 0 || extraCols.length > 0) {
+    return {
+      score: 0.25,
+      reason: `column mismatch: missing [${missingCols.join(", ")}], extra [${extraCols.join(", ")}]`,
+    };
+  }
+
+  // Columns match, compare row counts
+  if (expected.rowCount !== actual.rowCount) {
+    // Partial credit for same columns but different counts
+    const ratio = Math.min(expected.rowCount, actual.rowCount) / 
+                  Math.max(expected.rowCount, actual.rowCount);
+    return {
+      score: 0.5 + ratio * 0.25,
+      reason: `row count mismatch: expected ${expected.rowCount}, got ${actual.rowCount}`,
+    };
+  }
+
+  // Same columns and row count - compare actual data
+  const expectedData = expected.data ?? [];
+  const actualData = actual.data ?? [];
+
+  // Simple comparison: stringify and compare
+  // This handles the columnar format where data[colIndex][rowIndex]
+  const expectedStr = JSON.stringify(expectedData);
+  const actualStr = JSON.stringify(actualData);
+
+  if (expectedStr === actualStr) {
+    return { score: 1, reason: "exact match" };
+  }
+
+  // Same shape but different values
+  return {
+    score: 0.75,
+    reason: "same structure but different values",
+  };
 }

@@ -16,5 +16,6 @@ export {
   extractAplQuery,
   executeAplQuery,
   injectTimeRange,
+  compareQueryResults,
 } from "./axiom-query";
 export type { AxiomQueryResult } from "./axiom-query";
