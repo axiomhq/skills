@@ -7,7 +7,7 @@ Test the skill by translating these SPL queries to APL and running in [Axiom Pla
 ### 1. Basic count by status
 **SPL:**
 ```spl
-index=http_logs | stats count by status
+index=sample-http-logs | stats count by status
 ```
 
 **Expected APL:**
@@ -20,7 +20,7 @@ index=http_logs | stats count by status
 ### 2. Top 10 URIs
 **SPL:**
 ```spl
-index=http_logs | top limit=10 uri
+index=sample-http-logs | top limit=10 uri
 ```
 
 **Expected APL:**
@@ -34,7 +34,7 @@ index=http_logs | top limit=10 uri
 ### 3. Error rate over time
 **SPL:**
 ```spl
-index=http_logs | timechart span=5m count(eval(status>=500)) as errors, count as total | eval error_rate=errors/total*100
+index=sample-http-logs | timechart span=5m count(eval(status>=500)) as errors, count as total | eval error_rate=errors/total*100
 ```
 
 **Expected APL:**
@@ -50,7 +50,7 @@ index=http_logs | timechart span=5m count(eval(status>=500)) as errors, count as
 ### 4. Request duration percentiles
 **SPL:**
 ```spl
-index=http_logs | stats perc50(req_duration_ms) as p50, perc95(req_duration_ms) as p95, perc99(req_duration_ms) as p99 by method
+index=sample-http-logs | stats perc50(req_duration_ms) as p50, perc95(req_duration_ms) as p95, perc99(req_duration_ms) as p99 by method
 ```
 
 **Expected APL:**
@@ -67,7 +67,7 @@ index=http_logs | stats perc50(req_duration_ms) as p50, perc95(req_duration_ms) 
 ### 5. Geo distribution
 **SPL:**
 ```spl
-index=http_logs | iplocation clientip | stats count by Country, City | sort - count | head 20
+index=sample-http-logs | iplocation clientip | stats count by Country, City | sort - count | head 20
 ```
 
 **Expected APL:**
@@ -84,7 +84,7 @@ index=http_logs | iplocation clientip | stats count by Country, City | sort - co
 ### 6. Unique users per endpoint
 **SPL:**
 ```spl
-index=http_logs | stats dc(id) as unique_users, count as requests by uri | sort - unique_users
+index=sample-http-logs | stats dc(id) as unique_users, count as requests by uri | sort - unique_users
 ```
 
 **Expected APL:**
@@ -98,7 +98,7 @@ index=http_logs | stats dc(id) as unique_users, count as requests by uri | sort 
 ### 7. Conditional field creation
 **SPL:**
 ```spl
-index=http_logs | eval severity=if(status>=500, "error", if(status>=400, "warning", "ok")) | stats count by severity
+index=sample-http-logs | eval severity=if(status>=500, "error", if(status>=400, "warning", "ok")) | stats count by severity
 ```
 
 **Expected APL:**
@@ -120,7 +120,7 @@ index=http_logs | eval severity=if(status>=500, "error", if(status>=400, "warnin
 ### 8. Span duration by service
 **SPL:**
 ```spl
-index=traces | stats avg(duration) as avg_duration, perc95(duration) as p95_duration by service.name
+index=otel-demo-traces | stats avg(duration) as avg_duration, perc95(duration) as p95_duration by service.name
 ```
 
 **Expected APL:**
@@ -136,7 +136,7 @@ index=traces | stats avg(duration) as avg_duration, perc95(duration) as p95_dura
 ### 9. Error spans over time
 **SPL:**
 ```spl
-index=traces status_code="ERROR" | timechart span=1m count by service.name
+index=otel-demo-traces status_code="ERROR" | timechart span=1m count by service.name
 ```
 
 **Expected APL:**

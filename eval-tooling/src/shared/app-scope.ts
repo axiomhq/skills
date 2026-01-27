@@ -1,5 +1,6 @@
 import { createAppScope } from "axiom/ai";
 import { z } from "zod";
+import { MODEL_ID } from "../harnesses";
 
 /**
  * Harness version changelog:
@@ -14,6 +15,7 @@ const HARNESS_VERSION = "v2" as const;
 
 export const { flag, pickFlags } = createAppScope({
   flagSchema: z.object({
+    model: z.string().default(MODEL_ID),
     harnessType: z
       .enum(["prompt-injection", "tool-simulation"])
       .default("tool-simulation"),

@@ -12,3 +12,12 @@ export type {
   TokenUsage,
   HarnessResultMetadata,
 } from "./metadata";
+export {
+  extractAplQuery,
+  extractTimeExpression,
+  stripTimeFilter,
+  executeAplQuery,
+  compareQueryResults,
+  evaluateTimeRange,
+} from "./axiom-query";
+export type { AxiomQueryResult, TimeExpression, ExecuteOptions } from "./axiom-query";
