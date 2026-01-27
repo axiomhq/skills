@@ -52,34 +52,94 @@ export function extractAplQuery(output: string): string {
   return query.trim();
 }
 
+export interface TimeExpression {
+  start: string;
+  end: string;
+  raw: string;
+}
+
 /**
- * Inject time range into APL query if not present.
- * Adds `| where _time between (ago(1h) .. now())` after the dataset reference.
+ * Extract time range expression from APL query.
+ * Handles patterns like:
+ * - _time between (ago(1h) .. now())
+ * - _time between (datetime(2024-01-01) .. datetime(2024-01-02))
+ * - _time >= ago(1h)
+ */
+export function extractTimeExpression(query: string): TimeExpression | null {
+  // Pattern: _time between (start .. end)
+  const betweenMatch = query.match(
+    /_time\s+between\s*\(\s*([^.]+?)\s*\.\.\s*([^)]+?)\s*\)/i
+  );
+  if (betweenMatch?.[1] && betweenMatch[2]) {
+    return {
+      start: betweenMatch[1].trim(),
+      end: betweenMatch[2].trim(),
+      raw: betweenMatch[0],
+    };
+  }
+
+  // Pattern: _time >= expr (assumes end is now())
+  const gteMatch = query.match(/_time\s*>=\s*([^\s|]+)/i);
+  if (gteMatch?.[1]) {
+    return {
+      start: gteMatch[1].trim(),
+      end: "now()",
+      raw: gteMatch[0],
+    };
+  }
+
+  // Pattern: _time > expr (assumes end is now())
+  const gtMatch = query.match(/_time\s*>\s*([^\s|]+)/i);
+  if (gtMatch?.[1]) {
+    return {
+      start: gtMatch[1].trim(),
+      end: "now()",
+      raw: gtMatch[0],
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Strip existing time filter from APL query.
+ * Used before injecting a controlled time range.
+ */
+export function stripTimeFilter(query: string): string {
+  return query
+    // Remove: | where _time between (...)
+    .replace(/\|\s*where\s+_time\s+between\s*\([^)]+\)\s*/gi, "")
+    // Remove: | where _time >= ... (up to next pipe or end)
+    .replace(/\|\s*where\s+_time\s*>=?\s*[^|]+/gi, "")
+    // Remove: | where _time > ... (up to next pipe or end)
+    .replace(/\|\s*where\s+_time\s*>\s*[^|]+/gi, "")
+    // Clean up any double pipes left behind
+    .replace(/\|\s*\|/g, "|")
+    .trim();
+}
+
+/**
+ * Inject time range into APL query, replacing any existing time filter.
+ * Adds `| where _time between (...)` after the dataset reference.
  */
 export function injectTimeRange(
   query: string,
   timeRange: string = "ago(1h) .. now()"
 ): string {
-  // Check if query already has a time filter
-  if (
-    query.includes("_time between") ||
-    query.includes("_time >=") ||
-    query.includes("_time >")
-  ) {
-    return query;
-  }
+  // Strip any existing time filter first
+  const stripped = stripTimeFilter(query);
 
   // Find the dataset reference and inject time filter after it
-  // Pattern: ['dataset-name'] or ["dataset-name"]
-  const datasetMatch = query.match(/^\s*\[['"][^'"]+['"]\]/);
+  // Pattern: ['dataset-name'] or ["dataset-name"] or plain identifier
+  const datasetMatch = stripped.match(/^\s*(\[['"][^'"]+['"]\]|[a-zA-Z_][\w-]*)/);
   if (datasetMatch) {
     const datasetPart = datasetMatch[0];
-    const rest = query.slice(datasetPart.length);
+    const rest = stripped.slice(datasetPart.length);
     return `${datasetPart}\n| where _time between (${timeRange})${rest}`;
   }
 
-  // Fallback: prepend time filter if we can't find dataset
-  return query;
+  // Fallback: return stripped query (no dataset found to inject after)
+  return stripped;
 }
 
 /**
@@ -242,4 +302,33 @@ export function compareQueryResults(
     score: 0.75,
     reason: "same structure but different values",
   };
+}
+
+/**
+ * Evaluate a time range expression via APL and return duration in milliseconds.
+ * Uses Axiom to parse expressions like ago(1h), now(), datetime(...).
+ */
+export async function evaluateTimeRange(
+  timeExpr: TimeExpression
+): Promise<{ durationMs: number; error?: string }> {
+  // Use APL print to evaluate the time expressions
+  const query = `print start = ${timeExpr.start}, end = ${timeExpr.end}, duration = ${timeExpr.end} - ${timeExpr.start}`;
+
+  const result = await executeAplQuery(query, { injectTime: false });
+
+  if (!result.success) {
+    return { durationMs: 0, error: result.error };
+  }
+
+  // Tabular format: columns[2] is duration, columns[2][0] is the value
+  // Duration comes back as timespan in nanoseconds
+  const durationCol = result.data?.[2];
+  const durationNs = durationCol?.[0];
+
+  if (typeof durationNs !== "number") {
+    return { durationMs: 0, error: "failed to parse duration from result" };
+  }
+
+  // Convert nanoseconds to milliseconds
+  return { durationMs: durationNs / 1_000_000 };
 }

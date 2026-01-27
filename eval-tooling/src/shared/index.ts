@@ -14,8 +14,11 @@ export type {
 } from "./metadata";
 export {
   extractAplQuery,
+  extractTimeExpression,
+  stripTimeFilter,
   executeAplQuery,
   injectTimeRange,
   compareQueryResults,
+  evaluateTimeRange,
 } from "./axiom-query";
-export type { AxiomQueryResult } from "./axiom-query";
+export type { AxiomQueryResult, TimeExpression } from "./axiom-query";
