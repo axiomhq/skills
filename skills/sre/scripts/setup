@@ -26,7 +26,24 @@ for arg in "$@"; do
   esac
 done
 
-echo "=== axiom-sre Memory Setup ==="
+echo "=== axiom-sre Setup ==="
+echo ""
+
+# Check dependencies
+MISSING=""
+command -v jq >/dev/null 2>&1 || MISSING="$MISSING jq"
+command -v curl >/dev/null 2>&1 || MISSING="$MISSING curl"
+
+if [[ -n "$MISSING" ]]; then
+  echo "⚠ Missing required tools:$MISSING"
+  echo ""
+  echo "Install with:"
+  echo "  macOS:  brew install$MISSING"
+  echo "  Ubuntu: sudo apt install$MISSING"
+  echo ""
+  exit 1
+fi
+echo "✓ Dependencies: jq, curl"
 echo ""
 
 # --- Migrate legacy personal memory ---
@@ -72,11 +89,66 @@ echo ""
 
 # Check for Axiom config
 AXIOM_CONFIG="$HOME/.axiom.toml"
-if [[ ! -f "$AXIOM_CONFIG" ]]; then
-  echo "Optional: To enable Axiom queries, create $AXIOM_CONFIG:"
+if [[ -f "$AXIOM_CONFIG" ]]; then
+  echo "✓ Axiom config exists at $AXIOM_CONFIG"
   echo ""
-  echo '[deployments.dev]'
-  echo 'url = "https://api.axiom.co"'
-  echo 'token = "xaat-your-token-here"'
-  echo 'org_id = "your-org-id"'
+  echo "Configured deployments:"
+  grep -E '^\[deployments\.' "$AXIOM_CONFIG" | sed 's/\[deployments\.\(.*\)\]/  - \1/' || true
+else
+  echo "=== Axiom Configuration ==="
+  echo ""
+  echo "To query Axiom, you need to configure ~/.axiom.toml"
+  echo ""
+  echo "You'll need:"
+  echo "  1. org_id:  Settings → Organization (or from URL: app.axiom.co/{org_id}/...)"
+  echo "  2. token:   Settings → Profile → Personal Access Tokens (use a PAT, not API token)"
+  echo ""
+  
+  # Check if we're in an interactive terminal
+  if [[ -t 0 ]]; then
+    read -p "Set up Axiom config now? [y/N] " -n 1 -r
+    echo ""
+    
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      read -p "Deployment name (e.g., prod, staging, dev): " DEPLOY_NAME
+      DEPLOY_NAME=${DEPLOY_NAME:-prod}
+      
+      read -p "Org ID: " ORG_ID
+      read -p "API Token (xaat-...): " API_TOKEN
+      
+      if [[ -n "$ORG_ID" && -n "$API_TOKEN" ]]; then
+        cat > "$AXIOM_CONFIG" << EOF
+[deployments.${DEPLOY_NAME}]
+url = "https://api.axiom.co"
+token = "${API_TOKEN}"
+org_id = "${ORG_ID}"
+EOF
+        chmod 600 "$AXIOM_CONFIG"
+        echo ""
+        echo "✓ Created $AXIOM_CONFIG"
+        echo ""
+        
+        # Test the connection
+        echo "Testing connection..."
+        if "$SCRIPT_DIR/axiom-api" "$DEPLOY_NAME" GET "/v1/datasets" >/dev/null 2>&1; then
+          echo "✓ Connection successful!"
+          echo ""
+          echo "Try: scripts/axiom-query ${DEPLOY_NAME} \"['axiom-audit'] | take 1\""
+        else
+          echo "⚠ Connection test failed. Check your token and org_id."
+          echo ""
+          echo "Debug with: scripts/axiom-api ${DEPLOY_NAME} GET '/v1/datasets'"
+        fi
+      else
+        echo "Skipped - missing org_id or token"
+      fi
+    fi
+  else
+    echo "Create ~/.axiom.toml manually:"
+    echo ""
+    echo '[deployments.prod]'
+    echo 'url = "https://api.axiom.co"'
+    echo 'token = "xaat-your-token-here"'
+    echo 'org_id = "your-org-id"'
+  fi
 fi

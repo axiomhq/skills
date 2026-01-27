@@ -436,8 +436,9 @@ org_id = "your-org-id"
 3. Build JSON (from template or manually)
 4. **Validate queries** using axiom-sre with explicit time filter
 5. `dashboard-validate` to check structure
-6. `dashboard-create` to deploy
-7. Verify in browser
+6. `dashboard-create` or `dashboard-update` to deploy
+7. **`dashboard-link` to get URL** — NEVER construct Axiom URLs manually (org IDs and base URLs vary per deployment)
+8. Share link with user
 
 ---
 
@@ -483,6 +484,7 @@ scripts/dashboard-create prod ./dashboard.json
 | All panels show errors | Field names don't match your schema | Discover schema first, use sed to fix field names |
 | Dashboard shows no data | Service filter too restrictive | Remove or adjust `where service == 'x'` filters |
 | Queries time out | Missing time filter or too broad | Dashboard inherits time from picker; ad-hoc queries need explicit time filter |
+| Wrong org in dashboard URL | Manually constructed URL | **Always use `dashboard-link <deploy> <id>`** — never guess org IDs or base URLs |
 
 ---
 

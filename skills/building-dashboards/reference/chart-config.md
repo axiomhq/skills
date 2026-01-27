@@ -59,7 +59,24 @@ Charts support JSON configuration options beyond the query. These are set at the
 
 TimeSeries chart options are stored in `query.queryOptions.aggChartOpts` as a JSON string.
 
-The key format is `{"alias":"<column_name>","op":"<aggregation>"}` to target specific series.
+### Key Formats
+
+**Important:** The `"*"` wildcard is unreliable. Always use the specific key format derived from your query.
+
+#### Deriving the Key
+
+The key format depends on how the column is computed:
+
+| Query Pattern | Key Format |
+|---------------|------------|
+| `summarize count()` | `{"alias":"count_","op":"count"}` |
+| `summarize sum(field)` | `{"alias":"sum_field","op":"sum"}` |
+| `summarize ['Name'] = sum(field) / 1000` | `{"alias":"Name","field":"field","op":"computed"}` |
+| `summarize ['Name'] = round(sum(field), 1)` | `{"alias":"Name","field":"field","op":"computed"}` |
+
+**Rule:** If the column uses any expression (math, `round()`, etc.), use `"op":"computed"` and include the source `"field"`.
+
+#### Simple Aggregation Example
 
 ```json
 {
@@ -67,11 +84,23 @@ The key format is `{"alias":"<column_name>","op":"<aggregation>"}` to target spe
   "query": {
     "apl": "['logs'] | summarize count() by bin_auto(_time)",
     "queryOptions": {
-      "aggChartOpts": "{\"{\\\"alias\\\":\\\"count_\\\",\\\"op\\\":\\\"count\\\"}\":{\"variant\":\"area\",\"scaleDistr\":\"log\",\"displayNull\":\"span\"}}"
+      "aggChartOpts": "{\"{\\\"alias\\\":\\\"count_\\\",\\\"op\\\":\\\"count\\\"}\":{\"variant\":\"bars\"}}"
     }
   }
 }
 ```
+
+#### Computed Column Example
+
+For `['Ingest GB'] = round(sum(['properties.hourly_ingest_bytes']) / 1e9, 1)`:
+
+```json
+{
+  "aggChartOpts": "{\"{\\\"alias\\\":\\\"Ingest GB\\\",\\\"field\\\":\\\"properties.hourly_ingest_bytes\\\",\\\"op\\\":\\\"computed\\\"}\":{\"variant\":\"bars\",\"displayNull\":\"auto\"}}"
+}
+```
+
+**Note:** The `field` value is the source field name without brackets or the `properties.` prefix path as written in the query.
 
 ### Per-Series Options (inside aggChartOpts)
 
