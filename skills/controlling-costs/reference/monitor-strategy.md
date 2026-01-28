@@ -160,40 +160,53 @@ All thresholds are specified in **bytes**. Human-readable output auto-formats to
 3. **Dual gate**: Requires BOTH statistical anomaly AND material size
 4. **Sustained condition**: Requires 2+ spike hours to filter transient noise
 
-### The Query
+### The Query (Ingest Spike Detection)
 
 ```apl
 ['axiom-audit']
-| where _time >= ago(7d) and _time < bin(now(), 1h) and action == "usageCalculated"
-| extend bytes = toreal(['properties.hourly_ingest_bytes']), dataset = tostring(['properties.dataset']), y = log(bytes + 1)
-| summarize hourly_y = avg(y), hourly_bytes = sum(bytes) by bucket = bin(_time, 1h), dataset
+| where _time >= ago(4h) and _time < bin(now(), 1h) and action == "usageCalculated"
+| extend bytes = toreal(['properties.hourly_ingest_bytes']), dataset = tostring(['properties.dataset'])
+| where isfinite(bytes) and bytes >= 0
+| summarize hourly_bytes = sum(bytes) by bucket = bin(_time, 1h), dataset
+| extend hourly_y = log(hourly_bytes + 1)
 | join kind=inner (
     ['axiom-audit']
     | where _time >= ago(15d) and _time < ago(1h) and action == "usageCalculated"
-    | extend bytes = toreal(['properties.hourly_ingest_bytes']), dataset = tostring(['properties.dataset']), y = log(bytes + 1)
-    | summarize hourly_y = avg(y), hourly_bytes = sum(bytes) by bin(_time, 1h), dataset
-    | summarize y_p = percentiles_array(hourly_y, 25, 50, 75), b_p = percentiles_array(hourly_bytes, 50, 99) by dataset
-    | extend median_y = todouble(y_p[1]), sigma_y = max_of((todouble(y_p[2]) - todouble(y_p[0])) / 1.349, 0.1), p99_bytes = todouble(b_p[1])
-    | where todouble(b_p[0]) > 100000
+    | extend bytes = toreal(['properties.hourly_ingest_bytes']), dataset = tostring(['properties.dataset'])
+    | where isfinite(bytes) and bytes >= 0
+    | summarize hourly_bytes = sum(bytes) by bin(_time, 1h), dataset
+    | extend hourly_y = log(hourly_bytes + 1)
+    | summarize baseline_hours = count(), y_p = percentiles_array(hourly_y, 25, 50, 75), b_p = percentiles_array(hourly_bytes, 50, 99) by dataset
+    | where baseline_hours >= 72
+    | extend median_y = todouble(y_p[1]), sigma_y = max_of((todouble(y_p[2]) - todouble(y_p[0])) / 1.349, 0.1), median_bytes = todouble(b_p[0]), p99_bytes = todouble(b_p[1])
 ) on dataset
-| extend robust_z = (hourly_y - median_y) / sigma_y
-| where robust_z > 3 and hourly_bytes > p99_bytes
-| summarize spike_hours = count(), max_z = round(max(robust_z), 2) by dataset
+| extend robust_z = (hourly_y - median_y) / sigma_y, excess_bytes = hourly_bytes - median_bytes
+| where robust_z > 3 and hourly_bytes > p99_bytes and excess_bytes > 0
+| summarize spike_hours = count(), max_z = round(max(robust_z), 2), max_excess_bytes = max(excess_bytes) by dataset
 | where spike_hours >= 2
+| top 10 by max_excess_bytes desc
+| summarize spike_count = count()
 ```
+
+The query cost spike detection uses the same pattern with `hourly_billable_query_gbms` instead of `hourly_ingest_bytes`.
 
 ### Key Design Decisions
 
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
 | Log transform | `log(bytes + 1)` | Compresses heavy-tailed distributions; 10x spike → ~2.3 log units |
+| Sum first, then log | `sum() → log()` | Correct order; avoids bias if multiple records per hour |
 | Sigma estimation | `IQR / 1.349` | IQR is robust to outliers; 1.349 converts to sigma-equivalent for normal distributions |
 | Minimum sigma | `max_of(..., 0.1)` | Prevents division-by-zero on constant datasets |
+| Current window | `ago(4h)` | Short window avoids re-alerting on old spikes |
 | Baseline period | 15d (excl. last 1h) | Longer baseline captures weekly patterns; excludes recent data to avoid self-contamination |
+| Baseline guard | `baseline_hours >= 72` | Ensures enough data points for stable percentiles |
 | Z-score threshold | `> 3` | Standard anomaly threshold (~0.1% false positive rate for normal data) |
-| Materiality gate | `> p99_bytes` | Only alert if the spike is also large in absolute terms |
+| Relative gate | `> p99_bytes` | Spike must exceed dataset's own p99 (relative materiality) |
+| Excess gate | `excess_bytes > 0` | Spike must be above baseline median |
 | Persistence filter | `spike_hours >= 2` | Filters transient noise; catches sustained anomalies |
-| Dataset filter | `median_bytes > 100KB` | Excludes tiny datasets where small changes look like big z-scores |
+| Rank-based filter | `top 10 by max_excess_bytes` | Only alert on top 10 datasets by cost impact (scale-free) |
+| isfinite guard | `isfinite(bytes)` | Filters invalid/null values before log transform |
 
 ### Why This Works Better Than Spotlight
 

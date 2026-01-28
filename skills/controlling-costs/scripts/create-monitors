@@ -25,13 +25,9 @@ CONTRACT_BYTES=""
 GLIDEPATH_BYTES=""
 FORCE=false
 
-# Robust z-score thresholds (replaces Spotlight for per-dataset detection)
+# Robust z-score thresholds (used for both ingest and query cost spike detection)
 ZSCORE_THRESHOLD="3"            # Standard anomaly threshold (~0.1% false positive rate)
 SPIKE_HOURS_THRESHOLD="2"       # Require sustained anomaly (not transient)
-
-# Spotlight thresholds (kept for query cost spike only)
-SPOTLIGHT_P_VALUE="0.01"        # Stricter than 0.05 due to multiple comparisons
-SPOTLIGHT_DELTA_THRESHOLD="0.3" # Alert when delta_score exceeds this
 
 usage() {
     cat << 'EOF'
@@ -125,7 +121,7 @@ echo "Contract: $(format_bytes_rate "$CONTRACT_BYTES")"
 echo "Budget guardrail: $(format_bytes_rate "$GUARDRAIL_BYTES") (1.5x)"
 echo "Glidepath target: $(format_bytes_rate "$GLIDEPATH_BYTES")"
 echo "Per-dataset spike: robust z-score > $ZSCORE_THRESHOLD, sustained $SPIKE_HOURS_THRESHOLD+ hours"
-echo "Query cost spike: spotlight p < $SPOTLIGHT_P_VALUE, delta > $SPOTLIGHT_DELTA_THRESHOLD"
+echo "Query cost spike: robust z-score > $ZSCORE_THRESHOLD, sustained $SPIKE_HOURS_THRESHOLD+ hours"
 echo "Notifier: ${NOTIFIER_ID:-none}"
 echo ""
 
@@ -193,24 +189,31 @@ echo ""
 # Uses log-transform + IQR-based sigma, dual gate (z>3 AND >p99), 2+ hours sustained
 # =============================================================================
 
-# Build the robust z-score APL query
+# Build the robust z-score APL query with rank-based materiality filtering
+# Current window is 4h (not 7d) to avoid re-alerting on old spikes
+# Rank-based: only alert on top N datasets by excess_bytes (scale-free, no hardcoded thresholds)
 ZSCORE_QUERY="['$AUDIT_DATASET']
-| where _time >= ago(7d) and _time < bin(now(), 1h) and action == \"usageCalculated\"
-| extend bytes = toreal(['properties.hourly_ingest_bytes']), dataset = tostring(['properties.dataset']), y = log(bytes + 1)
-| summarize hourly_y = avg(y), hourly_bytes = sum(bytes) by bucket = bin(_time, 1h), dataset
+| where _time >= ago(4h) and _time < bin(now(), 1h) and action == \"usageCalculated\"
+| extend bytes = toreal(['properties.hourly_ingest_bytes']), dataset = tostring(['properties.dataset'])
+| where isfinite(bytes) and bytes >= 0
+| summarize hourly_bytes = sum(bytes) by bucket = bin(_time, 1h), dataset
+| extend hourly_y = log(hourly_bytes + 1)
 | join kind=inner (
     ['$AUDIT_DATASET']
     | where _time >= ago(15d) and _time < ago(1h) and action == \"usageCalculated\"
-    | extend bytes = toreal(['properties.hourly_ingest_bytes']), dataset = tostring(['properties.dataset']), y = log(bytes + 1)
-    | summarize hourly_y = avg(y), hourly_bytes = sum(bytes) by bin(_time, 1h), dataset
-    | summarize y_p = percentiles_array(hourly_y, 25, 50, 75), b_p = percentiles_array(hourly_bytes, 50, 99) by dataset
-    | extend median_y = todouble(y_p[1]), sigma_y = max_of((todouble(y_p[2]) - todouble(y_p[0])) / 1.349, 0.1), p99_bytes = todouble(b_p[1])
-    | where todouble(b_p[0]) > 100000
+    | extend bytes = toreal(['properties.hourly_ingest_bytes']), dataset = tostring(['properties.dataset'])
+    | where isfinite(bytes) and bytes >= 0
+    | summarize hourly_bytes = sum(bytes) by bin(_time, 1h), dataset
+    | extend hourly_y = log(hourly_bytes + 1)
+    | summarize baseline_hours = count(), y_p = percentiles_array(hourly_y, 25, 50, 75), b_p = percentiles_array(hourly_bytes, 50, 99) by dataset
+    | where baseline_hours >= 72
+    | extend median_y = todouble(y_p[1]), sigma_y = max_of((todouble(y_p[2]) - todouble(y_p[0])) / 1.349, 0.1), median_bytes = todouble(b_p[0]), p99_bytes = todouble(b_p[1])
 ) on dataset
-| extend robust_z = (hourly_y - median_y) / sigma_y
-| where robust_z > $ZSCORE_THRESHOLD and hourly_bytes > p99_bytes
-| summarize spike_hours = count(), max_z = round(max(robust_z), 2) by dataset
+| extend robust_z = (hourly_y - median_y) / sigma_y, excess_bytes = hourly_bytes - median_bytes
+| where robust_z > $ZSCORE_THRESHOLD and hourly_bytes > p99_bytes and excess_bytes > 0
+| summarize spike_hours = count(), max_z = round(max(robust_z), 2), max_excess_bytes = max(excess_bytes) by dataset
 | where spike_hours >= $SPIKE_HOURS_THRESHOLD
+| top 10 by max_excess_bytes desc
 | summarize spike_count = count()"
 
 # Escape for JSON
@@ -237,24 +240,56 @@ EOF
 echo ""
 
 # =============================================================================
-# MONITOR 3: QUERY COST SPIKE (Spotlight-based threshold)
+# MONITOR 3: QUERY COST SPIKE (Robust z-score, per-dataset)
 # Statistical detection of query cost changes (different cost driver than ingest)
+# Uses same robust z-score approach as ingest spike detection
 # =============================================================================
 
-echo "3/4: Creating Query Cost Spike Detection (spotlight, p < $SPOTLIGHT_P_VALUE, delta > $SPOTLIGHT_DELTA_THRESHOLD)..."
+# Build the robust z-score APL query for query costs with rank-based materiality filtering
+# Current window is 4h (not 7d) to avoid re-alerting on old spikes
+# Baseline is 15d to capture weekly seasonality patterns
+# Rank-based: only alert on top N datasets by excess_gbms (scale-free, no hardcoded thresholds)
+QCOST_ZSCORE_QUERY="['$AUDIT_DATASET']
+| where _time >= ago(4h) and _time < bin(now(), 1h) and action == \"usageCalculated\"
+| extend gbms = toreal(['properties.hourly_billable_query_gbms']), dataset = tostring(['properties.dataset'])
+| where isfinite(gbms) and gbms >= 0
+| summarize hourly_gbms = sum(gbms) by bucket = bin(_time, 1h), dataset
+| extend hourly_y = log(hourly_gbms + 1)
+| join kind=inner (
+    ['$AUDIT_DATASET']
+    | where _time >= ago(15d) and _time < ago(1h) and action == \"usageCalculated\"
+    | extend gbms = toreal(['properties.hourly_billable_query_gbms']), dataset = tostring(['properties.dataset'])
+    | where isfinite(gbms) and gbms >= 0
+    | summarize hourly_gbms = sum(gbms) by bin(_time, 1h), dataset
+    | extend hourly_y = log(hourly_gbms + 1)
+    | summarize baseline_hours = count(), y_p = percentiles_array(hourly_y, 25, 50, 75), g_p = percentiles_array(hourly_gbms, 50, 99) by dataset
+    | where baseline_hours >= 72
+    | extend median_y = todouble(y_p[1]), sigma_y = max_of((todouble(y_p[2]) - todouble(y_p[0])) / 1.349, 0.1), median_gbms = todouble(g_p[0]), p99_gbms = todouble(g_p[1])
+) on dataset
+| extend robust_z = (hourly_y - median_y) / sigma_y, excess_gbms = hourly_gbms - median_gbms
+| where robust_z > $ZSCORE_THRESHOLD and hourly_gbms > p99_gbms and excess_gbms > 0
+| summarize spike_hours = count(), max_z = round(max(robust_z), 2), max_excess_gbms = max(excess_gbms) by dataset
+| where spike_hours >= $SPIKE_HOURS_THRESHOLD
+| top 10 by max_excess_gbms desc
+| summarize spike_count = count()"
+
+# Escape for JSON
+QCOST_ZSCORE_QUERY_JSON=$(echo "$QCOST_ZSCORE_QUERY" | jq -Rs '.')
+
+echo "3/4: Creating Query Cost Spike Detection (robust z-score > $ZSCORE_THRESHOLD, $SPIKE_HOURS_THRESHOLD+ hours)..."
 $AXIOM_API "$DEPLOYMENT" POST "/v2/monitors" "$(cat <<EOF
 {
   "name": "Cost Control: Query Cost Spike",
-  "description": "Statistical detection of query cost changes. Compares last 6h to 7d baseline on hourly GB·ms.",
+  "description": "Robust z-score detection of per-dataset query cost spikes. Uses log-transform + IQR-based sigma. Alerts when z > $ZSCORE_THRESHOLD AND gbms > p99 for $SPIKE_HOURS_THRESHOLD+ hours.",
   "type": "Threshold",
-  "aplQuery": "['$AUDIT_DATASET']\n| where action == \"usageCalculated\"\n| where _time > ago(7d)\n| extend gbms = toreal(['properties.hourly_billable_query_gbms'])\n| summarize hourly_gbms = sum(gbms) by bin(_time, 1h)\n| summarize result = spotlight(_time > ago(6h), hourly_gbms)\n| mv-expand result\n| extend p_value = toreal(result.p_value), delta_score = toreal(result.delta_score), median_change = toreal(result.median_relative_change)\n| summarize max_delta = maxif(delta_score, p_value < $SPOTLIGHT_P_VALUE and median_change > 0)\n| extend max_delta = coalesce(max_delta, 0.0)",
+  "aplQuery": $QCOST_ZSCORE_QUERY_JSON,
   "operator": "AboveOrEqual",
-  "threshold": $SPOTLIGHT_DELTA_THRESHOLD,
+  "threshold": 1,
   "intervalMinutes": 60,
   "rangeMinutes": 10080,
   "notifierIds": $NOTIFIER_JSON,
   "notifyByGroup": false,
-  "triggerFromNRuns": 2
+  "triggerFromNRuns": 1
 }
 EOF
 )"
@@ -294,10 +329,10 @@ echo "  1. Budget Guardrail (threshold @ $(format_bytes "$GUARDRAIL_BYTES"))"
 echo "     Alerts within 1 hour if total ingest exceeds limit"
 echo ""
 echo "STATISTICAL ATTRIBUTION:"
-echo "  2. Per-Dataset Spike (robust z-score > $ZSCORE_THRESHOLD, $SPIKE_HOURS_THRESHOLD+ hours)"
-echo "     Uses log-transform + IQR-based sigma; dual gate (z AND bytes)"
-echo "  3. Query Cost Spike (spotlight, delta > $SPOTLIGHT_DELTA_THRESHOLD)"
-echo "     Detects changes in query cost patterns"
+echo "  2. Per-Dataset Ingest Spike (robust z-score > $ZSCORE_THRESHOLD, $SPIKE_HOURS_THRESHOLD+ hours)"
+echo "     Log-transform + IQR-based sigma; dual gate (z > 3 AND bytes > p99)"
+echo "  3. Per-Dataset Query Cost Spike (robust z-score > $ZSCORE_THRESHOLD, $SPIKE_HOURS_THRESHOLD+ hours)"
+echo "     Same approach for query costs (GB·ms)"
 echo ""
 echo "PROGRESS TRACKING:"
 echo "  4. Reduction Glidepath (threshold @ $(format_bytes "$GLIDEPATH_BYTES"))"
