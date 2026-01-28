@@ -135,6 +135,7 @@ export async function runToolSimulation(
   const skill = await discoverSkill(options.skillDir, skillFile);
 
   const toolsCalled: string[] = [];
+  const filesRead: string[] = [];
 
   const tools = {
     skill: tool({
@@ -190,6 +191,7 @@ export async function runToolSimulation(
       }),
       execute: async ({ path: filePath }) => {
         toolsCalled.push("readFile");
+        filesRead.push(filePath);
 
         const normalizedPath = posix.normalize(filePath);
         if (
@@ -269,6 +271,7 @@ ${options.systemPromptSuffix}`;
       tools: {
         available: Object.keys(tools),
         called: toolsCalled,
+        filesRead,
       },
     },
   };

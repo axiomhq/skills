@@ -40,6 +40,7 @@ export interface HarnessResultMetadata {
   tools: {
     available: string[];
     called: string[];
+    filesRead?: string[];
   };
 }
 

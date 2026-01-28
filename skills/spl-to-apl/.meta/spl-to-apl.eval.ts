@@ -130,7 +130,10 @@ Eval("spl-translation", {
     // Log tool usage for verification
     const tools = result.metadata.tools;
     if (tools) {
-      console.log(`[tools] available: [${tools.available.join(", ")}], called: [${tools.called.join(", ")}]`);
+      console.log(`[tools] called: [${tools.called.join(", ")}]`);
+      if (tools.filesRead?.length) {
+        console.log(`[files] read: [${tools.filesRead.join(", ")}]`);
+      }
     }
 
     return {
