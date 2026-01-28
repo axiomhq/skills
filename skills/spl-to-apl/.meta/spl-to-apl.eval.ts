@@ -43,6 +43,14 @@ const EVAL_END_TIME = "2026-01-27T12:00:00Z";
  * - 0.25: column mismatch
  * - 0.0: query failed to execute
  */
+const SkillLoaded = Scorer(
+  "skill-loaded",
+  async ({ output }: { output: TaskOutput }) => {
+    const called = output.metadata.tools?.called ?? [];
+    return called.includes("skill") ? 1 : 0;
+  }
+);
+
 const ResultsMatch = Scorer(
   "results-match",
   async ({ output, expected }: { output: TaskOutput; expected: string }) => {
@@ -123,5 +131,5 @@ Eval("spl-translation", {
     };
   },
 
-  scorers: [ResultsMatch],
+  scorers: [SkillLoaded, ResultsMatch],
 });
