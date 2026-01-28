@@ -1,3 +1,13 @@
+import { config } from "dotenv";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load .env from eval-tooling directory
+config({ path: resolve(__dirname, "../../../eval-tooling/.env") });
+
 import { Eval, Scorer } from "axiom/ai/evals";
 import { testCases } from "./cases";
 import { flag, pickFlags, getGitCommit, buildSkillMetadata } from "../../../eval-tooling/src/shared";
@@ -7,11 +17,6 @@ import {
   executeAplQuery,
   compareQueryResults,
 } from "../../../eval-tooling/src/shared/axiom-query";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 const SKILL_DIR = resolve(__dirname, "..");
 const WORKSPACE_ROOT = resolve(__dirname, "../../..");
@@ -43,6 +48,16 @@ const EVAL_END_TIME = "2026-01-27T12:00:00Z";
  * - 0.25: column mismatch
  * - 0.0: query failed to execute
  */
+/**
+ * Log-only metrics for understanding behavior (not scored)
+ */
+function logToolMetrics(output: TaskOutput) {
+  const called = output.metadata.tools?.called ?? [];
+  const skillLoaded = called.includes("skill");
+  const schemaRead = called.includes("readFile");
+  console.log(`[metrics] skill-loaded: ${skillLoaded}, schema-read: ${schemaRead}`);
+}
+
 const ResultsMatch = Scorer(
   "results-match",
   async ({ output, expected }: { output: TaskOutput; expected: string }) => {
@@ -110,6 +125,9 @@ Eval("spl-translation", {
       systemPromptSuffix:
         "Translate the following SPL query to APL. Output ONLY the APL query, no explanation.",
     });
+
+    // Log metrics for understanding (not scored)
+    logToolMetrics(result);
 
     return {
       output: result.output,

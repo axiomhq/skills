@@ -5,7 +5,9 @@ description: Translates Splunk SPL queries to Axiom APL. Provides command mappin
 
 # SPL to APL Translator
 
-Expert translator from Splunk Processing Language (SPL) to Axiom Processing Language (APL). 
+**Type safety:** Fields like status are often stored as strings. Always cast before numeric comparison: toint(status) >= 500, not status >= 500.
+
+---
 
 ## Critical Differences
 
