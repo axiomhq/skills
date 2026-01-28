@@ -1,37 +1,58 @@
 #!/bin/bash
-# Create 5 hybrid cost control monitors
-# Strategy: Budget guardrails (threshold) + Spike attribution (anomaly) + Glidepath (threshold)
+# Create 4 cost control monitors using hybrid threshold + statistical approach
 #
-# Usage: create-monitors -d <deployment> -a <audit-dataset> [options]
+# Monitors:
+#   1. Budget Guardrail (threshold) - immediate reaction to overspend
+#   2. Per-Dataset Spike (robust z-score) - statistical attribution of which dataset changed
+#   3. Query Cost Spike (spotlight) - statistical detection of query cost changes
+#   4. Reduction Glidepath (threshold) - progress tracking toward target
+#
+# Usage: create-monitors -d <deployment> -a <audit-dataset> -c <contract-bytes> [options]
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 AXIOM_API="${AXIOM_API:-$HOME/.config/agents/skills/sre/scripts/axiom-api}"
+
+# Source shared utilities
+source "$SCRIPT_DIR/lib/format-bytes.sh"
 
 # Defaults
 DEPLOYMENT=""
 AUDIT_DATASET=""
 NOTIFIER_ID=""
-CONTRACT_TB="167"
-GLIDEPATH_TB=""
+CONTRACT_BYTES=""
+GLIDEPATH_BYTES=""
+FORCE=false
+
+# Robust z-score thresholds (replaces Spotlight for per-dataset detection)
+ZSCORE_THRESHOLD="3"            # Standard anomaly threshold (~0.1% false positive rate)
+SPIKE_HOURS_THRESHOLD="2"       # Require sustained anomaly (not transient)
+
+# Spotlight thresholds (kept for query cost spike only)
+SPOTLIGHT_P_VALUE="0.01"        # Stricter than 0.05 due to multiple comparisons
+SPOTLIGHT_DELTA_THRESHOLD="0.3" # Alert when delta_score exceeds this
 
 usage() {
     cat << 'EOF'
-Usage: create-monitors -d <deployment> -a <audit-dataset> [options]
+Usage: create-monitors -d <deployment> -a <audit-dataset> -c <contract> [options]
 
-Create 5 hybrid cost control monitors.
+Create 4 hybrid cost control monitors.
 
 Required:
   -d, --deployment NAME    Axiom deployment name
-  -a, --audit-dataset NAME Audit dataset name (e.g., axiom-audit, axiom-audit-logs-view)
+  -a, --audit-dataset NAME Audit dataset name (e.g., axiom-audit)
+  -c, --contract BYTES     Daily contract limit in bytes (e.g., 167000000000000)
+                           Also accepts units: 167TB, 5PB, 500GB
 
 Optional:
   -n, --notifier ID        Notifier ID for alerts (omit for no alerts)
-  -c, --contract TB        Daily contract limit in TB (default: 167 = 5 PB/month)
-  -g, --glidepath TB       Initial glidepath target in TB (default: contract × 1.5)
+  -g, --glidepath BYTES    Initial glidepath target (default: contract × 1.5)
+  --force                  Delete existing monitors and recreate
 
 Example:
-  create-monitors -d prod -a axiom-audit-logs-view -c 333 -n "abc123"
+  create-monitors -d prod -a axiom-audit -c 167TB -n "abc123"
+  create-monitors -d dev -a axiom-audit -c 500000000000  # 500 GB in bytes
 EOF
     exit 1
 }
@@ -52,12 +73,16 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -c|--contract)
-            CONTRACT_TB="$2"
+            CONTRACT_BYTES=$(parse_bytes "$2")
             shift 2
             ;;
         -g|--glidepath)
-            GLIDEPATH_TB="$2"
+            GLIDEPATH_BYTES=$(parse_bytes "$2")
             shift 2
+            ;;
+        --force)
+            FORCE=true
+            shift
             ;;
         -h|--help)
             usage
@@ -72,26 +97,19 @@ done
 # Validate required args
 [[ -z "$DEPLOYMENT" ]] && { echo "Error: -d/--deployment required" >&2; usage; }
 [[ -z "$AUDIT_DATASET" ]] && { echo "Error: -a/--audit-dataset required" >&2; usage; }
+[[ -z "$CONTRACT_BYTES" || "$CONTRACT_BYTES" == "0" ]] && { echo "Error: -c/--contract required" >&2; usage; }
 
 # Validate dependencies
 command -v jq >/dev/null 2>&1 || { echo "Error: jq required" >&2; exit 1; }
-command -v bc >/dev/null 2>&1 || { echo "Error: bc required" >&2; exit 1; }
 [[ -x "$AXIOM_API" ]] || { echo "Error: axiom-api not found at $AXIOM_API" >&2; exit 1; }
 
-# Validate numeric inputs
-[[ "$CONTRACT_TB" =~ ^[0-9]+([.][0-9]+)?$ ]] || { echo "Error: --contract must be numeric" >&2; exit 1; }
-
-# Helper: evaluate with bc -l, round to 3 decimals
-bc_round() { bc -l <<< "scale=3; $1" | sed 's/^\./0./'; }
-
 # Default glidepath to 1.5x contract if not specified
-if [[ -z "$GLIDEPATH_TB" ]]; then
-    GLIDEPATH_TB=$(bc_round "$CONTRACT_TB * 1.5")
+if [[ -z "$GLIDEPATH_BYTES" ]]; then
+    GLIDEPATH_BYTES=$(awk -v c="$CONTRACT_BYTES" 'BEGIN { printf "%.0f", c * 1.5 }')
 fi
 
-# Calculate thresholds
-WARN_TB=$(bc_round "$CONTRACT_TB * 1.1")
-CRIT_TB=$(bc_round "$CONTRACT_TB * 1.5")
+# Calculate budget guardrail threshold (1.5x contract)
+GUARDRAIL_BYTES=$(awk -v c="$CONTRACT_BYTES" 'BEGIN { printf "%.0f", c * 1.5 }')
 
 # Build notifier array
 if [[ -n "$NOTIFIER_ID" ]]; then
@@ -103,28 +121,61 @@ fi
 echo "=== Creating Cost Control Monitors ==="
 echo "Deployment: $DEPLOYMENT"
 echo "Audit dataset: $AUDIT_DATASET"
-echo "Contract: $CONTRACT_TB TB/day"
-echo "Warning threshold: $WARN_TB TB (1.1x)"
-echo "Critical threshold: $CRIT_TB TB (1.5x)"
-echo "Glidepath target: $GLIDEPATH_TB TB"
+echo "Contract: $(format_bytes_rate "$CONTRACT_BYTES")"
+echo "Budget guardrail: $(format_bytes_rate "$GUARDRAIL_BYTES") (1.5x)"
+echo "Glidepath target: $(format_bytes_rate "$GLIDEPATH_BYTES")"
+echo "Per-dataset spike: robust z-score > $ZSCORE_THRESHOLD, sustained $SPIKE_HOURS_THRESHOLD+ hours"
+echo "Query cost spike: spotlight p < $SPOTLIGHT_P_VALUE, delta > $SPOTLIGHT_DELTA_THRESHOLD"
 echo "Notifier: ${NOTIFIER_ID:-none}"
 echo ""
 
+# Check for existing monitors
+echo "Checking for existing Cost Control monitors..."
+EXISTING_IDS=$($AXIOM_API "$DEPLOYMENT" GET "/v2/monitors" 2>/dev/null | \
+    jq -r '.[] | select(.name | startswith("Cost Control:")) | .id' 2>/dev/null || true)
+
+if [[ -n "$EXISTING_IDS" ]]; then
+    EXISTING_COUNT=$(echo "$EXISTING_IDS" | wc -l | tr -d ' ')
+    
+    if [[ "$FORCE" == "true" ]]; then
+        echo "Found $EXISTING_COUNT existing monitors. Deleting (--force)..."
+        echo "$EXISTING_IDS" | while read -r id; do
+            echo "  Deleting $id..."
+            $AXIOM_API "$DEPLOYMENT" DELETE "/v2/monitors/$id" >/dev/null 2>&1 || true
+        done
+        echo "Deleted. Proceeding with creation..."
+        echo ""
+    else
+        EXISTING_NAMES=$($AXIOM_API "$DEPLOYMENT" GET "/v2/monitors" 2>/dev/null | \
+            jq -r '.[] | select(.name | startswith("Cost Control:")) | .name' 2>/dev/null || true)
+        echo ""
+        echo "BLOCKER: MONITORS_ALREADY_EXIST"
+        echo ""
+        echo "Found $EXISTING_COUNT existing Cost Control monitors:"
+        echo "$EXISTING_NAMES" | sed 's/^/  - /'
+        echo ""
+        echo "NEXT: scripts/create-monitors -d $DEPLOYMENT -a $AUDIT_DATASET -c $CONTRACT_BYTES --force"
+        exit 1
+    fi
+else
+    echo "No existing monitors found. Creating..."
+    echo ""
+fi
+
 # =============================================================================
-# LAYER 1: BUDGET GUARDRAILS (Threshold monitors for contract compliance)
+# MONITOR 1: BUDGET GUARDRAIL (Threshold)
+# Immediate reaction: alerts when 24h ingest exceeds 1.5x contract
 # =============================================================================
 
-# 1. Last 24h Ingest vs Contract
-# Monitor range is 1440 min (24h), query sums over that range
-echo "1/5: Creating Last 24h Ingest vs Contract (threshold @ $CRIT_TB TB)..."
+echo "1/4: Creating Budget Guardrail (threshold @ $(format_bytes "$GUARDRAIL_BYTES"))..."
 $AXIOM_API "$DEPLOYMENT" POST "/v2/monitors" "$(cat <<EOF
 {
-  "name": "Cost Control: Last 24h Ingest vs Contract",
-  "description": "Budget guardrail. Last 24h ingest vs ${CONTRACT_TB} TB/day contract. Alert at >${CRIT_TB} TB (1.5x).",
+  "name": "Cost Control: Budget Guardrail",
+  "description": "Immediate alert when 24h ingest exceeds $(format_bytes_rate "$GUARDRAIL_BYTES") (1.5x contract of $(format_bytes_rate "$CONTRACT_BYTES")).",
   "type": "Threshold",
-  "aplQuery": "['$AUDIT_DATASET']\n| where action == \"usageCalculated\"\n| summarize total_24h_tb = sum(toreal(['properties.hourly_ingest_bytes'])) / 1000000000000",
+  "aplQuery": "['$AUDIT_DATASET']\n| where action == \"usageCalculated\"\n| where _time > ago(24h)\n| summarize total_bytes = sum(toreal(['properties.hourly_ingest_bytes']))",
   "operator": "AboveOrEqual",
-  "threshold": $CRIT_TB,
+  "threshold": $GUARDRAIL_BYTES,
   "intervalMinutes": 60,
   "rangeMinutes": 1440,
   "notifierIds": $NOTIFIER_JSON,
@@ -137,24 +188,47 @@ EOF
 echo ""
 
 # =============================================================================
-# LAYER 2: SPIKE ATTRIBUTION (Anomaly monitors for change detection)
+# MONITOR 2: PER-DATASET SPIKE (Robust z-score)
+# Statistical attribution: detects which dataset's ingest pattern changed
+# Uses log-transform + IQR-based sigma, dual gate (z>3 AND >p99), 2+ hours sustained
 # =============================================================================
 
-# 2. Per-Dataset Hourly Anomaly
-# Anomaly detection learns baseline per dataset automatically
-echo "2/5: Creating Per-Dataset Hourly Anomaly (anomaly)..."
+# Build the robust z-score APL query
+ZSCORE_QUERY="['$AUDIT_DATASET']
+| where _time >= ago(7d) and _time < bin(now(), 1h) and action == \"usageCalculated\"
+| extend bytes = toreal(['properties.hourly_ingest_bytes']), dataset = tostring(['properties.dataset']), y = log(bytes + 1)
+| summarize hourly_y = avg(y), hourly_bytes = sum(bytes) by bucket = bin(_time, 1h), dataset
+| join kind=inner (
+    ['$AUDIT_DATASET']
+    | where _time >= ago(15d) and _time < ago(1h) and action == \"usageCalculated\"
+    | extend bytes = toreal(['properties.hourly_ingest_bytes']), dataset = tostring(['properties.dataset']), y = log(bytes + 1)
+    | summarize hourly_y = avg(y), hourly_bytes = sum(bytes) by bin(_time, 1h), dataset
+    | summarize y_p = percentiles_array(hourly_y, 25, 50, 75), b_p = percentiles_array(hourly_bytes, 50, 99) by dataset
+    | extend median_y = todouble(y_p[1]), sigma_y = max_of((todouble(y_p[2]) - todouble(y_p[0])) / 1.349, 0.1), p99_bytes = todouble(b_p[1])
+    | where todouble(b_p[0]) > 100000
+) on dataset
+| extend robust_z = (hourly_y - median_y) / sigma_y
+| where robust_z > $ZSCORE_THRESHOLD and hourly_bytes > p99_bytes
+| summarize spike_hours = count(), max_z = round(max(robust_z), 2) by dataset
+| where spike_hours >= $SPIKE_HOURS_THRESHOLD
+| summarize spike_count = count()"
+
+# Escape for JSON
+ZSCORE_QUERY_JSON=$(echo "$ZSCORE_QUERY" | jq -Rs '.')
+
+echo "2/4: Creating Per-Dataset Spike Detection (robust z-score > $ZSCORE_THRESHOLD, $SPIKE_HOURS_THRESHOLD+ hours)..."
 $AXIOM_API "$DEPLOYMENT" POST "/v2/monitors" "$(cat <<EOF
 {
-  "name": "Cost Control: Per-Dataset Spike Detection",
-  "description": "Spike attribution. Anomaly detection per dataset, above only.",
-  "type": "AnomalyDetection",
-  "aplQuery": "['$AUDIT_DATASET']\n| where action == \"usageCalculated\"\n| summarize hourly_ingest_tb = sum(toreal(['properties.hourly_ingest_bytes'])) / 1000000000000 by bin(_time, 1h), dataset = tostring(['properties.dataset'])",
-  "operator": "Above",
-  "tolerance": 3,
-  "intervalMinutes": 15,
-  "rangeMinutes": 720,
+  "name": "Cost Control: Per-Dataset Spike",
+  "description": "Robust z-score detection of dataset ingest spikes. Uses log-transform + IQR-based sigma. Alerts when z > $ZSCORE_THRESHOLD AND bytes > p99 for $SPIKE_HOURS_THRESHOLD+ hours.",
+  "type": "Threshold",
+  "aplQuery": $ZSCORE_QUERY_JSON,
+  "operator": "AboveOrEqual",
+  "threshold": 1,
+  "intervalMinutes": 60,
+  "rangeMinutes": 10080,
   "notifierIds": $NOTIFIER_JSON,
-  "notifyByGroup": true,
+  "notifyByGroup": false,
   "triggerFromNRuns": 1
 }
 EOF
@@ -162,47 +236,25 @@ EOF
 
 echo ""
 
-# 3. Top Dataset Dominance
-# Alerts when any single dataset exceeds threshold
-echo "3/5: Creating Top Dataset Dominance (threshold)..."
-DOMINANCE_THRESH=$(bc_round "$CONTRACT_TB / 24 * 0.4")  # 40% of hourly contract
-# Ensure minimum threshold for small orgs
-[[ "$(echo "$DOMINANCE_THRESH < 0.001" | bc -l)" == "1" ]] && DOMINANCE_THRESH="0.001"
-$AXIOM_API "$DEPLOYMENT" POST "/v2/monitors" "$(cat <<EOF
-{
-  "name": "Cost Control: Top Dataset Dominance",
-  "description": "Alerts when any dataset exceeds 40% of hourly ingest. Catches concentration/runaway datasets.",
-  "type": "Threshold",
-  "aplQuery": "['$AUDIT_DATASET']\n| where action == \"usageCalculated\"\n| summarize hourly_bytes = sum(toreal(['properties.hourly_ingest_bytes'])) by bin(_time, 1h), dataset = tostring(['properties.dataset'])\n| top 1 by hourly_bytes\n| extend hourly_tb = hourly_bytes / 1000000000000",
-  "operator": "AboveOrEqual",
-  "threshold": $DOMINANCE_THRESH,
-  "intervalMinutes": 60,
-  "rangeMinutes": 180,
-  "notifierIds": $NOTIFIER_JSON,
-  "notifyByGroup": true,
-  "triggerFromNRuns": 2
-}
-EOF
-)"
+# =============================================================================
+# MONITOR 3: QUERY COST SPIKE (Spotlight-based threshold)
+# Statistical detection of query cost changes (different cost driver than ingest)
+# =============================================================================
 
-echo ""
-
-# 4. Query Cost Anomaly
-# Hourly anomaly on query GB·ms - different cost driver than ingest
-echo "4/5: Creating Query Cost Anomaly (anomaly)..."
+echo "3/4: Creating Query Cost Spike Detection (spotlight, p < $SPOTLIGHT_P_VALUE, delta > $SPOTLIGHT_DELTA_THRESHOLD)..."
 $AXIOM_API "$DEPLOYMENT" POST "/v2/monitors" "$(cat <<EOF
 {
   "name": "Cost Control: Query Cost Spike",
-  "description": "Hourly anomaly on query GB·ms. Detects unusual query cost spikes.",
-  "type": "AnomalyDetection",
-  "aplQuery": "['$AUDIT_DATASET']\n| where action == \"usageCalculated\"\n| summarize hourly_query_gbms = sum(toreal(['properties.hourly_billable_query_gbms'])) by bin(_time, 1h)",
-  "operator": "Above",
-  "tolerance": 3,
-  "intervalMinutes": 15,
-  "rangeMinutes": 1440,
+  "description": "Statistical detection of query cost changes. Compares last 6h to 7d baseline on hourly GB·ms.",
+  "type": "Threshold",
+  "aplQuery": "['$AUDIT_DATASET']\n| where action == \"usageCalculated\"\n| where _time > ago(7d)\n| extend gbms = toreal(['properties.hourly_billable_query_gbms'])\n| summarize hourly_gbms = sum(gbms) by bin(_time, 1h)\n| summarize result = spotlight(_time > ago(6h), hourly_gbms)\n| mv-expand result\n| extend p_value = toreal(result.p_value), delta_score = toreal(result.delta_score), median_change = toreal(result.median_relative_change)\n| summarize max_delta = maxif(delta_score, p_value < $SPOTLIGHT_P_VALUE and median_change > 0)\n| extend max_delta = coalesce(max_delta, 0.0)",
+  "operator": "AboveOrEqual",
+  "threshold": $SPOTLIGHT_DELTA_THRESHOLD,
+  "intervalMinutes": 60,
+  "rangeMinutes": 10080,
   "notifierIds": $NOTIFIER_JSON,
   "notifyByGroup": false,
-  "triggerFromNRuns": 1
+  "triggerFromNRuns": 2
 }
 EOF
 )"
@@ -210,20 +262,19 @@ EOF
 echo ""
 
 # =============================================================================
-# LAYER 3: REDUCTION GLIDEPATH (Threshold for tracking reduction progress)
+# MONITOR 4: REDUCTION GLIDEPATH (Threshold)
+# Progress tracking: alerts when daily ingest exceeds reduction target
 # =============================================================================
 
-# 5. Reduction Glidepath Target
-# UPDATE THIS THRESHOLD WEEKLY as reduction progresses
-echo "5/5: Creating Reduction Glidepath Target (threshold @ $GLIDEPATH_TB TB)..."
+echo "4/4: Creating Reduction Glidepath (threshold @ $(format_bytes "$GLIDEPATH_BYTES"))..."
 $AXIOM_API "$DEPLOYMENT" POST "/v2/monitors" "$(cat <<EOF
 {
   "name": "Cost Control: Reduction Glidepath",
-  "description": "Tracks progress toward ${CONTRACT_TB} TB/day contract. Current target: ${GLIDEPATH_TB} TB/day. Update weekly with update-glidepath script.",
+  "description": "Tracks progress toward $(format_bytes_rate "$CONTRACT_BYTES") contract. Current target: $(format_bytes_rate "$GLIDEPATH_BYTES"). Update with update-glidepath script.",
   "type": "Threshold",
-  "aplQuery": "['$AUDIT_DATASET']\n| where action == \"usageCalculated\"\n| summarize daily_ingest_tb = sum(toreal(['properties.hourly_ingest_bytes'])) / 1000000000000 by bin(_time, 1d)",
+  "aplQuery": "['$AUDIT_DATASET']\n| where action == \"usageCalculated\"\n| where _time > ago(24h)\n| summarize daily_ingest = sum(toreal(['properties.hourly_ingest_bytes']))",
   "operator": "AboveOrEqual",
-  "threshold": $GLIDEPATH_TB,
+  "threshold": $GLIDEPATH_BYTES,
   "intervalMinutes": 360,
   "rangeMinutes": 1440,
   "notifierIds": $NOTIFIER_JSON,
@@ -235,19 +286,22 @@ EOF
 
 echo ""
 echo "=============================================="
-echo "Done! Created 5 hybrid cost control monitors."
+echo "Done! Created 4 cost control monitors."
 echo "=============================================="
 echo ""
-echo "LAYER 1 - Budget Guardrails:"
-echo "  1. Last 24h Ingest vs Contract (threshold @ $CRIT_TB TB)"
+echo "IMMEDIATE REACTION:"
+echo "  1. Budget Guardrail (threshold @ $(format_bytes "$GUARDRAIL_BYTES"))"
+echo "     Alerts within 1 hour if total ingest exceeds limit"
 echo ""
-echo "LAYER 2 - Spike Attribution:"
-echo "  2. Per-Dataset Spike Detection (anomaly, by dataset)"
-echo "  3. Top Dataset Dominance (threshold @ $DOMINANCE_THRESH TB/hr)"
-echo "  4. Query Cost Spike (anomaly)"
+echo "STATISTICAL ATTRIBUTION:"
+echo "  2. Per-Dataset Spike (robust z-score > $ZSCORE_THRESHOLD, $SPIKE_HOURS_THRESHOLD+ hours)"
+echo "     Uses log-transform + IQR-based sigma; dual gate (z AND bytes)"
+echo "  3. Query Cost Spike (spotlight, delta > $SPOTLIGHT_DELTA_THRESHOLD)"
+echo "     Detects changes in query cost patterns"
 echo ""
-echo "LAYER 3 - Reduction Glidepath:"
-echo "  5. Reduction Glidepath (threshold @ $GLIDEPATH_TB TB, update weekly)"
+echo "PROGRESS TRACKING:"
+echo "  4. Reduction Glidepath (threshold @ $(format_bytes "$GLIDEPATH_BYTES"))"
+echo "     Update weekly: scripts/update-glidepath -d $DEPLOYMENT -t <new-target>"
 echo ""
 
 # Get org_id for URL (best-effort)
