@@ -96,17 +96,28 @@ Creates dashboard with: ingest trends, burn rate, projections, waste candidates,
 
 **Contract is required.** You must have the contract limit from preflight step 4.
 
+### Step 1: List available notifiers
+
+```bash
+scripts/list-notifiers -d <deployment>
+```
+
+Present the list to the user and ask which notifier they want for cost alerts.
+If they don't want notifications, proceed without `-n`.
+
+### Step 2: Create monitors
+
 ```bash
 scripts/create-monitors -d <deployment> -a <audit-dataset> -c <contract_tb> [-n <notifier_id>]
 ```
 
-Creates 5 monitors (use `-n` to attach notifier):
+Creates 3 monitors:
 
-1. **Last 24h Ingest vs Contract** — threshold @ 1.5x contract
-2. **Per-Dataset Spike Detection** — anomaly, grouped by dataset
-3. **Top Dataset Dominance** — threshold @ 40% of hourly contract
-4. **Query Cost Spike** — anomaly on GB·ms
-5. **Reduction Glidepath** — threshold, update weekly
+1. **Total Ingest Guard** — alerts when daily ingest >1.2x contract OR 7-day avg grows >15% vs baseline
+2. **Per-Dataset Spike** — robust z-score detection, alerts per dataset with attribution
+3. **Query Cost Spike** — same z-score approach for query costs (GB·ms)
+
+The spike monitors use `notifyByGroup: true` so each dataset triggers a separate alert.
 
 See `reference/monitor-strategy.md` for threshold derivation.
 
@@ -159,21 +170,6 @@ For each dataset, note: name, ingest volume, Work/GB, top unqueried values, acti
 All P0⛔ and P1 datasets analyzed. Then compile report using `reference/analysis-report-template.md`.
 
 ---
-
-## Phase 5: Glidepath
-
-Update threshold weekly as reductions take effect:
-
-```bash
-scripts/update-glidepath -d <deployment> -t <threshold_tb>
-```
-
-| Week | Target |
-|------|--------|
-| 1 | Current p95 |
-| 2 | -25% |
-| 3 | -50% |
-| 4 | Contract |
 
 ---
 

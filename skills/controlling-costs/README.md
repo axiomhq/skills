@@ -7,7 +7,7 @@ Analyzes Axiom query patterns to find unused data, then builds dashboards and mo
 - **Query Coverage Analysis** - Parses APL query ASTs to find columns and field values that are ingested but never queried
 - **Volume Estimation** - Uses strided sampling to estimate event volume by field value
 - **Dashboard** - Deploys cost control dashboard with ingest tracking, waste candidates, and query cost breakdowns
-- **Monitors** - Creates hybrid alerting (budget guardrails + anomaly detection + reduction glidepath)
+- **Monitors** - Creates 3 cost control monitors (ingest guard + per-dataset spike detection)
 
 ## Installation
 
@@ -51,8 +51,11 @@ scripts/analyze-query-coverage <deployment> <dataset> <field>
 # Deploy cost control dashboard
 scripts/deploy-dashboard <deployment>
 
-# Create monitors (notifier optional)
-scripts/create-monitors <deployment> [notifier_id] [contract_tb]
+# List available notifiers
+scripts/list-notifiers -d <deployment>
+
+# Create monitors (with optional notifier)
+scripts/create-monitors -d <deployment> -a <audit-dataset> -c <contract> [-n <notifier_id>]
 ```
 
 ## Scripts
@@ -61,6 +64,6 @@ scripts/create-monitors <deployment> [notifier_id] [contract_tb]
 |--------|---------|
 | `analyze-query-coverage` | Find unused columns and field values |
 | `deploy-dashboard` | Deploy cost control dashboard |
-| `create-monitors` | Create 5 hybrid monitors |
+| `list-notifiers` | List available notifiers for alerts |
+| `create-monitors` | Create 3 cost control monitors |
 | `baseline-stats` | Get 30-day usage statistics |
-| `update-glidepath` | Update weekly reduction target |
