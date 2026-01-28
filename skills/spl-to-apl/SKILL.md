@@ -9,16 +9,7 @@ Expert translator from Splunk Processing Language (SPL) to Axiom Processing Lang
 
 ## Before Translating
 
-**Always fetch the target dataset schema first.** Field types in Axiom may differ from Splunk (e.g., `status` stored as string requires `toint(status)` for numeric comparisons).
-
-```apl
-['dataset-name'] | getschema
-```
-
-Use the schema to:
-- Cast fields to correct types (`toint()`, `toreal()`, `tostring()`)
-- Identify pre-computed fields (e.g., `geo.country` instead of `iplocation`)
-- Verify field names match exactly (case-sensitive)
+**Check the target dataset schema.** Run `['dataset'] | getschema` or see `reference/dataset-schemas.md`.
 
 ---
 

@@ -111,6 +111,12 @@ Eval("spl-translation", {
         "Translate the following SPL query to APL. Output ONLY the APL query, no explanation.",
     });
 
+    // Log tool usage for verification
+    const tools = result.metadata.tools;
+    if (tools) {
+      console.log(`[tools] available: [${tools.available.join(", ")}], called: [${tools.called.join(", ")}]`);
+    }
+
     return {
       output: result.output,
       metadata: result.metadata,
