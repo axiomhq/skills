@@ -48,21 +48,15 @@ const EVAL_END_TIME = "2026-01-27T12:00:00Z";
  * - 0.25: column mismatch
  * - 0.0: query failed to execute
  */
-const SkillLoaded = Scorer(
-  "skill-loaded",
-  async ({ output }: { output: TaskOutput }) => {
-    const called = output.metadata.tools?.called ?? [];
-    return called.includes("skill") ? 1 : 0;
-  }
-);
-
-const SchemaRead = Scorer(
-  "schema-read",
-  async ({ output }: { output: TaskOutput }) => {
-    const called = output.metadata.tools?.called ?? [];
-    return called.includes("readFile") ? 1 : 0;
-  }
-);
+/**
+ * Log-only metrics for understanding behavior (not scored)
+ */
+function logToolMetrics(output: TaskOutput) {
+  const called = output.metadata.tools?.called ?? [];
+  const skillLoaded = called.includes("skill");
+  const schemaRead = called.includes("readFile");
+  console.log(`[metrics] skill-loaded: ${skillLoaded}, schema-read: ${schemaRead}`);
+}
 
 const ResultsMatch = Scorer(
   "results-match",
@@ -132,14 +126,8 @@ Eval("spl-translation", {
         "Translate the following SPL query to APL. Output ONLY the APL query, no explanation.",
     });
 
-    // Log tool usage for verification
-    const tools = result.metadata.tools;
-    if (tools) {
-      console.log(`[tools] called: [${tools.called.join(", ")}]`);
-      if (tools.filesRead?.length) {
-        console.log(`[files] read: [${tools.filesRead.join(", ")}]`);
-      }
-    }
+    // Log metrics for understanding (not scored)
+    logToolMetrics(result);
 
     return {
       output: result.output,
@@ -147,5 +135,5 @@ Eval("spl-translation", {
     };
   },
 
-  scorers: [SkillLoaded, SchemaRead, ResultsMatch],
+  scorers: [ResultsMatch],
 });
