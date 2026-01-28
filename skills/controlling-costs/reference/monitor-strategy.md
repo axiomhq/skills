@@ -6,78 +6,60 @@
 
 **Solution:** Hybrid approach combining:
 
-1. **Budget Guardrails** (Threshold) - Absolute limits for immediate reaction
-2. **Statistical Attribution** (Spotlight) - Detect significant changes, identify which dataset
-3. **Progress Tracking** (Threshold) - Track reduction progress toward targets
+1. **Total Ingest Guard** (Threshold + Trend) - Catches overspend AND gradual growth automatically
+2. **Statistical Attribution** (Robust Z-Score) - Detect significant changes, identify which dataset
 
-## The 4 Monitors
+## The 3 Monitors
 
 | # | Monitor | Type | Reactivity | Purpose |
 |---|---------|------|------------|---------|
-| 1 | Budget Guardrail | Threshold | 1 hour | Immediate: "total over limit" |
-| 2 | Per-Dataset Spike | Robust Z-Score | 2+ hours | Attribution: "which dataset changed" |
-| 3 | Query Cost Spike | Spotlight→Threshold | 6 hours | Separate cost driver detection |
-| 4 | Glidepath | Threshold | 1 day | Progress tracking |
-
-## Spotlight-Based Change Detection
-
-### How It Works
-
-Spotlight compares a "comparison" period against a "baseline" and outputs statistical metrics:
-
-```apl
-['audit-dataset']
-| where action == "usageCalculated"
-| extend bytes = toreal(['properties.hourly_ingest_bytes'])
-| summarize result = spotlight(_time > ago(6h), bytes) by dataset = tostring(['properties.dataset'])
-| mv-expand result
-| extend p_value = toreal(result.p_value), delta_score = toreal(result.delta_score)
-```
-
-### Key Metrics
-
-| Metric | Range | Meaning |
-|--------|-------|---------|
-| `p_value` | 0-1 | Statistical significance (lower = more confident change is real) |
-| `delta_score` | 0-1 | Normalized Wasserstein distance (how different distributions are) |
-| `effect_size` | 0-∞ | Magnitude accounting for sample size |
-| `median_relative_change` | -1 to +1 | Direction: positive = increase, negative = decrease |
-
-### Alert Logic
-
-**Gate on significance + materiality:**
-
-```
-p_value < 0.01           # Stricter than 0.05 due to multiple dataset comparisons
-AND delta_score > 0.3    # Meaningful distribution change
-AND median_change > 0    # Only cost increases (not decreases)
-```
-
-### Why p < 0.01?
-
-With N datasets evaluated per run, using `p < 0.05` causes too many false positives. Stricter alpha (0.01) reduces noise without formal multiple comparison correction.
-
-### Threshold Guidelines
-
-| delta_score | Interpretation |
-|-------------|----------------|
-| < 0.2 | Minor variation, probably noise |
-| 0.2 - 0.3 | Noticeable change, worth monitoring |
-| 0.3 - 0.5 | Significant change, likely actionable |
-| > 0.5 | Major change, investigate immediately |
+| 1 | Total Ingest Guard | Threshold + Trend | 2 hours | Catches overspend (>1.2x contract) OR gradual growth (>15% week-over-week) |
+| 2 | Per-Dataset Spike | Robust Z-Score | 2+ hours | Attribution: "which dataset's ingest changed" |
+| 3 | Query Cost Spike | Robust Z-Score | 2+ hours | Attribution: "which dataset's query cost changed" |
 
 ## Monitor Details
 
-### 1. Budget Guardrail
+### 1. Total Ingest Guard
 
-- **Type:** Threshold
-- **Query:** Sum ingest bytes over 24h range
-- **Threshold:** 1.5x contract (in bytes)
+- **Type:** Threshold (on combined overspend OR growth condition)
+- **Query:** See below
+- **Threshold:** 1 (alert if either condition is true)
 - **Frequency:** Hourly
-- **Range:** 24 hours (1440 minutes)
+- **Range:** 30 days (43200 minutes)
 - **Trigger after:** 2 consecutive runs
 
-Purpose: Immediate reaction when total ingest exceeds absolute limit. Cannot be "learned away" by anomaly detection.
+**Purpose:** Catches two scenarios in one monitor:
+1. **Overspend:** Today's ingest > 1.2x contract (absolute ceiling)
+2. **Gradual growth:** 7-day average > 23-day baseline by 15%+ (catches organic creep)
+
+**The Query:**
+
+```apl
+['axiom-audit']
+| where _time >= ago(30d) and action == "usageCalculated"
+| extend bytes = toreal(['properties.hourly_ingest_bytes'])
+| summarize daily_bytes = sum(bytes) by day = bin(_time, 1d)
+| summarize 
+    today = sumif(daily_bytes, day >= ago(24h)),
+    recent_7d = avgif(daily_bytes, day >= ago(7d)),
+    baseline_23d = avgif(daily_bytes, day < ago(7d)),
+    baseline_days = countif(day < ago(7d))
+| extend growth_pct = iff(isfinite(baseline_23d) and baseline_23d > 0, (recent_7d - baseline_23d) / baseline_23d * 100, 0)
+| extend over_contract = today > <contract_bytes> * 1.2
+| extend growing = growth_pct > 15 and baseline_days >= 14
+| where over_contract or growing
+| summarize alert_count = count()
+```
+
+**Key design decisions:**
+
+| Component | Choice | Rationale |
+|-----------|--------|-----------|
+| Over-contract multiplier | 1.2x | Early warning, not emergency-only |
+| Growth threshold | 15% | Catches meaningful growth, not noise |
+| Baseline requirement | 14+ days | Ensures stable baseline for growth calculation |
+| Division guard | `isfinite() and > 0` | Prevents division by zero on new orgs |
+| Sustained condition | `triggerFromNRuns: 2` | Reduces transient false positives |
 
 ### 2. Per-Dataset Spike Detection (Robust Z-Score)
 
@@ -100,41 +82,14 @@ Purpose: Statistical attribution - identifies *which* dataset's ingest pattern c
 
 ### 3. Query Cost Spike
 
-- **Type:** Threshold (on spotlight output)
-- **Query:** Spotlight on hourly GB·ms
-- **Threshold:** delta_score ≥ 0.3
+- **Type:** Threshold (on robust z-score output)
+- **Query:** Same approach as Per-Dataset Spike, using `hourly_billable_query_gbms` instead of bytes
+- **Threshold:** 1 (any dataset with sustained spikes)
 - **Frequency:** Hourly
-- **Range:** 7 days + 6 hours (10080 minutes)
-- **Trigger after:** 2 consecutive runs
+- **Range:** 7 days (10080 minutes)
+- **Trigger after:** 1 run (persistence built into query)
 
-Purpose: Detect changes in query cost patterns (different cost driver than ingest). Same statistical approach as per-dataset spike.
-
-### 4. Reduction Glidepath
-
-- **Type:** Threshold
-- **Query:** Sum daily ingest bytes
-- **Threshold:** Current reduction target (update weekly)
-- **Frequency:** 6 hours
-- **Range:** 24 hours (1440 minutes)
-- **Trigger after:** 1 run
-
-Purpose: Track progress toward contract. Update threshold weekly as reduction progresses:
-- Week 1: Current p95
-- Week 2: -25%
-- Week 3: -50%
-- Week 4: Contract target
-
-## Reactivity Trade-offs
-
-| Approach | Reactivity | Statistical Rigor |
-|----------|------------|-------------------|
-| Threshold (absolute) | ~1 hour | None - fixed limit |
-| Spotlight (6h comparison) | ~6 hours | High - p-value + effect size |
-| Spotlight (1h comparison) | ~1 hour | Low - insufficient samples |
-
-**Why 6 hours?** Spotlight needs `n ≥ 6` samples for statistical significance. With hourly audit data, that's 6 hours minimum.
-
-**Hybrid approach:** Use threshold for immediate reaction, spotlight for attribution after the fact.
+Purpose: Detect changes in query cost patterns (different cost driver than ingest). Uses identical robust z-score approach as ingest spike detection.
 
 ## Units
 
