@@ -51,6 +51,14 @@ const SkillLoaded = Scorer(
   }
 );
 
+const SchemaRead = Scorer(
+  "schema-read",
+  async ({ output }: { output: TaskOutput }) => {
+    const called = output.metadata.tools?.called ?? [];
+    return called.includes("readFile") ? 1 : 0;
+  }
+);
+
 const ResultsMatch = Scorer(
   "results-match",
   async ({ output, expected }: { output: TaskOutput; expected: string }) => {
@@ -131,5 +139,5 @@ Eval("spl-translation", {
     };
   },
 
-  scorers: [SkillLoaded, ResultsMatch],
+  scorers: [SkillLoaded, SchemaRead, ResultsMatch],
 });
