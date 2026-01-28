@@ -189,31 +189,36 @@ echo ""
 # Uses log-transform + IQR-based sigma, dual gate (z>3 AND >p99), 2+ hours sustained
 # =============================================================================
 
-# Build the robust z-score APL query with rank-based materiality filtering
-# Current window is 4h (not 7d) to avoid re-alerting on old spikes
-# Rank-based: only alert on top N datasets by excess_bytes (scale-free, no hardcoded thresholds)
+# Build the robust z-score APL query with single-pass approach (no joins)
+# Single-pass is more efficient and reliable than complex joins with multiple summarize operations
+# Uses conditional aggregation with is_current/is_baseline flags
 ZSCORE_QUERY="['$AUDIT_DATASET']
-| where _time >= ago(4h) and _time < bin(now(), 1h) and action == \"usageCalculated\"
+| where _time >= ago(15d) and action == \"usageCalculated\"
 | extend bytes = toreal(['properties.hourly_ingest_bytes']), dataset = tostring(['properties.dataset'])
 | where isfinite(bytes) and bytes >= 0
-| summarize hourly_bytes = sum(bytes) by bucket = bin(_time, 1h), dataset
+| extend is_current = _time >= ago(4h) and _time < bin(now(), 1h)
+| extend is_baseline = _time < ago(1h)
+| summarize hourly_bytes = sum(bytes) by bucket = bin(_time, 1h), dataset, is_current, is_baseline
 | extend hourly_y = log(hourly_bytes + 1)
-| join kind=inner (
-    ['$AUDIT_DATASET']
-    | where _time >= ago(15d) and _time < ago(1h) and action == \"usageCalculated\"
-    | extend bytes = toreal(['properties.hourly_ingest_bytes']), dataset = tostring(['properties.dataset'])
-    | where isfinite(bytes) and bytes >= 0
-    | summarize hourly_bytes = sum(bytes) by bin(_time, 1h), dataset
-    | extend hourly_y = log(hourly_bytes + 1)
-    | summarize baseline_hours = count(), y_p = percentiles_array(hourly_y, 25, 50, 75), b_p = percentiles_array(hourly_bytes, 50, 99) by dataset
-    | where baseline_hours >= 72
-    | extend median_y = todouble(y_p[1]), sigma_y = max_of((todouble(y_p[2]) - todouble(y_p[0])) / 1.349, 0.1), median_bytes = todouble(b_p[0]), p99_bytes = todouble(b_p[1])
-) on dataset
-| extend robust_z = (hourly_y - median_y) / sigma_y, excess_bytes = hourly_bytes - median_bytes
-| where robust_z > $ZSCORE_THRESHOLD and hourly_bytes > p99_bytes and excess_bytes > 0
-| summarize spike_hours = count(), max_z = round(max(robust_z), 2), max_excess_bytes = max(excess_bytes) by dataset
-| where spike_hours >= $SPIKE_HOURS_THRESHOLD
-| top 10 by max_excess_bytes desc
+| summarize 
+    current_hours = countif(is_current),
+    baseline_hours = countif(is_baseline),
+    baseline_y_p25 = percentileif(hourly_y, 25, is_baseline),
+    baseline_y_p50 = percentileif(hourly_y, 50, is_baseline),
+    baseline_y_p75 = percentileif(hourly_y, 75, is_baseline),
+    baseline_bytes_p99 = percentileif(hourly_bytes, 99, is_baseline),
+    baseline_bytes_p50 = percentileif(hourly_bytes, 50, is_baseline),
+    current_max_y = maxif(hourly_y, is_current),
+    current_max_bytes = maxif(hourly_bytes, is_current)
+  by dataset
+| where baseline_hours >= 72 and current_hours >= $SPIKE_HOURS_THRESHOLD
+| extend iqr = baseline_y_p75 - baseline_y_p25
+| extend sigma_y = iff(iqr / 1.349 > 0.1, iqr / 1.349, 0.1)
+| extend max_z = (current_max_y - baseline_y_p50) / sigma_y
+| where max_z > $ZSCORE_THRESHOLD and current_max_bytes > baseline_bytes_p99
+| extend excess_bytes = current_max_bytes - baseline_bytes_p50
+| where excess_bytes > 0
+| top 10 by excess_bytes desc
 | summarize spike_count = count()"
 
 # Escape for JSON
@@ -245,32 +250,36 @@ echo ""
 # Uses same robust z-score approach as ingest spike detection
 # =============================================================================
 
-# Build the robust z-score APL query for query costs with rank-based materiality filtering
-# Current window is 4h (not 7d) to avoid re-alerting on old spikes
-# Baseline is 15d to capture weekly seasonality patterns
-# Rank-based: only alert on top N datasets by excess_gbms (scale-free, no hardcoded thresholds)
+# Build the robust z-score APL query for query costs with single-pass approach (no joins)
+# Single-pass is more efficient and reliable than complex joins with multiple summarize operations
+# Uses conditional aggregation with is_current/is_baseline flags
 QCOST_ZSCORE_QUERY="['$AUDIT_DATASET']
-| where _time >= ago(4h) and _time < bin(now(), 1h) and action == \"usageCalculated\"
+| where _time >= ago(15d) and action == \"usageCalculated\"
 | extend gbms = toreal(['properties.hourly_billable_query_gbms']), dataset = tostring(['properties.dataset'])
 | where isfinite(gbms) and gbms >= 0
-| summarize hourly_gbms = sum(gbms) by bucket = bin(_time, 1h), dataset
+| extend is_current = _time >= ago(4h) and _time < bin(now(), 1h)
+| extend is_baseline = _time < ago(1h)
+| summarize hourly_gbms = sum(gbms) by bucket = bin(_time, 1h), dataset, is_current, is_baseline
 | extend hourly_y = log(hourly_gbms + 1)
-| join kind=inner (
-    ['$AUDIT_DATASET']
-    | where _time >= ago(15d) and _time < ago(1h) and action == \"usageCalculated\"
-    | extend gbms = toreal(['properties.hourly_billable_query_gbms']), dataset = tostring(['properties.dataset'])
-    | where isfinite(gbms) and gbms >= 0
-    | summarize hourly_gbms = sum(gbms) by bin(_time, 1h), dataset
-    | extend hourly_y = log(hourly_gbms + 1)
-    | summarize baseline_hours = count(), y_p = percentiles_array(hourly_y, 25, 50, 75), g_p = percentiles_array(hourly_gbms, 50, 99) by dataset
-    | where baseline_hours >= 72
-    | extend median_y = todouble(y_p[1]), sigma_y = max_of((todouble(y_p[2]) - todouble(y_p[0])) / 1.349, 0.1), median_gbms = todouble(g_p[0]), p99_gbms = todouble(g_p[1])
-) on dataset
-| extend robust_z = (hourly_y - median_y) / sigma_y, excess_gbms = hourly_gbms - median_gbms
-| where robust_z > $ZSCORE_THRESHOLD and hourly_gbms > p99_gbms and excess_gbms > 0
-| summarize spike_hours = count(), max_z = round(max(robust_z), 2), max_excess_gbms = max(excess_gbms) by dataset
-| where spike_hours >= $SPIKE_HOURS_THRESHOLD
-| top 10 by max_excess_gbms desc
+| summarize 
+    current_hours = countif(is_current),
+    baseline_hours = countif(is_baseline),
+    baseline_y_p25 = percentileif(hourly_y, 25, is_baseline),
+    baseline_y_p50 = percentileif(hourly_y, 50, is_baseline),
+    baseline_y_p75 = percentileif(hourly_y, 75, is_baseline),
+    baseline_gbms_p99 = percentileif(hourly_gbms, 99, is_baseline),
+    baseline_gbms_p50 = percentileif(hourly_gbms, 50, is_baseline),
+    current_max_y = maxif(hourly_y, is_current),
+    current_max_gbms = maxif(hourly_gbms, is_current)
+  by dataset
+| where baseline_hours >= 72 and current_hours >= $SPIKE_HOURS_THRESHOLD
+| extend iqr = baseline_y_p75 - baseline_y_p25
+| extend sigma_y = iff(iqr / 1.349 > 0.1, iqr / 1.349, 0.1)
+| extend max_z = (current_max_y - baseline_y_p50) / sigma_y
+| where max_z > $ZSCORE_THRESHOLD and current_max_gbms > baseline_gbms_p99
+| extend excess_gbms = current_max_gbms - baseline_gbms_p50
+| where excess_gbms > 0
+| top 10 by excess_gbms desc
 | summarize spike_count = count()"
 
 # Escape for JSON

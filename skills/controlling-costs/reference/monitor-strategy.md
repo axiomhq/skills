@@ -162,33 +162,42 @@ All thresholds are specified in **bytes**. Human-readable output auto-formats to
 
 ### The Query (Ingest Spike Detection)
 
+**Important:** Uses single-pass approach with conditional aggregation for efficiency and reliability.
+
 ```apl
 ['axiom-audit']
-| where _time >= ago(4h) and _time < bin(now(), 1h) and action == "usageCalculated"
+| where _time >= ago(15d) and action == "usageCalculated"
 | extend bytes = toreal(['properties.hourly_ingest_bytes']), dataset = tostring(['properties.dataset'])
 | where isfinite(bytes) and bytes >= 0
-| summarize hourly_bytes = sum(bytes) by bucket = bin(_time, 1h), dataset
+| extend is_current = _time >= ago(4h) and _time < bin(now(), 1h)
+| extend is_baseline = _time < ago(1h)
+| summarize hourly_bytes = sum(bytes) by bucket = bin(_time, 1h), dataset, is_current, is_baseline
 | extend hourly_y = log(hourly_bytes + 1)
-| join kind=inner (
-    ['axiom-audit']
-    | where _time >= ago(15d) and _time < ago(1h) and action == "usageCalculated"
-    | extend bytes = toreal(['properties.hourly_ingest_bytes']), dataset = tostring(['properties.dataset'])
-    | where isfinite(bytes) and bytes >= 0
-    | summarize hourly_bytes = sum(bytes) by bin(_time, 1h), dataset
-    | extend hourly_y = log(hourly_bytes + 1)
-    | summarize baseline_hours = count(), y_p = percentiles_array(hourly_y, 25, 50, 75), b_p = percentiles_array(hourly_bytes, 50, 99) by dataset
-    | where baseline_hours >= 72
-    | extend median_y = todouble(y_p[1]), sigma_y = max_of((todouble(y_p[2]) - todouble(y_p[0])) / 1.349, 0.1), median_bytes = todouble(b_p[0]), p99_bytes = todouble(b_p[1])
-) on dataset
-| extend robust_z = (hourly_y - median_y) / sigma_y, excess_bytes = hourly_bytes - median_bytes
-| where robust_z > 3 and hourly_bytes > p99_bytes and excess_bytes > 0
-| summarize spike_hours = count(), max_z = round(max(robust_z), 2), max_excess_bytes = max(excess_bytes) by dataset
-| where spike_hours >= 2
-| top 10 by max_excess_bytes desc
+| summarize 
+    current_hours = countif(is_current),
+    baseline_hours = countif(is_baseline),
+    baseline_y_p25 = percentileif(hourly_y, 25, is_baseline),
+    baseline_y_p50 = percentileif(hourly_y, 50, is_baseline),
+    baseline_y_p75 = percentileif(hourly_y, 75, is_baseline),
+    baseline_bytes_p99 = percentileif(hourly_bytes, 99, is_baseline),
+    baseline_bytes_p50 = percentileif(hourly_bytes, 50, is_baseline),
+    current_max_y = maxif(hourly_y, is_current),
+    current_max_bytes = maxif(hourly_bytes, is_current)
+  by dataset
+| where baseline_hours >= 72 and current_hours >= 2
+| extend iqr = baseline_y_p75 - baseline_y_p25
+| extend sigma_y = iff(iqr / 1.349 > 0.1, iqr / 1.349, 0.1)
+| extend max_z = (current_max_y - baseline_y_p50) / sigma_y
+| where max_z > 3 and current_max_bytes > baseline_bytes_p99
+| extend excess_bytes = current_max_bytes - baseline_bytes_p50
+| where excess_bytes > 0
+| top 10 by excess_bytes desc
 | summarize spike_count = count()
 ```
 
 The query cost spike detection uses the same pattern with `hourly_billable_query_gbms` instead of `hourly_ingest_bytes`.
+
+**Why single-pass instead of join?** The single-pass approach is more efficient and reliable than complex joins with multiple `summarize` operations. It uses `is_current`/`is_baseline` flags with conditional aggregation functions (`countif`, `percentileif`, `maxif`) to compute baseline and current statistics in one pass.
 
 ### Key Design Decisions
 
@@ -198,8 +207,10 @@ The query cost spike detection uses the same pattern with `hourly_billable_query
 | Sum first, then log | `sum() → log()` | Correct order; avoids bias if multiple records per hour |
 | Sigma estimation | `IQR / 1.349` | IQR is robust to outliers; 1.349 converts to sigma-equivalent for normal distributions |
 | Minimum sigma | `max_of(..., 0.1)` | Prevents division-by-zero on constant datasets |
+| Query approach | Single-pass | More efficient and reliable than complex joins; uses conditional aggregation |
 | Current window | `ago(4h)` | Short window avoids re-alerting on old spikes |
 | Baseline period | 15d (excl. last 1h) | Longer baseline captures weekly patterns; excludes recent data to avoid self-contamination |
+| Conditional aggs | `countif`, `percentileif`, `maxif` | Compute baseline and current stats in one pass without joins |
 | Baseline guard | `baseline_hours >= 72` | Ensures enough data points for stable percentiles |
 | Z-score threshold | `> 3` | Standard anomaly threshold (~0.1% false positive rate for normal data) |
 | Relative gate | `> p99_bytes` | Spike must exceed dataset's own p99 (relative materiality) |
