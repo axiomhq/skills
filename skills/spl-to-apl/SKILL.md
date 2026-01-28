@@ -5,11 +5,7 @@ description: Translates Splunk SPL queries to Axiom APL. Provides command mappin
 
 # SPL to APL Translator
 
-**First:** Read reference/dataset-schemas.md to check field types.
-
-Type mismatches cause silent bugs — query runs, wrong results. Cast numeric comparisons on string fields with toint() or toreal().
-
-**Output:** Valid APL only. No markdown, no explanations.
+**Type safety:** Fields like "status" are often stored as strings. Always cast before numeric comparison: toint(status) >= 500, not status >= 500. Check reference/dataset-schemas.md when unsure.
 
 ---
 

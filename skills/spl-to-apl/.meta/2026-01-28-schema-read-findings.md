@@ -64,12 +64,15 @@ both failures are type comparison errors:
 
 model knows about toint() (mentioned in skill). doesn't consistently know WHEN to apply it without reading schema.
 
-## options for next session
+## solution
 
-1. **accept 78% baseline** — the 2 failing cases are a known limitation
-2. **harness enforcement** — modify tool-simulation to require schema read before translation
-3. **two-phase prompting** — first call reads schema and returns type info, second call translates with that context
-4. **embed heuristics** — add rule like "if comparing field to number, check if field might be string type"
+**embed the heuristic directly.** changed instruction from "read schema to check types" to:
+
+> **Type safety:** Fields like "status" are often stored as strings. Always cast before numeric comparison: toint(status) >= 500, not status >= 500.
+
+result: **100% results-match** (stable across multiple runs).
+
+the insight: we couldn't embed dataset-specific types, but we COULD embed a defensive heuristic that works universally. "always cast" is safer than "check schema then maybe cast".
 
 ## files changed
 
