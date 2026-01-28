@@ -1,3 +1,13 @@
+import { config } from "dotenv";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load .env from eval-tooling directory
+config({ path: resolve(__dirname, "../../../eval-tooling/.env") });
+
 import { Eval, Scorer } from "axiom/ai/evals";
 import { testCases } from "./cases";
 import { flag, pickFlags, getGitCommit, buildSkillMetadata } from "../../../eval-tooling/src/shared";
@@ -7,11 +17,6 @@ import {
   executeAplQuery,
   compareQueryResults,
 } from "../../../eval-tooling/src/shared/axiom-query";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 const SKILL_DIR = resolve(__dirname, "..");
 const WORKSPACE_ROOT = resolve(__dirname, "../../..");

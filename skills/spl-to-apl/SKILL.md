@@ -5,11 +5,11 @@ description: Translates Splunk SPL queries to Axiom APL. Provides command mappin
 
 # SPL to APL Translator
 
-Expert translator from Splunk Processing Language (SPL) to Axiom Processing Language (APL). 
+**First:** Read reference/dataset-schemas.md to check field types.
 
-## Before Translating
+Type mismatches cause silent bugs — query runs, wrong results. Cast numeric comparisons on string fields with toint() or toreal().
 
-**Check the target dataset schema.** Run `['dataset'] | getschema` or see `reference/dataset-schemas.md`.
+**Output:** Valid APL only. No markdown, no explanations.
 
 ---
 
