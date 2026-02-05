@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 # Slack API wrapper - multi-env, token-efficient output
-# Usage: slack <env> <method> [params...] [--raw|--full]
+# Usage: slack <workspace> <method> [params...] [--raw|--full]
+#
+# Use workspace names from `scripts/init` output (under "Slack Workspaces").
 #
 # Examples:
-#   slack work conversations.list types=public_channel
-#   slack personal chat.postMessage channel=C1234 text="Hello"
-#   echo "multiline msg" | slack work chat.postMessage channel=C1234 text=-
-#   slack work users.list
+#   slack default conversations.list types=public_channel
+#   slack default chat.postMessage channel=C1234 text="Hello"
+#   echo "multiline msg" | slack default chat.postMessage channel=C1234 text=-
+#   slack default users.list
 #
 # Config: ~/.config/axiom-sre/config.toml
-#   [slack.workspaces.work]
+#   [slack.workspaces.default]
 #   token = "xoxb-..."
 #
-#   [slack.workspaces.personal]
+#   [slack.workspaces.corp]
 #   token = "xoxp-..."
 
 set -euo pipefail
@@ -111,10 +113,7 @@ if [[ "$IS_POST" == true ]]; then
     done
   fi
 
-  RESPONSE=$(curl -s -X POST "$URL" \
-    -H "Authorization: Bearer $SLACK_TOKEN" \
-    -H "Content-Type: application/json; charset=utf-8" \
-    -d "$BODY")
+  RESPONSE=$("$SCRIPT_DIR/curl-auth" slack "$ENV" -X POST -d "$BODY" "$URL")
 else
   # GET with query params
   if [[ ${#PARAMS[@]} -gt 0 ]]; then
@@ -122,8 +121,7 @@ else
     URL="$URL?${QUERY:1}"
   fi
 
-  RESPONSE=$(curl -s "$URL" \
-    -H "Authorization: Bearer $SLACK_TOKEN")
+  RESPONSE=$("$SCRIPT_DIR/curl-auth" slack "$ENV" "$URL")
 fi
 
 # Auto-paginate for list methods (unless --raw or cursor already specified)
@@ -167,7 +165,7 @@ if [[ -n "$ARRAY_KEY" && -z "$RAW" && "$HAS_CURSOR" == false ]]; then
       CURSOR_URL="$CURSOR_URL?cursor=$NEXT_CURSOR"
     fi
 
-    RESPONSE=$(curl -s "$CURSOR_URL" -H "Authorization: Bearer $SLACK_TOKEN")
+    RESPONSE=$("$SCRIPT_DIR/curl-auth" slack "$ENV" "$CURSOR_URL")
     ALL_RESPONSES=$(echo "$ALL_RESPONSES"$'\n'"$RESPONSE")
     NEXT_CURSOR=$(echo "$RESPONSE" | jq -r '.response_metadata.next_cursor // empty')
   done
