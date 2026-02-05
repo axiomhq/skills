@@ -25,6 +25,9 @@ jobs:
       - name: Run sync
         run: _gilfoyle/scripts/sync-to-skills skills/sre
 
+      - name: Run tests
+        run: _gilfoyle/scripts/test-build skills/sre
+
       - name: Check for changes
         id: changes
         run: |
