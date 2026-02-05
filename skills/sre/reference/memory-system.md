@@ -6,19 +6,19 @@ Three-tier memory with automatic merging. All tiers use identical structure.
 
 | Tier | Location | Scope | Sync |
 |------|----------|-------|------|
-| Personal | `~/.config/amp/memory/personal/axiom-sre/` | Just me | None |
-| Org | `~/.config/amp/memory/orgs/{org}/axiom-sre/` | Team-wide | Git repo |
+| Personal | `~/.config/axiom-sre/memory/` | Just me | None |
+| Org | `~/.config/axiom-sre/memory/orgs/{org}/` | Team-wide | Git repo |
 
 ## Reading Memory
 
-Before investigating, read all memory tiers:
+Before investigating, read all memory tiers. **ALWAYS read full files.** NEVER use `head -n N` or other partial read operators; a partial knowledge base is worse than none.
 
 ```bash
 # Personal tier
-cat ~/.config/amp/memory/personal/axiom-sre/kb/*.md
+cat ~/.config/axiom-sre/memory/kb/*.md
 
 # All org tiers (read each org that exists)
-for org in ~/.config/amp/memory/orgs/*/axiom-sre/kb; do
+for org in ~/.config/axiom-sre/memory/orgs/*/kb; do
   cat "$org"/*.md 2>/dev/null
 done
 ```
@@ -79,15 +79,14 @@ scripts/mem-doctor
 ## Directory Structure
 
 ```
-~/.config/amp/memory/
-    ├── personal/axiom-sre/             # Personal tier
-    │   ├── kb/
-    │   │   ├── facts.md
-    │   │   ├── patterns.md
-    │   │   └── queries.md
-    │   └── journal/
+~/.config/axiom-sre/memory/
+    ├── kb/
+    │   ├── facts.md
+    │   ├── patterns.md
+    │   └── queries.md
+    ├── journal/
     └── orgs/
-        └── axiom/axiom-sre/            # Org tier (git-tracked)
+        └── axiom/            # Org tier (git-tracked)
             └── kb/
 ```
 
@@ -139,20 +138,14 @@ Connection pool exhausted. Found leak in payment handler.
 
 **End of session:** Create summary in `kb/incidents.md` with key learnings.
 
-## Consolidation (Digest)
+## Consolidation (Sleep)
 
 Run after incidents or periodically:
 ```bash
-scripts/mem-digest              # Review journal, find stale entries
-scripts/mem-digest --prune      # Also archive stale entries
-scripts/mem-digest --days 60    # Custom stale threshold
+scripts/sleep    # Review recent additions for consolidation
 ```
 
-This will:
-1. Review journal entries for promotion to KB
-2. Find stale entries (unused 90+ days, not pinned)
-3. Archive stale entries (with `--prune`)
-4. Report memory stats
+This will dump recent memory additions for you to review and synthesize into patterns.
 
 ## Health Check
 

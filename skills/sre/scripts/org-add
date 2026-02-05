@@ -7,8 +7,8 @@
 
 set -euo pipefail
 
-SKILL_NAME="axiom-sre"
-ORGS_DIR="$HOME/.config/amp/memory/orgs"
+CONFIG_DIR="${SRE_CONFIG_DIR:-$HOME/.config/axiom-sre}"
+ORGS_DIR="$CONFIG_DIR/memory/orgs"
 
 if [[ $# -lt 1 ]]; then
   echo "Usage: scripts/org-add <name> [git-repo-url]"
@@ -36,7 +36,7 @@ if [[ -n "$REPO_URL" ]]; then
   fi
 elif [[ ! -d "$ORG_DIR" ]]; then
   echo "Creating local-only org at $ORG_DIR"
-  mkdir -p "$ORG_DIR/$SKILL_NAME/kb"
+  mkdir -p "$ORG_DIR/kb"
   echo "✓ Created (no git repo)"
 else
   echo "Org '$ORG_NAME' already exists at $ORG_DIR"

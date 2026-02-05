@@ -1,4 +1,4 @@
-# Axiom SRE Memory
+# Gilfoyle Memory
 
 This is your working memory for investigations. Append freely, consolidate periodically.
 
@@ -8,8 +8,8 @@ Memory is organized in two tiers, merged when reading:
 
 | Tier | Location | Scope | Sync |
 |------|----------|-------|------|
-| Personal | `~/.config/amp/memory/personal/axiom-sre/` | Just me | None |
-| Org | `~/.config/amp/memory/orgs/{org}/axiom-sre/` | Team-wide | Git repo |
+| Personal | `~/.config/axiom-sre/memory/` | Just me | None |
+| Org | `~/.config/axiom-sre/memory/orgs/{org}/` | Team-wide | Git repo |
 
 **Read order:** Both tiers merged, tagged by source. Conflicts: Personal > Org.
 
@@ -20,17 +20,17 @@ Memory is organized in two tiers, merged when reading:
 ## Directory Structure
 
 ```
-axiom-sre/
+axiom-sre/memory/
 ├── README.memory.md     # This file
 ├── journal/             # Append-only logs during investigations
 │   └── journal-YYYY-MM.md
 ├── kb/                  # Curated knowledge base
-│   ├── facts.md         # Teams, channels, conventions
-│   ├── integrations.md  # DBs, APIs, external tools
-│   ├── patterns.md      # Failure signatures
-│   ├── queries.md       # APL learnings
-│   └── incidents.md     # Incident summaries
-└── archive/             # Old entries (preserved, not deleted)
+│   ├── facts.md
+│   ├── integrations.md
+│   ├── patterns.md
+│   ├── queries.md
+│   └── incidents.md
+└── archive/             # Old entries
 ```
 
 ---
@@ -64,6 +64,7 @@ Extended information, queries, evidence, etc.
 |-------|----------|-------------|
 | type | Yes | fact, query, incident, pattern, integration, note |
 | tags | Yes | Comma-separated, for retrieval |
+| status | No | active, stale, deprecated (optional lifecycle state) |
 | used | No | Count of times retrieved and helpful (default: 0) |
 | last_used | No | Date of last helpful retrieval |
 | pinned | No | If true, never auto-archive (default: false) |
@@ -88,33 +89,41 @@ Seeing "connection pool exhausted" in orders-api logs.
 Started after deploy at 14:15.
 ```
 
+### Retrieval
+
+Before investigating, read all memory tiers in full. Never use partial reads.
+
+```bash
+# Personal tier
+cat ~/.config/axiom-sre/memory/kb/*.md
+
+# Org tiers
+for org in ~/.config/axiom-sre/memory/orgs/*/kb; do
+  cat "$org"/*.md 2>/dev/null
+done
+```
+
 ### End of Incident
 
 Create summary in `kb/incidents.md` with key learnings.
 
 ---
 
-## Consolidation (Digest)
+## Consolidation (Sleep)
 
 Run periodically or after incidents:
 
 ```bash
-scripts/mem-digest
+scripts/sleep
 ```
 
 This will:
-1. **Review** journal entries for promotion to KB
-2. **Report** memory stats and stale entries
-3. **Suggest** cleanup actions
+1. **Review** recent entries for promotion to KB
+2. **Dump** content for synthesis
 
 ### Manual Actions
 
 **Promote:** Move valuable journal entries to appropriate `kb/*.md` file.
-
-**Prune:** Archive stale entries (unused 90+ days, not pinned):
-```bash
-scripts/mem-prune --tier personal
-```
 
 **Share:** Commit org memory changes:
 ```bash
@@ -142,14 +151,14 @@ When an entry is critical and should never be archived:
 | `scripts/org-add` | Add an org for shared memory |
 | `scripts/mem-sync` | Pull org memory updates |
 | `scripts/mem-share` | Commit and push org changes |
-| `scripts/mem-digest` | Consolidation pass |
-| `scripts/mem-prune` | Archive stale entries |
+| `scripts/sleep` | Consolidation pass |
 | `scripts/mem-doctor` | Health check |
 
 ---
 
 ## Anti-Patterns to Avoid
 
+- **Partial reading**: NEVER use `head` or `tail` to read memory. You need full context.
 - **Query spam**: Don't log every query, only significant ones
 - **Over-structuring during incidents**: Just append to journal
 - **Forgetting to update used/last_used**: Track what actually helped

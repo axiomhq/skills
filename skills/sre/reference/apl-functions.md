@@ -79,11 +79,44 @@ Compare a cohort against baseline to find what's statistically different (like H
 | where _time between (ago(15m) .. now())
 | summarize spotlight(status >= 500, method, uri, ['geo.country']) by service
 
-// Why is this specific user/region having issues?
-['logs'] 
-| where _time between (ago(1h) .. now())
-| summarize spotlight(user_id == "problem-user", service, uri, method, status)
+// Time-based comparison: what changed in last 6h vs baseline?
+['audit'] 
+| where _time between (ago(7d) .. now())
+| summarize spotlight(_time > ago(6h), dataset, source)
 ```
+
+**Extracting Spotlight Metrics in APL:**
+```apl
+// Extract p_value and delta_score for threshold monitoring
+| summarize result = spotlight(_time > ago(6h), bytes) by dataset
+| mv-expand result
+| extend p_value = toreal(result.p_value), delta_score = toreal(result.delta_score)
+| where p_value < 0.05  // statistically significant
+| summarize max_delta = max(delta_score)
+```
+
+**Key Metrics (from spotlight output):**
+| Metric | Range | Meaning |
+|--------|-------|---------|
+| `p_value` | 0-1 | Statistical significance (< 0.05 = significant) |
+| `delta_score` | 0-1 | Distribution difference (higher = more different) |
+| `effect_size` | 0-∞ | Magnitude accounting for sample size |
+| `median_relative_change` | -1 to +1 | Direction of change |
+
+**Note:** Spotlight needs sufficient samples (n >= 6) for statistical significance.
+
+### Presence (Field Analysis) — Finding Sparse/Unused Columns
+Returns a map of `{field_name: non_null_count}` for all fields in scanned rows:
+```apl
+// Find field presence across all columns
+['logs'] 
+| where _time >= ago(60d) 
+| summarize presence(*)
+
+// Parse output with jq to find sparse fields:
+// jq '.tables[0].columns[0][0] | to_entries | sort_by(.value)'
+```
+Compare counts against total row count to calculate presence percentage. Useful for identifying unused columns before schema cleanup.
 
 ### Phrases (Text Analysis)
 ```apl

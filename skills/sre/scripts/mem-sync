@@ -6,7 +6,8 @@
 
 set -euo pipefail
 
-ORGS_DIR="$HOME/.config/amp/memory/orgs"
+CONFIG_DIR="${SRE_CONFIG_DIR:-$HOME/.config/axiom-sre}"
+ORGS_DIR="$CONFIG_DIR/memory/orgs"
 
 sync_org() {
   local org_dir="$1"

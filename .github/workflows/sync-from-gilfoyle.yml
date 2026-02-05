@@ -1,0 +1,63 @@
+name: Sync SRE from Gilfoyle
+
+on:
+  schedule:
+    - cron: '0 8 * * *' # Daily at 8am UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout skills
+        uses: actions/checkout@v4
+
+      - name: Checkout gilfoyle
+        uses: actions/checkout@v4
+        with:
+          repository: axiomhq/gilfoyle
+          path: _gilfoyle
+
+      - name: Run sync
+        run: _gilfoyle/scripts/sync-to-skills skills/sre
+
+      - name: Check for changes
+        id: changes
+        run: |
+          git diff --quiet skills/sre/ && echo "changed=false" >> $GITHUB_OUTPUT || echo "changed=true" >> $GITHUB_OUTPUT
+
+      - name: Create or update PR
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          GILFOYLE_SHA=$(git -C _gilfoyle rev-parse --short HEAD)
+          BRANCH="sync/gilfoyle"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Reuse existing branch if PR is already open, otherwise create new
+          git fetch origin "$BRANCH" 2>/dev/null && git checkout "$BRANCH" && git merge --no-edit origin/main || git checkout -b "$BRANCH"
+
+          git add skills/sre/
+          git commit -m "sre: sync from gilfoyle@${GILFOYLE_SHA}" || exit 0
+          git push -f origin "$BRANCH"
+
+          # Create PR if one doesn't exist
+          if ! gh pr list --head "$BRANCH" --state open --json number -q '.[0].number' | grep -q .; then
+            gh pr create \
+              --title "sre: sync from gilfoyle" \
+              --body "Automated sync from [axiomhq/gilfoyle@\`${GILFOYLE_SHA}\`](https://github.com/axiomhq/gilfoyle/commit/$(git -C _gilfoyle rev-parse HEAD)).
+
+          This PR is kept up to date automatically. Merge when ready." \
+              --base main
+          fi
+
+      - name: Clean up
+        if: always()
+        run: rm -rf _gilfoyle

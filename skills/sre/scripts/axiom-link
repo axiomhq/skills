@@ -22,26 +22,15 @@ if [[ -z "$DEPLOYMENT" || -z "$APL" ]]; then
   exit 1
 fi
 
-CONFIG_FILE="$HOME/.axiom.toml"
-if [[ ! -f "$CONFIG_FILE" ]]; then
-  echo "Error: $CONFIG_FILE not found" >&2
-  exit 1
-fi
+# Load config via unified config parser
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+eval "$("$SCRIPT_DIR/config" axiom "$DEPLOYMENT")"
 
-# Parse TOML for deployment config
-extract_value() {
-  local key="$1"
-  awk -v deployment="$DEPLOYMENT" -v key="$key" '
-    /^\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
-    in_deployment && $1 == key { gsub(/[" ]/, "", $3); print $3; exit }
-  ' "$CONFIG_FILE"
-}
-
-URL=$(extract_value "url")
-ORG_ID=$(extract_value "org_id")
+URL="$AXIOM_URL"
+ORG_ID="$AXIOM_ORG_ID"
 
 if [[ -z "$URL" || -z "$ORG_ID" ]]; then
-  echo "Error: Could not find deployment '$DEPLOYMENT' in $CONFIG_FILE" >&2
+  echo "Error: Missing url or org_id for deployment '$DEPLOYMENT'" >&2
   exit 1
 fi
 

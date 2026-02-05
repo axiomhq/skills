@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Axiom API helper - reads credentials from ~/.axiom.toml
+# Axiom API helper - uses unified config
 # Usage: axiom-api <deployment> <method> <endpoint> [body]
 # Examples:
 #   axiom-api dev POST "/v1/datasets/_apl?format=tabular" '{"apl": "..."}'
@@ -17,29 +17,14 @@ if [[ -z "$DEPLOYMENT" || -z "$ENDPOINT" ]]; then
   exit 1
 fi
 
-CONFIG_FILE="$HOME/.axiom.toml"
-if [[ ! -f "$CONFIG_FILE" ]]; then
-  echo "Error: $CONFIG_FILE not found" >&2
-  exit 1
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Parse TOML for deployment config (simple parser for known structure)
-extract_value() {
-  local key="$1"
-  awk -v deployment="$DEPLOYMENT" -v key="$key" '
-    /^\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
-    in_deployment && $1 == key { gsub(/[" ]/, "", $3); print $3; exit }
-  ' "$CONFIG_FILE"
-}
+# Load config from unified config file
+eval "$("$SCRIPT_DIR/config" axiom "$DEPLOYMENT")"
 
-URL=$(extract_value "url")
-TOKEN=$(extract_value "token")
-ORG_ID=$(extract_value "org_id")
-
-if [[ -z "$URL" || -z "$TOKEN" || -z "$ORG_ID" ]]; then
-  echo "Error: Could not find deployment '$DEPLOYMENT' in $CONFIG_FILE" >&2
-  exit 1
-fi
+URL="$AXIOM_URL"
+TOKEN="$AXIOM_TOKEN"
+ORG_ID="$AXIOM_ORG_ID"
 
 # Build curl command
 CURL_ARGS=(

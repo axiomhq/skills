@@ -1,154 +1,217 @@
 #!/usr/bin/env bash
-# Setup axiom-sre 2-tier memory system (personal + org)
-# Usage: scripts/setup [--force]
-#   --force    Overwrite existing memory without prompting
-#   default    Sets up personal memory + orgs config
+# Gilfoyle setup - creates config directory and migrates existing configs
+# Usage: setup [--migrate]
+#
+# Creates:
+#   ~/.config/axiom-sre/config.toml
+#   ~/.config/axiom-sre/memory/kb/
+#
+# Migrates from (if --migrate):
+#   ~/.axiom.toml
+#   ~/.grafana.toml
+#   ~/.pyroscope.toml
+#   ~/.slack.conf
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SKILL_DIR="$(dirname "$SCRIPT_DIR")"
-TEMPLATES_DIR="$SKILL_DIR/templates"
-SKILL_NAME="axiom-sre"
+CONFIG_DIR="${SRE_CONFIG_DIR:-$HOME/.config/axiom-sre}"
+CONFIG_FILE="$CONFIG_DIR/config.toml"
+MEMORY_DIR="$CONFIG_DIR/memory/kb"
 
-# Paths
-PERSONAL_DIR="$HOME/.config/amp/memory/personal/$SKILL_NAME"
-ORGS_DIR="$HOME/.config/amp/memory/orgs"
+MIGRATE="${1:-}"
 
-# Legacy path (for migration)
-LEGACY_DIR="$HOME/.config/amp/memory/$SKILL_NAME"
+echo "Gilfoyle Setup"
+echo "=============="
+echo ""
 
-FORCE=false
+# Create directories
+mkdir -p "$CONFIG_DIR"
+mkdir -p "$MEMORY_DIR"
+chmod 700 "$CONFIG_DIR"
 
-for arg in "$@"; do
-  case $arg in
-    --force) FORCE=true ;;
-  esac
+# Initialize memory files if they don't exist
+for kb_file in facts.md patterns.md queries.md incidents.md integrations.md; do
+    if [[ ! -f "$MEMORY_DIR/$kb_file" ]]; then
+        echo "# ${kb_file%.md}" > "$MEMORY_DIR/$kb_file"
+        echo "" >> "$MEMORY_DIR/$kb_file"
+    fi
 done
 
-echo "=== axiom-sre Setup ==="
+echo "Created: $CONFIG_DIR"
+echo "Created: $MEMORY_DIR"
 echo ""
 
-# Check dependencies
-MISSING=""
-command -v jq >/dev/null 2>&1 || MISSING="$MISSING jq"
-command -v curl >/dev/null 2>&1 || MISSING="$MISSING curl"
-
-if [[ -n "$MISSING" ]]; then
-  echo "⚠ Missing required tools:$MISSING"
-  echo ""
-  echo "Install with:"
-  echo "  macOS:  brew install$MISSING"
-  echo "  Ubuntu: sudo apt install$MISSING"
-  echo ""
-  exit 1
-fi
-echo "✓ Dependencies: jq, curl"
-echo ""
-
-# --- Migrate legacy personal memory ---
-if [[ -d "$LEGACY_DIR/kb" && ! -d "$PERSONAL_DIR" ]]; then
-  echo "Migrating legacy memory: $LEGACY_DIR → $PERSONAL_DIR"
-  mkdir -p "$(dirname "$PERSONAL_DIR")"
-  mv "$LEGACY_DIR" "$PERSONAL_DIR"
-  echo "✓ Migration complete"
-  echo ""
-fi
-
-# --- Personal tier ---
-if [[ -d "$PERSONAL_DIR/kb" ]]; then
-  if [[ "$FORCE" == true ]]; then
-    echo "Overwriting personal memory at $PERSONAL_DIR"
-    rm -rf "$PERSONAL_DIR"
-  else
-    echo "✓ Personal memory exists at $PERSONAL_DIR"
-  fi
-fi
-
-if [[ ! -d "$PERSONAL_DIR/kb" ]]; then
-  echo "Creating personal memory at $PERSONAL_DIR"
-  mkdir -p "$PERSONAL_DIR"
-  cp -r "$TEMPLATES_DIR"/* "$PERSONAL_DIR/"
-  echo "✓ Personal memory initialized"
-fi
-
-# --- Orgs directory ---
-mkdir -p "$ORGS_DIR"
-
-echo ""
-echo "=== Setup Complete ==="
-echo ""
-echo "Memory tiers:"
-echo "  Personal: $PERSONAL_DIR"
-echo "  Org:      $ORGS_DIR/<org-name>/$SKILL_NAME"
-echo ""
-echo "Next steps:"
-echo "  1. Add an org: scripts/org-add <name> <git-repo-url>"
-echo "  2. Sync org:   scripts/mem-sync"
-echo ""
-
-# Check for Axiom config
-AXIOM_CONFIG="$HOME/.axiom.toml"
-if [[ -f "$AXIOM_CONFIG" ]]; then
-  echo "✓ Axiom config exists at $AXIOM_CONFIG"
-  echo ""
-  echo "Configured deployments:"
-  grep -E '^\[deployments\.' "$AXIOM_CONFIG" | sed 's/\[deployments\.\(.*\)\]/  - \1/' || true
-else
-  echo "=== Axiom Configuration ==="
-  echo ""
-  echo "To query Axiom, you need to configure ~/.axiom.toml"
-  echo ""
-  echo "You'll need:"
-  echo "  1. org_id:  Settings → Organization (or from URL: app.axiom.co/{org_id}/...)"
-  echo "  2. token:   Settings → Profile → Personal Access Tokens (use a PAT, not API token)"
-  echo ""
-  
-  # Check if we're in an interactive terminal
-  if [[ -t 0 ]]; then
-    read -p "Set up Axiom config now? [y/N] " -n 1 -r
+# Check for existing unified config
+if [[ -f "$CONFIG_FILE" && "$MIGRATE" != "--migrate" ]]; then
+    echo "Config exists: $CONFIG_FILE"
     echo ""
+    echo "Run 'setup --migrate' to merge existing tool configs."
+    exit 0
+fi
+
+# Start building config
+CONFIG_CONTENT=""
+
+# Migrate ~/.axiom.toml
+if [[ -f "$HOME/.axiom.toml" ]]; then
+    echo "Found: ~/.axiom.toml"
     
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-      read -p "Deployment name (e.g., prod, staging, dev): " DEPLOY_NAME
-      DEPLOY_NAME=${DEPLOY_NAME:-prod}
-      
-      read -p "Org ID: " ORG_ID
-      read -p "API Token (xaat-...): " API_TOKEN
-      
-      if [[ -n "$ORG_ID" && -n "$API_TOKEN" ]]; then
-        cat > "$AXIOM_CONFIG" << EOF
-[deployments.${DEPLOY_NAME}]
-url = "https://api.axiom.co"
-token = "${API_TOKEN}"
-org_id = "${ORG_ID}"
-EOF
-        chmod 600 "$AXIOM_CONFIG"
-        echo ""
-        echo "✓ Created $AXIOM_CONFIG"
-        echo ""
-        
-        # Test the connection
-        echo "Testing connection..."
-        if "$SCRIPT_DIR/axiom-api" "$DEPLOY_NAME" GET "/v1/datasets" >/dev/null 2>&1; then
-          echo "✓ Connection successful!"
-          echo ""
-          echo "Try: scripts/axiom-query ${DEPLOY_NAME} \"['axiom-audit'] | take 1\""
-        else
-          echo "⚠ Connection test failed. Check your token and org_id."
-          echo ""
-          echo "Debug with: scripts/axiom-api ${DEPLOY_NAME} GET '/v1/datasets'"
+    # Parse existing axiom config
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^\[deployments\.([^\]]+)\] ]]; then
+            deployment="${BASH_REMATCH[1]}"
+            CONFIG_CONTENT+="
+[axiom.deployments.$deployment]"
+        elif [[ "$line" =~ ^url[[:space:]]*=[[:space:]]*\"?([^\"]+)\"? ]]; then
+            CONFIG_CONTENT+="
+url = \"${BASH_REMATCH[1]}\""
+        elif [[ "$line" =~ ^token[[:space:]]*=[[:space:]]*\"?([^\"]+)\"? ]]; then
+            CONFIG_CONTENT+="
+token = \"${BASH_REMATCH[1]}\""
+        elif [[ "$line" =~ ^org_id[[:space:]]*=[[:space:]]*\"?([^\"]+)\"? ]]; then
+            CONFIG_CONTENT+="
+org_id = \"${BASH_REMATCH[1]}\""
         fi
-      else
-        echo "Skipped - missing org_id or token"
-      fi
-    fi
-  else
-    echo "Create ~/.axiom.toml manually:"
-    echo ""
-    echo '[deployments.prod]'
-    echo 'url = "https://api.axiom.co"'
-    echo 'token = "xaat-your-token-here"'
-    echo 'org_id = "your-org-id"'
-  fi
+    done < "$HOME/.axiom.toml"
+    
+    echo "  → Migrated Axiom deployments"
 fi
+
+# Migrate ~/.grafana.toml
+if [[ -f "$HOME/.grafana.toml" ]]; then
+    echo "Found: ~/.grafana.toml"
+    
+    current_deployment=""
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^\[deployments\.([^\]]+)\] ]]; then
+            current_deployment="${BASH_REMATCH[1]}"
+            CONFIG_CONTENT+="
+
+[grafana.deployments.$current_deployment]"
+        elif [[ -n "$current_deployment" ]]; then
+            if [[ "$line" =~ ^url[[:space:]]*=[[:space:]]*\"?([^\"]+)\"? ]]; then
+                CONFIG_CONTENT+="
+url = \"${BASH_REMATCH[1]}\"
+access_command = \"cloudflared access curl\""
+            fi
+        fi
+    done < "$HOME/.grafana.toml"
+    
+    echo "  → Migrated Grafana deployments (with cloudflared access)"
+fi
+
+# Migrate ~/.pyroscope.toml
+if [[ -f "$HOME/.pyroscope.toml" ]]; then
+    echo "Found: ~/.pyroscope.toml"
+    
+    current_deployment=""
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^\[deployments\.([^\]]+)\] ]]; then
+            current_deployment="${BASH_REMATCH[1]}"
+            CONFIG_CONTENT+="
+
+[pyroscope.deployments.$current_deployment]"
+        elif [[ -n "$current_deployment" ]]; then
+            if [[ "$line" =~ ^url[[:space:]]*=[[:space:]]*\"?([^\"]+)\"? ]]; then
+                CONFIG_CONTENT+="
+url = \"${BASH_REMATCH[1]}\"
+access_command = \"cloudflared access curl\""
+            fi
+        fi
+    done < "$HOME/.pyroscope.toml"
+    
+    echo "  → Migrated Pyroscope deployments (with cloudflared access)"
+fi
+
+# Migrate ~/.slack.conf
+if [[ -f "$HOME/.slack.conf" ]]; then
+    echo "Found: ~/.slack.conf"
+    
+    current_workspace=""
+    while IFS= read -r line; do
+        # Skip comments
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        
+        if [[ "$line" =~ ^\[([^\]]+)\] ]]; then
+            current_workspace="${BASH_REMATCH[1]}"
+            CONFIG_CONTENT+="
+
+[slack.workspaces.$current_workspace]"
+        elif [[ -n "$current_workspace" && "$line" =~ ^[[:space:]]*token[[:space:]]*=[[:space:]]*(.+) ]]; then
+            token=$(echo "${BASH_REMATCH[1]}" | tr -d '"'"'" | xargs)
+            CONFIG_CONTENT+="
+token = \"$token\""
+        fi
+    done < "$HOME/.slack.conf"
+    
+    echo "  → Migrated Slack workspaces"
+fi
+
+# Write config file
+if [[ -n "$CONFIG_CONTENT" ]]; then
+    cat > "$CONFIG_FILE" << 'EOF'
+# Gilfoyle Configuration
+# ======================
+# Unified config for all observability tools.
+#
+# Auth options per deployment:
+#   token          - Bearer token (Grafana Cloud, API keys)
+#   access_command - Custom wrapper (e.g., "cloudflared access curl")
+#   username/password - Basic auth (on-prem)
+
+EOF
+    echo "$CONFIG_CONTENT" >> "$CONFIG_FILE"
+    chmod 600 "$CONFIG_FILE"
+    echo ""
+    echo "Created: $CONFIG_FILE"
+else
+    # Create example config
+    cat > "$CONFIG_FILE" << 'EOF'
+# Gilfoyle Configuration
+# ======================
+# Unified config for all observability tools.
+#
+# Auth options per deployment:
+#   token          - Bearer token (Grafana Cloud, API keys)
+#   access_command - Custom wrapper (e.g., "cloudflared access curl")
+#   username/password - Basic auth (on-prem)
+
+# Example Axiom configuration
+# [axiom.deployments.prod]
+# url = "https://api.axiom.co"
+# token = "xapt-xxx"
+# org_id = "my-org"
+
+# Example Grafana with API token (cloud)
+# [grafana.deployments.cloud]
+# url = "https://myorg.grafana.net"
+# token = "glsa_xxx"
+
+# Example Grafana with cloudflared (internal)
+# [grafana.deployments.internal]
+# url = "https://grafana.internal.example.com"
+# access_command = "cloudflared access curl"
+
+# Example Grafana with basic auth (on-prem)
+# [grafana.deployments.onprem]
+# url = "https://grafana.corp.example.com"
+# username = "admin"
+# password = "secret"
+
+# Example Pyroscope
+# [pyroscope.deployments.prod]
+# url = "https://pyroscope.example.com"
+# token = "xxx"
+
+# Example Slack
+# [slack.workspaces.work]
+# token = "xoxb-xxx"
+EOF
+    chmod 600 "$CONFIG_FILE"
+    echo ""
+    echo "Created example config: $CONFIG_FILE"
+    echo "Edit this file to add your deployments."
+fi
+
+echo ""
+echo "Done. Memory files at: $MEMORY_DIR"

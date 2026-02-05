@@ -63,6 +63,6 @@ Development Axiom organization for testing queries.
 
 - Org: axiom-dev
 - Datasets: test-logs, test-traces
-- Config: ~/.axiom.toml [dev] section
+- Config: ~/.config/axiom-sre/config.toml [axiom.deployments.dev]
 
 -->

@@ -20,9 +20,10 @@
 
 set -euo pipefail
 
-SKILL_NAME="axiom-sre"
-PERSONAL_DIR="$HOME/.config/amp/memory/personal/$SKILL_NAME"
-ORGS_DIR="$HOME/.config/amp/memory/orgs"
+CONFIG_DIR="${SRE_CONFIG_DIR:-$HOME/.config/axiom-sre}"
+MEMORY_DIR="$CONFIG_DIR/memory"
+KB_DIR="$MEMORY_DIR/kb"
+ORGS_DIR="$MEMORY_DIR/orgs"
 
 # Defaults
 ORG=""
@@ -102,21 +103,21 @@ esac
 
 # Determine target directory
 if [[ -n "$ORG" ]]; then
-  TARGET_DIR="$ORGS_DIR/$ORG/$SKILL_NAME"
+  TARGET_DIR="$ORGS_DIR/$ORG"
   if [[ ! -d "$TARGET_DIR/kb" ]]; then
     echo "Error: Org memory not found at $TARGET_DIR"
     echo ""
     echo "Available orgs:"
     for d in "$ORGS_DIR"/*/; do
-      [[ -d "$d/$SKILL_NAME/kb" ]] && echo "  - $(basename "$d")"
+      [[ -d "$d/kb" ]] && echo "  - $(basename "$d")"
     done
     exit 1
   fi
   TIER="org:$ORG"
 else
-  TARGET_DIR="$PERSONAL_DIR"
-  if [[ ! -d "$TARGET_DIR/kb" ]]; then
-    echo "Error: Personal memory not found at $TARGET_DIR"
+  TARGET_DIR="$MEMORY_DIR"
+  if [[ ! -d "$KB_DIR" ]]; then
+    echo "Error: Memory not found at $KB_DIR"
     echo "Run: scripts/setup"
     exit 1
   fi

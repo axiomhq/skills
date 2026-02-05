@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# Gilfoyle Initialization & Discovery Script
+# Usage: ./scripts/init
+#
+# Rule #1: RUN THIS FIRST.
+# Performs discovery on all configured environments to prevent hallucinations.
+# Lists available Axiom datasets, Grafana datasources, Pyroscope apps, and K8s contexts.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Colors for output
+BOLD='\033[1m'
+NC='\033[0m' # No Color
+YELLOW='\033[0;33m'
+
+echo -e "${BOLD}Gilfoyle Environment Discovery${NC}"
+echo "=============================="
+
+# Sync shared memory first (fast, usually)
+"$SCRIPT_DIR/mem-sync"
+echo ""
+
+# Create temp files for output
+TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+echo -e "Scanning environments in parallel..."
+
+TIMEOUT_SECONDS="${SRE_INIT_TIMEOUT:-12}"
+
+if command -v timeout >/dev/null 2>&1; then
+    TIMEOUT_CMD="timeout"
+elif command -v gtimeout >/dev/null 2>&1; then
+    TIMEOUT_CMD="gtimeout"
+else
+    echo "timeout command not found. Install coreutils (gtimeout) or provide timeout in PATH." >&2
+    exit 1
+fi
+
+JOBS=()
+
+start_job() {
+    local name="$1"
+    local out="$2"
+    shift 2
+
+    (
+        "$TIMEOUT_CMD" -k 2s "${TIMEOUT_SECONDS}s" "$@" > "$out" 2>&1
+        status=$?
+        if [[ $status -eq 124 || $status -eq 137 ]]; then
+            echo "timeout" > "$TMP_DIR/${name}.timeout"
+        fi
+        exit $status
+    ) &
+    local pid=$!
+
+    JOBS+=("${name}:${pid}")
+}
+
+wait_jobs() {
+    local job name pid
+    for job in "${JOBS[@]}"; do
+        IFS=: read -r name pid <<< "$job"
+        wait "$pid" || true
+    done
+}
+
+render_output() {
+    local name="$1"
+    local file="$2"
+    local timeout_file="$TMP_DIR/${name}.timeout"
+    if [[ -f "$timeout_file" ]]; then
+        echo -e "${YELLOW}⚠️  ${name} timed out after ${TIMEOUT_SECONDS}s${NC}" >> "$file"
+    fi
+    cat "$file"
+}
+
+# Run discovery in parallel
+start_job "axiom" "$TMP_DIR/axiom" "$SCRIPT_DIR/discover-axiom"
+start_job "grafana" "$TMP_DIR/grafana" "$SCRIPT_DIR/discover-grafana"
+start_job "pyroscope" "$TMP_DIR/pyroscope" "$SCRIPT_DIR/discover-pyroscope"
+start_job "k8s" "$TMP_DIR/k8s" "$SCRIPT_DIR/discover-k8s"
+start_job "alerts" "$TMP_DIR/alerts" "$SCRIPT_DIR/discover-alerts"
+start_job "slack" "$TMP_DIR/slack" "$SCRIPT_DIR/discover-slack"
+
+# Wait for all background jobs
+wait_jobs
+
+# Display results
+render_output "alerts" "$TMP_DIR/alerts"
+echo ""
+render_output "slack" "$TMP_DIR/slack"
+echo ""
+render_output "axiom" "$TMP_DIR/axiom"
+echo ""
+render_output "grafana" "$TMP_DIR/grafana"
+echo ""
+render_output "pyroscope" "$TMP_DIR/pyroscope"
+echo ""
+render_output "k8s" "$TMP_DIR/k8s"
+
+# Check for Memory Bloat (The "Yawn")
+MEMORY_KB="$HOME/.config/axiom-sre/memory/kb"
+if [[ -d "$MEMORY_KB" ]]; then
+    TOTAL_LINES=$(find "$MEMORY_KB" -name "*.md" -type f -exec cat {} + | wc -l | tr -d ' ')
+    if [[ "$TOTAL_LINES" -gt 1000 ]]; then
+        echo ""
+        echo -e "${RED}⚠️  MEMORY BLOAT DETECTED ($TOTAL_LINES lines)${NC}"
+        echo "   Performance degrading. Start a new session to run 'scripts/sleep'."
+    fi
+fi
+
+echo ""
+echo -e "${BOLD}Discovery Complete.${NC}"
+echo "Context loaded. You may now formulate hypotheses based on these actual assets."
