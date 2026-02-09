@@ -58,11 +58,27 @@ Based on what you found:
 | Agent result with tool calls | Tool use | Tool name presence |
 | Streaming text | Streaming | Exact match or contains (auto-concatenated) |
 
-### Step 3: Generate
+### Step 3: Choose scorers
+
+Every eval needs **at least 2 scorers**. Use this layering:
+
+1. **Correctness scorer (required)** — Does the output match expected? Pick from the eval type table above (exact match, set match, field match, etc.).
+2. **Quality scorer (recommended)** — Is the output well-formed? Check confidence thresholds, output length, format validity, or field completeness.
+3. **Reference-free scorer (add for user-facing text)** — Is the output coherent, relevant, non-toxic? Use LLM-as-judge or autoevals.
+
+| Output type | Minimum scorers |
+|-------------|----------------|
+| Category label | Correctness (exact match) + Confidence threshold |
+| Free-form text | Correctness (contains/Levenshtein) + Coherence (LLM-as-judge) |
+| Structured object | Field match + Field completeness |
+| Tool calls | Tool name presence + Argument validation |
+| Retrieval results | Set match + Relevance (LLM-as-judge) |
+
+### Step 4: Generate
 
 1. Create the `.eval.ts` file colocated next to the source file
 2. Import the actual function — do not create a stub
-3. Write the scorer based on the output type
+3. Write the scorers based on the output type (minimum 2, see step 3)
 4. Generate test data (see Data Design Guidelines)
 5. Set capability and step names matching the feature's purpose
 6. If flags exist, use `pickFlags` to scope them
@@ -550,6 +566,7 @@ The CLI uses OAuth credentials first, then falls back to environment variables. 
 | `npx axiom eval --list` | List cases without running |
 | `npx axiom eval -b BASELINE_ID` | Compare against baseline |
 | `npx axiom eval --flag.myCapability.model=gpt-4o-mini` | Override flag |
+| `npx axiom eval --flags-config=experiments/config.json` | Load flag overrides from JSON file |
 
 ---
 
