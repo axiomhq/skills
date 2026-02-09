@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+# eval-results: Query eval results from Axiom
+#
+# Usage: eval-results <deployment> [options]
+#
+# Queries eval spans from Axiom and displays results. Requires the sre skill's
+# axiom-query script and a configured Axiom deployment (~/.config/axiom-sre/config.toml).
+#
+# Arguments:
+#   deployment    Axiom deployment name (e.g., prod, staging)
+#
+# Options:
+#   -c, --capability NAME   Filter by capability name
+#   -s, --step NAME         Filter by step name
+#   -e, --eval NAME         Filter by eval name
+#   -n, --limit N           Max results (default: 20)
+#   -t, --timeframe RANGE   Time range (default: 24h)
+#   --scores                Show per-case scores (queries eval.case spans)
+#   --scorers               Show per-scorer breakdown (queries eval.score spans)
+#   --ndjson                Output as NDJSON for piping to jq
+#   --raw                   Output raw API response
+#
+# Examples:
+#   eval-results prod                                    # Recent evals (last 24h)
+#   eval-results prod -c support-agent                   # Filter by capability
+#   eval-results prod -c support-agent --scores          # Show case-level scores
+#   eval-results prod -e categorize-messages --scorers   # Show scorer breakdown
+#   eval-results prod -t 7d                              # Last 7 days
+#   eval-results prod -c qa -n 50 --ndjson | jq '.score' # Pipe to jq
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Locate axiom-query from the sre skill
+AXIOM_QUERY=""
+for candidate in \
+    "$SCRIPT_DIR/../../sre/scripts/axiom-query" \
+    "$HOME/.config/agents/skills/sre/scripts/axiom-query" \
+    "$HOME/.agents/skills/sre/scripts/axiom-query"; do
+    if [[ -x "$candidate" ]]; then
+        AXIOM_QUERY="$candidate"
+        break
+    fi
+done
+
+if [[ -z "$AXIOM_QUERY" ]]; then
+    echo "Error: axiom-query not found. Install the sre skill first:" >&2
+    echo "  npx skills add axiomhq/skills" >&2
+    exit 1
+fi
+
+usage() {
+    echo "Usage: eval-results <deployment> [options]" >&2
+    echo "" >&2
+    echo "Options:" >&2
+    echo "  -c, --capability NAME   Filter by capability" >&2
+    echo "  -s, --step NAME         Filter by step" >&2
+    echo "  -e, --eval NAME         Filter by eval name" >&2
+    echo "  -n, --limit N           Max results (default: 20)" >&2
+    echo "  -t, --timeframe RANGE   Time range (default: 24h)" >&2
+    echo "  --scores                Show per-case scores" >&2
+    echo "  --scorers               Show per-scorer breakdown" >&2
+    echo "  --ndjson                Output as NDJSON" >&2
+    echo "  --raw                   Output raw API response" >&2
+    exit 1
+}
+
+if [[ $# -lt 1 ]]; then
+    usage
+fi
+
+DEPLOYMENT="$1"
+shift
+
+CAPABILITY=""
+STEP=""
+EVAL_NAME=""
+LIMIT=20
+TIMEFRAME="24h"
+MODE="summary"
+FMT_ARGS=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -c|--capability) CAPABILITY="$2"; shift 2 ;;
+        -s|--step)       STEP="$2"; shift 2 ;;
+        -e|--eval)       EVAL_NAME="$2"; shift 2 ;;
+        -n|--limit)      LIMIT="$2"; shift 2 ;;
+        -t|--timeframe)  TIMEFRAME="$2"; shift 2 ;;
+        --scores)        MODE="scores"; shift ;;
+        --scorers)       MODE="scorers"; shift ;;
+        --ndjson)        FMT_ARGS="--ndjson"; shift ;;
+        --raw)           FMT_ARGS="--raw"; shift ;;
+        *)               echo "Error: Unknown option '$1'" >&2; usage ;;
+    esac
+done
+
+# Build time filter
+case "$TIMEFRAME" in
+    *d) TIME_AGO="${TIMEFRAME}" ;;
+    *h) TIME_AGO="${TIMEFRAME}" ;;
+    *m) TIME_AGO="${TIMEFRAME}" ;;
+    *)  TIME_AGO="${TIMEFRAME}" ;;
+esac
+
+# Build WHERE clauses
+FILTERS=""
+
+if [[ -n "$CAPABILITY" ]]; then
+    FILTERS="$FILTERS | where ['eval.capability.name'] == '$CAPABILITY'"
+fi
+
+if [[ -n "$STEP" ]]; then
+    FILTERS="$FILTERS | where ['eval.step.name'] == '$STEP'"
+fi
+
+if [[ -n "$EVAL_NAME" ]]; then
+    FILTERS="$FILTERS | where ['eval.name'] == '$EVAL_NAME'"
+fi
+
+# Build query based on mode
+case "$MODE" in
+    summary)
+        QUERY="['opentelemetry-spans']
+| where ['gen_ai.operation.name'] == 'eval'
+$FILTERS
+| extend startTime = _time
+| project startTime, ['eval.name'], ['eval.version'], ['eval.capability.name'], ['eval.step.name'], ['eval.collection.size'], ['eval.user.name'], ['eval.baseline.name'], duration
+| sort by startTime desc
+| take $LIMIT"
+        ;;
+
+    scores)
+        QUERY="['opentelemetry-spans']
+| where ['gen_ai.operation.name'] == 'eval.case'
+$FILTERS
+| extend startTime = _time
+| project startTime, ['eval.name'], ['eval.case.index'], ['eval.case.input'], ['eval.case.expected'], ['eval.case.output'], ['eval.case.scores'], ['eval.case.metadata'], ['eval.case.trials']
+| sort by startTime desc
+| take $LIMIT"
+        ;;
+
+    scorers)
+        QUERY="['opentelemetry-spans']
+| where ['gen_ai.operation.name'] == 'eval.score'
+$FILTERS
+| extend startTime = _time
+| project startTime, ['eval.name'], ['eval.score.name'], ['eval.score.value'], ['eval.score.metadata'], ['eval.score.aggregation'], ['eval.trial.index']
+| sort by startTime desc
+| take $LIMIT"
+        ;;
+esac
+
+# Execute query
+"$AXIOM_QUERY" "$DEPLOYMENT" $FMT_ARGS <<< "$QUERY"

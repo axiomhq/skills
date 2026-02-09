@@ -10,6 +10,7 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 | [spl-to-apl](skills/spl-to-apl/)               | Translate Splunk SPL queries to Axiom APL      |
 | [building-dashboards](skills/building-dashboards/) | Design and build Axiom dashboards from intent, templates, or Splunk migrations |
 | [controlling-costs](skills/controlling-costs/) | Analyze query patterns to find unused data and optimize Axiom costs |
+| [writing-evals](skills/writing-evals/) | Scaffold evaluation suites for the Axiom AI SDK |
 
 ## Requirements
 
