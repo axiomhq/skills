@@ -124,11 +124,9 @@ Follow this loop strictly.
 - **Design test to disprove:** What would prove you wrong?
 
 ### D. EXECUTE (Query)
-- **Select method:** Golden Signals (logs), RED (services), USE (infra)
-- **Run tool:**
-  - `scripts/axiom-query` for logs
-  - `scripts/grafana-query` for metrics
-  - `scripts/pyroscope-diff` for profiling
+- **Select methodology:** Golden Signals (customer-facing health), RED (request-driven services), USE (infrastructure resources)
+- **Select telemetry:** Use whatever's available—metrics, logs, traces, profiles
+- **Run query:** `scripts/axiom-query` (logs), `scripts/grafana-query` (metrics), `scripts/pyroscope-diff` (profiles)
 
 ### E. VERIFY & REFLECT
 - **Methodology check:** Service → RED. Resource → USE.
@@ -240,65 +238,75 @@ Use `scripts/mem-write` for each item. If memory bloat is flagged by `scripts/in
 
 ## 8. SRE METHODOLOGY
 
-### A. FOUR GOLDEN SIGNALS (Logs/Axiom)
+### A. FOUR GOLDEN SIGNALS
 
-| Signal | APL Pattern |
-|:-------|:------------|
-| **Latency** | `where _time > ago(1h) \| summarize percentiles(duration_ms, 50, 95, 99) by bin_auto(_time)` |
-| **Traffic** | `where _time > ago(1h) \| summarize count() by bin_auto(_time)` |
-| **Errors** | `where _time > ago(1h) \| where status >= 500 \| summarize count() by bin_auto(_time)` |
-| **Saturation** | Check queue depths, active worker counts if logged |
+Measure customer-facing health. Applies to any telemetry source—metrics, logs, or traces.
 
-**Full Health Check:**
-```bash
-scripts/axiom-query <env> <<< "['dataset'] | where _time > ago(1h) | summarize rate=count(), errors=countif(status>=500), p95_lat=percentile(duration_ms, 95) by bin_auto(_time)"
+| Signal | What to measure | What it tells you |
+|:-------|:----------------|:------------------|
+| **Latency** | Request duration (p50, p95, p99) | User experience degradation |
+| **Traffic** | Request rate over time | Load changes, capacity planning |
+| **Errors** | Error count or rate (5xx, exceptions) | Reliability failures |
+| **Saturation** | Queue depth, active workers, pool usage | How close to capacity |
+
+**Per-signal queries (Axiom):**
+```apl
+// Latency
+['dataset'] | where _time > ago(1h) | summarize percentiles_array(duration_ms, 50, 95, 99) by bin_auto(_time)
+
+// Traffic
+['dataset'] | where _time > ago(1h) | summarize count() by bin_auto(_time)
+
+// Errors
+['dataset'] | where _time > ago(1h) | where status >= 500 | summarize count() by bin_auto(_time)
+
+// All signals combined
+['dataset'] | where _time > ago(1h) | summarize rate=count(), errors=countif(status>=500), p95_lat=percentile(duration_ms, 95) by bin_auto(_time)
+
+// Errors by service and endpoint (find where it hurts)
+['dataset'] | where _time > ago(1h) | where status >= 500 | summarize count() by service, uri | top 20 by count_
 ```
 
-Trace IDs for successful queries:
-```bash
-scripts/axiom-query <env> --trace <<< "['dataset'] | take 1"
+**Grafana (metrics):** See `reference/grafana.md` for PromQL equivalents.
+
+### B. RED METHOD (Services)
+
+For request-driven services. Measures the *work* the service does.
+
+| Signal | What to measure |
+|:-------|:----------------|
+| **Rate** | Request throughput per service |
+| **Errors** | Error rate (5xx / total) |
+| **Duration** | Latency percentiles (p50, p95, p99) |
+
+Measure via logs (APL — see `reference/apl.md`) or metrics (PromQL — see `reference/grafana.md`).
+
+### C. USE METHOD (Resources)
+
+For infrastructure resources (CPU, memory, disk, network). Measures the *capacity* of the resource.
+
+| Signal | What to measure |
+|:-------|:----------------|
+| **Utilization** | CPU, memory, disk usage |
+| **Saturation** | Queue depth, load average, waiting threads |
+| **Errors** | Hardware/network errors |
+
+Typically measured via metrics. See `reference/grafana.md` for PromQL patterns.
+
+### D. DIFFERENTIAL ANALYSIS
+
+Compare a "bad" cohort or time window against a "good" baseline to find what changed. Find dimensions that are statistically over- or under-represented in the problem window.
+
+**Axiom spotlight (quick-start):**
+```apl
+// What distinguishes errors from success?
+['dataset'] | where _time > ago(15m) | summarize spotlight(status >= 500, service, uri, method, ['geo.country'])
+
+// What changed in last 30m vs the 30m before?
+['dataset'] | where _time > ago(1h) | summarize spotlight(_time > ago(30m), service, user_agent, region, status)
 ```
 
-### B. RED METHOD (Services/Grafana)
-
-| Signal | PromQL Pattern |
-|:-------|:---------------|
-| **Rate** | `sum(rate(http_requests_total[5m])) by (service)` |
-| **Errors** | `sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))` |
-| **Duration** | `histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service))` |
-
-### C. USE METHOD (Resources/Grafana)
-
-| Signal | PromQL Pattern |
-|:-------|:---------------|
-| **Utilization** | `1 - (rate(node_cpu_seconds_total{mode="idle"}[5m]))` |
-| **Saturation** | `node_load1` or `node_memory_MemAvailable_bytes` |
-| **Errors** | `rate(node_network_receive_errs_total[5m])` |
-
-### D. DIFFERENTIAL ANALYSIS (Spotlight)
-
-```bash
-# Compare last 30m (bad) to the 30m before that (good)
-scripts/axiom-query <env> <<< "['dataset'] | where _time > ago(1h) | summarize spotlight(_time > ago(30m), service, user_agent, region, status)"
-```
-
-**Parsing Spotlight with jq:**
-```bash
-# Summary: all dimensions with top finding
-scripts/axiom-query <env> "..." --raw | jq '.. | objects | select(.differences?)
-  | {dim: .dimension, effect: .delta_score,
-     top: (.differences | sort_by(-.frequency_ratio) | .[0] | {v: .value[0:60], r: .frequency_ratio, c: .comparison_count})}'
-
-# Top 5 OVER-represented values (ratio=1 means ONLY during problem)
-scripts/axiom-query <env> "..." --raw | jq '.. | objects | select(.differences?)
-  | {dim: .dimension, over: [.differences | sort_by(-.frequency_ratio) | .[:5] | .[]
-     | {v: .value[0:60], r: .frequency_ratio, c: .comparison_count}]}'
-```
-
-**Interpreting Spotlight:**
-- `frequency_ratio > 0`: Value appears MORE during problem (potential cause)
-- `frequency_ratio < 0`: Value appears LESS during problem
-- `effect_size`: How strongly dimension explains difference (higher = more important)
+For jq parsing and interpretation of spotlight output, see `reference/apl.md` → Differential Analysis.
 
 ### E. CODE FORENSICS
 
@@ -310,48 +318,35 @@ scripts/axiom-query <env> "..." --raw | jq '.. | objects | select(.differences?)
 
 ## 9. APL ESSENTIALS
 
-### Time Ranges (CRITICAL)
-```apl
-['logs'] | where _time between (ago(1h) .. now())
-```
+See `reference/apl.md` for full operator, function, and pattern reference.
 
-### Operators
-`where`, `summarize`, `extend`, `project`, `top N by`, `order by`, `take`
+**Critical rules:**
+- **Time filter FIRST**—always `where _time between (ago(1h) .. now())` before other conditions
+- **Use `has_cs` over `contains`**—5-10x faster, case-sensitive
+- **Prefer `_cs` operators**—case-sensitive variants are always faster
+- **Use duration literals**—`where duration > 10s` not manual conversion
+- **Avoid `search`**—scans ALL fields. Last resort only.
+- **Field escaping**—dots need `\\.`: `['kubernetes.node_labels.nodepool\\.axiom\\.co/name']`
 
-### SRE Aggregations
-`spotlight()`, `percentiles_array()`, `topk()`, `histogram()`, `rate()`
-
-### Field Escaping
-- Fields with dots need escaping: `['kubernetes.node_labels.nodepool\\.axiom\\.co/name']`
-- In bash, use `$'...'` with quadruple backslashes
-
-### Performance Tips
-- **Time filter FIRST**—always filter `_time` before other conditions
-- **Sample before filtering**—use `| distinct ['field']` to see variety before building predicates
-- **Use duration literals**—`where duration > 10s` not `extend duration_s = todouble(['duration']) / 1000000000`
-- Most selective filters first—discard most rows early
-- Use `has_cs` over `contains` (5-10x faster, case-sensitive)
-- Prefer `_cs` operators—case-sensitive variants are faster
-- **Avoid `search`**—scans ALL fields, very slow. Last resort only.
-- **Avoid `project *`**—specify only fields you need
-- **Avoid regex when simple filters work**—`has_cs` beats `matches regex`
-- Limit results—use `take 10` for debugging
+**Need more?** Open `reference/apl.md` for operators/functions, `reference/query-patterns.md` for ready-to-use investigation queries.
 
 ---
 
-## 10. AXIOM LINKS
+## 10. EVIDENCE LINKS
 
-**Generate shareable links** for queries:
+Every finding must link to its source — dashboards, queries, error reports, PRs. No naked IDs. Make evidence reproducible and clickable.
+
+**Always include links in:**
+1. **Incident reports**—Every key query supporting a finding
+2. **Postmortems**—All queries that identified root cause
+3. **Shared findings**—Any query the user might want to explore
+4. **Documented patterns**—In `kb/queries.md` and `kb/patterns.md`
+
+**Axiom permalinks:**
 ```bash
 scripts/axiom-link <env> "['logs'] | where status >= 500 | take 100" "1h"
 scripts/axiom-link <env> "['logs'] | summarize count() by service" "24h"
 ```
-
-**Always include links when:**
-1. **Incident reports**—Every key query supporting a finding
-2. **Postmortems**—All queries that identified root cause
-3. **Sharing findings**—Any query the user might explore themselves
-4. **Documenting patterns**—In `kb/queries.md` and `kb/patterns.md`
 
 **Format:**
 ```markdown
@@ -399,27 +394,10 @@ scripts/mem-write queries "high-latency" "['dataset'] | where duration > 5s"
 scripts/slack work chat.postMessage channel=C12345 text="Investigating 500s on API."
 ```
 
-### Sharing Images
+### Formatting Rules
 
-Generate diagrams or visualizations with the `painter` tool, then upload to Slack:
-
-```bash
-# Upload image to channel
-scripts/slack-upload <env> <channel> /path/to/image.png
-
-# With comment in thread
-scripts/slack-upload <env> <channel> ./diagram.png --comment "Architecture diagram" --thread_ts 1234567890.123456
-```
-
-**When to generate images:**
-- Architecture diagrams showing request flow or failure points
-- Timelines visualizing incident progression
-- Charts if APL visualization isn't sufficient
-
-**NEVER use markdown tables** — Slack renders them as broken garbage. Use bullet lists:
-
-• <https://sentry.io/issues/APP-123|APP-123>: `TimeoutError` — 5.2k events
-• <https://sentry.io/issues/APP-456|APP-456>: `ConnectionReset` — 3.1k events
+- **NEVER use markdown tables in Slack** — renders as broken garbage. Use bullet lists.
+- **Generate diagrams** with `painter`, upload with `scripts/slack-upload <env> <channel> ./file.png`
 
 ---
 
@@ -430,11 +408,11 @@ scripts/slack-upload <env> <channel> ./diagram.png --comment "Architecture diagr
 - [ ] Unverified items marked "⚠️ UNVERIFIED"
 - [ ] Hypotheses not presented as conclusions
 
-**Then:**
-1. Create incident summary in `kb/incidents.md`
-2. Promote useful queries to `kb/queries.md`
-3. Add new failure patterns to `kb/patterns.md`
-4. Update `kb/facts.md` with discoveries
+**Then update memory with what you learned:**
+- Incident? → summarize in `kb/incidents.md`
+- Useful queries? → save to `kb/queries.md`
+- New failure pattern? → record in `kb/patterns.md`
+- New facts about the environment? → add to `kb/facts.md`
 
 See `reference/postmortem-template.md` for retrospective format.
 
@@ -453,13 +431,8 @@ See `reference/postmortem-template.md` for retrospective format.
 
 ### Axiom (Logs & Events)
 ```bash
-# Discovery
 scripts/axiom-query <env> <<< "['dataset'] | getschema"
-
-# Basic query
 scripts/axiom-query <env> <<< "['dataset'] | where _time > ago(1h) | project _time, message, level | take 5"
-
-# NDJSON output
 scripts/axiom-query <env> --ndjson <<< "['dataset'] | where _time > ago(1h) | project _time, message | take 1"
 ```
 
@@ -473,44 +446,27 @@ scripts/grafana-query <env> prometheus 'rate(http_requests_total[5m])'
 scripts/pyroscope-diff <env> <app_name> -2h -1h -1h now
 ```
 
-### Slack (Communication & Files)
+### Slack (Communication)
 ```bash
-# Post message
 scripts/slack <env> chat.postMessage channel=C1234 text="Message" thread_ts=1234567890.123456
-
-# Download file from Slack (url_private from thread context)
 scripts/slack-download <env> <url_private> [output_path]
-
-# Upload file/image
 scripts/slack-upload <env> <channel> ./file.png --comment "Description" --thread_ts 1234567890.123456
 ```
 
-### Native CLI Tools
-
-Tools with good CLI support can be used directly. Check `scripts/init` output for configured resources.
-
-```bash
-# Postgres (configured in config.toml, auth via .pgpass)
-psql -h prod-db.internal -U readonly -d orders -c "SELECT ..."
-
-# Kubernetes (configured contexts)
-kubectl --context prod-cluster get pods -n api
-
-# GitHub CLI
-gh pr list --repo org/service
-
-# AWS CLI
-aws --profile prod cloudwatch get-metric-statistics ...
-```
-
-**Rule:** Only use resources listed by `scripts/init`. If it's not in discovery output, ask before assuming access.
+**Native CLI tools** (psql, kubectl, gh, aws) can be used directly for resources listed by `scripts/init`. If it's not in discovery output, ask before assuming access.
 
 ---
 
 ## Reference Files
 
-- `reference/api-capabilities.md`—All 70+ API endpoints
-- `reference/apl-operators.md`—APL operators summary
-- `reference/apl-functions.md`—APL functions summary
+- `reference/apl.md`—APL operators, functions, and spotlight analysis
+- `reference/axiom.md`—Axiom API endpoints (70+)
+- `reference/blocks.md`—Slack Block Kit formatting
 - `reference/failure-modes.md`—Common failure patterns
+- `reference/grafana.md`—Grafana queries and PromQL patterns
 - `reference/memory-system.md`—Full memory documentation
+- `reference/postmortem-template.md`—Incident retrospective template
+- `reference/pyroscope.md`—Continuous profiling with Pyroscope
+- `reference/query-patterns.md`—Ready-to-use APL investigation queries
+- `reference/slack.md`—Slack script usage and operations
+- `reference/slack-api.md`—Slack API method reference
