@@ -9,7 +9,7 @@ Common scoring patterns for Axiom AI evaluations.
 **When:** Output must equal expected exactly.
 
 ```typescript
-import { Scorer } from 'axiom/ai/evals';
+import { Scorer } from 'axiom/ai/evals/scorers';
 
 const ExactMatch = Scorer(
   'exact-match',
@@ -35,7 +35,7 @@ return output.toLowerCase().trim() === expected.toLowerCase().trim();
 **When:** Running multiple trials and need aggregated scores.
 
 ```typescript
-import { Scorer } from 'axiom/ai/evals';
+import { Scorer } from 'axiom/ai/evals/scorers';
 import { Mean } from 'axiom/ai/evals/aggregations';
 
 const ExactMatchMean = Scorer(

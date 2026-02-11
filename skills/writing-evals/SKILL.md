@@ -135,7 +135,8 @@ Standard structure of an eval file:
 
 ```typescript
 import { pickFlags } from '@/app-scope';       // or relative path
-import { Eval, Scorer } from 'axiom/ai/evals';
+import { Eval } from 'axiom/ai/evals';
+import { Scorer } from 'axiom/ai/evals/scorers';
 import { Mean, PassHatK } from 'axiom/ai/evals/aggregations';
 import { myFunction } from './my-function';
 
@@ -226,7 +227,7 @@ npm install autoevals
 ```
 
 ```typescript
-import { Scorer } from 'axiom/ai/evals';
+import { Scorer } from 'axiom/ai/evals/scorers';
 import { Levenshtein, Factuality } from 'autoevals';
 
 const LevenshteinScorer = Scorer(
@@ -257,7 +258,7 @@ Reference-free scorers evaluate output quality without needing an `expected` val
 ```typescript
 import { generateObject } from 'ai';
 import { openai } from '@ai-sdk/openai';
-import { Scorer } from 'axiom/ai/evals';
+import { Scorer } from 'axiom/ai/evals/scorers';
 import { z } from 'zod';
 
 const CoherenceScorer = Scorer(
@@ -366,8 +367,10 @@ Functions are called **once** during eval setup — data is loaded fresh each ru
 
 | Import | What |
 |--------|------|
-| `axiom/ai` | `createAppScope`, `initAxiomAI`, `withSpan`, `onlineEval`, `Scorer`, `createScorer` |
-| `axiom/ai/evals` | `Eval`, `Scorer`, `EvalTask`, `EvalParams` |
+| `axiom/ai` | `createAppScope`, `initAxiomAI`, `withSpan`, `wrapAISDKModel`, `wrapTool`, `axiomAIMiddleware`, `RedactionPolicy` |
+| `axiom/ai/evals` | `Eval`, `EvalTask`, `EvalParams` |
+| `axiom/ai/evals/scorers` | `Scorer` |
+| `axiom/ai/evals/online` | `onlineEval` |
 | `axiom/ai/evals/aggregations` | `Mean`, `Median`, `PassAtK`, `PassHatK`, `AtLeastOneTrialPasses`, `AllTrialsPass` |
 | `axiom/ai/config` | `defineConfig` |
 | `axiom/ai/feedback` | `createFeedbackClient` |
@@ -652,7 +655,8 @@ Always add `metadata: { purpose: '...' }` to each test case for categorization.
 For production scoring (not offline evals):
 
 ```typescript
-import { onlineEval } from 'axiom/ai';
+import { Scorer } from 'axiom/ai/evals/scorers';
+import { onlineEval } from 'axiom/ai/evals/online';
 
 void onlineEval(
   { capability: 'qa', step: 'answer' },

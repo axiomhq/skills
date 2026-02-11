@@ -8,8 +8,10 @@ Exact type signatures for the Axiom AI SDK evaluation APIs.
 
 | Import | Exports |
 |--------|---------|
-| `axiom/ai` | `createAppScope`, `initAxiomAI`, `withSpan`, `onlineEval`, `Scorer`, `createScorer`, `wrapTool`, `axiomAIMiddleware`, `RedactionPolicy` |
-| `axiom/ai/evals` | `Eval`, `Scorer`, `EvalTask`, `EvalParams` |
+| `axiom/ai` | `createAppScope`, `initAxiomAI`, `withSpan`, `wrapAISDKModel`, `wrapTool`, `axiomAIMiddleware`, `RedactionPolicy` |
+| `axiom/ai/evals` | `Eval`, `EvalTask`, `EvalParams` |
+| `axiom/ai/evals/scorers` | `Scorer` |
+| `axiom/ai/evals/online` | `onlineEval` |
 | `axiom/ai/evals/aggregations` | `Mean`, `Median`, `PassAtK`, `PassHatK`, `AtLeastOneTrialPasses`, `AllTrialsPass` |
 | `axiom/ai/config` | `defineConfig` |
 | `axiom/ai/feedback` | `createFeedbackClient` |
@@ -74,12 +76,10 @@ Eval names and capability/step names are validated:
 
 ---
 
-## Scorer / createScorer
-
-`Scorer` is an alias for `createScorer`.
+## Scorer
 
 ```typescript
-function createScorer<TArgs extends Record<string, any>>(
+function Scorer<TArgs extends Record<string, any>>(
   name: string,
   fn: (args: TArgs) => number | boolean | Score | Promise<number | boolean | Score>,
   options?: ScorerOptions,

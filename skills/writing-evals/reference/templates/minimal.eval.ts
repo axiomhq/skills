@@ -1,4 +1,5 @@
-import { Eval, Scorer } from 'axiom/ai/evals';
+import { Eval } from 'axiom/ai/evals';
+import { Scorer } from 'axiom/ai/evals/scorers';
 
 const ExactMatch = Scorer(
   'exact-match',
