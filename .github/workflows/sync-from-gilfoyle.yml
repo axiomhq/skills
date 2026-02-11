@@ -44,8 +44,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Reuse existing branch if PR is already open, otherwise create new
-          git fetch origin "$BRANCH" 2>/dev/null && git checkout "$BRANCH" && git merge --no-edit origin/main || git checkout -b "$BRANCH"
+          # Always start fresh from main — delete stale remote branch if it exists
+          git push origin --delete "$BRANCH" 2>/dev/null || true
+          git checkout -b "$BRANCH"
 
           git add skills/sre/
           git commit -m "sre: sync from gilfoyle@${GILFOYLE_SHA}" || exit 0
