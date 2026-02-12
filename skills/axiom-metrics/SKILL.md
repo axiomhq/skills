@@ -1,11 +1,11 @@
 ---
 name: axiom-metrics
-description: "Queries Axiom MetricsDB using MPL via curl. Discovers available metrics, tags, and tag values. Use when asked to query metrics, explore metric datasets, check metric values, or investigate OTel metrics data."
+description: "Runs metrics queries against Axiom MetricsDB via curl. Discovers available metrics, tags, and tag values. Use when asked to query metrics, explore metric datasets, check metric values, or investigate OTel metrics data."
 ---
 
-# Querying Axiom Metrics (MPL)
+# Querying Axiom Metrics
 
-Query OpenTelemetry metrics stored in Axiom's MetricsDB using MPL, a purpose-built query language.
+Query OpenTelemetry metrics stored in Axiom's MetricsDB.
 
 ## Prerequisites
 
@@ -13,24 +13,24 @@ Query OpenTelemetry metrics stored in Axiom's MetricsDB using MPL, a purpose-bui
 - `$AXIOM_TOKEN` must be set (API token or personal token with query permissions)
 - The target dataset must be of kind `otel-metrics-v1`
 
-## Learning MPL Syntax
+## Learning the metrics query syntax
 
-The query endpoint is self-describing. Before writing any query, fetch the full MPL specification:
+The query endpoint is self-describing. Before writing any query, fetch the full specification:
 
 ```bash
 curl -s -X OPTIONS "$AXIOM_URL/v1/query/_metrics"
 ```
 
-This returns the complete MPL language specification with syntax, operators, and examples. Read it to understand query structure before composing queries.
+This returns the complete metrics query specification with syntax, operators, and examples. Read it to understand query structure before composing queries.
 
 
 ## Endpoints
 
 All endpoints use `$AXIOM_URL` as the base URL. All authenticated endpoints require `Authorization: Bearer $AXIOM_TOKEN`.
 
-### Query (MPL)
+### Query metrics
 
-Execute an MPL query against a metrics dataset.
+Execute a metrics query against a dataset.
 
 ```bash
 curl -s -X POST "$AXIOM_URL/v1/query/_metrics?format=metrics-v1" \
@@ -47,7 +47,7 @@ The request body is JSON with the following fields:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `apl` | Yes | MPL query string. Dataset is extracted from the query itself. |
+| `apl` | Yes | Metrics query string. Dataset is extracted from the query itself. |
 | `startTime` | Yes | RFC3339 timestamp only (e.g., `2025-01-01T00:00:00Z`). Relative expressions like `now-1h` are **not** supported. |
 | `endTime` | Yes | RFC3339 timestamp only (e.g., `2025-01-02T00:00:00Z`). Relative expressions like `now` are **not** supported. |
 
@@ -103,10 +103,10 @@ curl -s -X POST "$AXIOM_URL/v1/query/metrics/info/datasets/DATASET_NAME/metrics"
 
 ## Workflow
 
-1. **Learn the language**: Call `OPTIONS /v1/query/_metrics` to read the MPL spec
+1. **Learn the language**: Call `OPTIONS /v1/query/_metrics` to read the metrics query spec
 2. **Discover metrics**: If possible use the 'find metrics' endpoint otherwise list available metrics in the target dataset via the info endpoints
 3. **Explore tags**: List tags and tag values to understand filtering options
-4. **Write and execute query**: Compose an MPL query and POST it to the query endpoint
+4. **Write and execute query**: Compose a metrics query and POST it to the query endpoint
 5. **Iterate**: Refine filters, aggregations, and groupings based on results
 
 If you are unsure what to query, start by searching for metrics that match a relevant tag value using `POST /v1/query/metrics/info/datasets/DATASET_NAME/metrics` with `{"value": "SEARCH_VALUE"}`. This finds metrics associated with a known value (e.g., a service name or host), giving you a starting point for building queries.

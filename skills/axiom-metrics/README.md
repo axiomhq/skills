@@ -1,10 +1,10 @@
 # Axiom Metrics
 
-A skill for querying Axiom MetricsDB using MPL.
+A skill for running metrics queries against Axiom MetricsDB.
 
 ## Description
 
-Queries OpenTelemetry metrics stored in Axiom's MetricsDB using MPL, a purpose-built query language. Discovers available metrics, tags, and tag values via info endpoints.
+Queries OpenTelemetry metrics stored in Axiom's MetricsDB. Discovers available metrics, tags, and tag values via info endpoints.
 
 ## When to Use
 
