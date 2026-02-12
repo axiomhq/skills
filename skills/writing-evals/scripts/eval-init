@@ -79,10 +79,7 @@ else
 fi
 
 if grep -q '"vitest"' "$PROJECT_DIR/package.json" 2>/dev/null; then
-    info "vitest found in package.json"
-else
-    warn "vitest not found in package.json"
-    echo "       Install it: npm install -D vitest"
+    info "vitest found in package.json (bundled with axiom SDK)"
 fi
 
 if grep -q '"zod"' "$PROJECT_DIR/package.json" 2>/dev/null; then

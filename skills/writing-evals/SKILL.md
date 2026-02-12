@@ -678,7 +678,7 @@ void onlineEval(
 | "Union types not supported" | Using `z.union()` in flagSchema | Use `z.enum()` for string variants |
 | Scorer type error | Mismatched input/output types | Explicitly type scorer args: `({ output, expected }: { output: T; expected: T })` |
 | Eval not discovered | Wrong file extension or glob | Check `include` patterns in axiom.config.ts, file must end in `.eval.ts` |
-| "Failed to load vitest" | vitest not installed | `npm install -D vitest` |
+| "Failed to load vitest" | axiom SDK not installed or corrupted | Reinstall: `npm install axiom` (vitest is bundled) |
 | Baseline comparison empty | Wrong baseline ID | Get ID from Axiom console or previous run output |
 | Eval timing out | Task takes longer than 60s default | Add `timeout: 120_000` to the eval (overrides global `timeoutMs`) |
 

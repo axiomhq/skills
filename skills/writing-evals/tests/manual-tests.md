@@ -18,7 +18,7 @@ Before testing:
 
 2. Have a project with Axiom AI SDK installed:
    ```bash
-   npm install axiom vitest
+   npm install axiom
    ```
 
 ---
@@ -42,13 +42,13 @@ Before testing:
 **Prompt:** "I want to evaluate my message categorization function"
 
 **Expected behavior:**
-- Agent asks about capability name and step
+- Agent asks about capability name (and optionally step)
 - Agent asks about function signature (input/output types)
 - Agent asks about success criteria
 - Agent asks about test data
 
 **Validation:**
-- [ ] Agent identifies capability and step
+- [ ] Agent identifies capability (and optionally step)
 - [ ] Agent asks about function types
 - [ ] Agent proposes scorer pattern
 
