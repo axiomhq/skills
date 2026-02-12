@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# axiom-api: Make authenticated requests to Axiom API
+#
+# Usage: axiom-api <deployment> <method> <path> [json-body]
+#
+# Reads credentials from ~/.axiom.toml (shared with axiom-sre)
+#
+# Examples:
+#   axiom-api prod GET /v1/datasets
+#   axiom-api prod POST /v1/query/_metrics '{"apl":"..."}'
+
+set -euo pipefail
+
+DEPLOYMENT="${1:-}"
+METHOD="${2:-}"
+PATH_="${3:-}"
+BODY="${4:-}"
+
+if [[ -z "$DEPLOYMENT" || -z "$METHOD" || -z "$PATH_" ]]; then
+    echo "Usage: axiom-api <deployment> <method> <path> [json-body]" >&2
+    exit 1
+fi
+
+CONFIG_FILE="$HOME/.axiom.toml"
+if [[ ! -f "$CONFIG_FILE" ]]; then
+    echo "Error: $CONFIG_FILE not found. Run scripts/setup for help." >&2
+    exit 1
+fi
+
+# Parse TOML for deployment config
+extract_value() {
+    local key="$1"
+    awk -v deployment="$DEPLOYMENT" -v key="$key" '
+        /^\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
+        in_deployment && $1 == key { gsub(/[" ]/, "", $3); print $3; exit }
+    ' "$CONFIG_FILE"
+}
+
+URL=$(extract_value "url")
+TOKEN=$(extract_value "token")
+ORG_ID=$(extract_value "org_id")
+
+if [[ -z "$URL" || -z "$TOKEN" || -z "$ORG_ID" ]]; then
+    echo "Error: Could not find deployment '$DEPLOYMENT' in $CONFIG_FILE" >&2
+    echo "" >&2
+    echo "Available deployments:" >&2
+    grep '^\[deployments\.' "$CONFIG_FILE" | sed 's/\[deployments\.\(.*\)\]/  - \1/' >&2
+    exit 1
+fi
+
+CURL_ARGS=(
+    -s
+    -X "$METHOD"
+    -H "Authorization: Bearer $TOKEN"
+    -H "X-Axiom-Org-Id: $ORG_ID"
+    -H "Content-Type: application/json"
+    -H "Accept: application/json"
+)
+
+if [[ -n "$BODY" ]]; then
+    CURL_ARGS+=(-d "$BODY")
+fi
+
+curl "${CURL_ARGS[@]}" "${URL}${PATH_}"
