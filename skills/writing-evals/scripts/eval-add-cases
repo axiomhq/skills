@@ -45,7 +45,7 @@ echo "Total test cases: $TOTAL_CASES"
 echo ""
 
 # --- Extract metadata.purpose values ---
-PURPOSES=$(grep -oE "purpose:\s*['\"]([^'\"]+)['\"]" "$FILE" | sed -E "s/purpose:\s*['\"]([^'\"]+)['\"]$/\1/" | sort)
+PURPOSES=$(grep -oE "purpose:\s*['\"]([^'\"]+)['\"]" "$FILE" 2>/dev/null | sed -E "s/purpose:\s*['\"]([^'\"]+)['\"]$/\1/" | sort || true)
 HAS_METADATA=false
 
 if [[ -n "$PURPOSES" ]]; then
@@ -69,8 +69,8 @@ present=0
 
 for category in $STANDARD_CATEGORIES; do
     # Check if any purpose contains this category as a prefix
-    if echo "$PURPOSES" | grep -q "$category"; then
-        count=$(echo "$PURPOSES" | grep -c "$category")
+    if echo "$PURPOSES" | grep -q "$category" 2>/dev/null; then
+        count=$(echo "$PURPOSES" | grep -c "$category" 2>/dev/null || echo 0)
         printf "  ✓ %-20s %s case(s)\n" "$category" "$count"
         present=$((present + 1))
     else
@@ -106,7 +106,7 @@ if [[ $missing -gt 0 || "$HAS_METADATA" != "true" ]]; then
     echo ""
 fi
 
-if echo "$PURPOSES" | grep -q "adversarial"; then
+if echo "$PURPOSES" | grep -q "adversarial" 2>/dev/null; then
     :
 else
     echo "  Add adversarial cases:"
@@ -115,7 +115,7 @@ else
     echo ""
 fi
 
-if echo "$PURPOSES" | grep -q "boundary"; then
+if echo "$PURPOSES" | grep -q "boundary" 2>/dev/null; then
     :
 else
     echo "  Add boundary cases:"
@@ -125,7 +125,7 @@ else
     echo ""
 fi
 
-if echo "$PURPOSES" | grep -q "negative"; then
+if echo "$PURPOSES" | grep -q "negative" 2>/dev/null; then
     :
 else
     echo "  Add negative cases:"
@@ -133,7 +133,7 @@ else
     echo ""
 fi
 
-if echo "$PURPOSES" | grep -q "distractor"; then
+if echo "$PURPOSES" | grep -q "distractor" 2>/dev/null; then
     :
 else
     echo "  Add distractor cases:"

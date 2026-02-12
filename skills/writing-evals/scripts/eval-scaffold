@@ -78,26 +78,48 @@ if [[ -z "$OUTPUT" ]]; then
 fi
 
 # Convert capability/step to camelCase for pickFlags (e.g., support-agent -> supportAgent)
-CAMEL_CAPABILITY=$(echo "$CAPABILITY" | sed -E 's/-([a-z])/\U\1/g')
+to_camel() {
+    local result=""
+    local capitalize=false
+    local str="$1"
+    for (( i=0; i<${#str}; i++ )); do
+        local ch="${str:$i:1}"
+        if [[ "$ch" == "-" ]]; then
+            capitalize=true
+        elif $capitalize; then
+            result+=$(printf '%s' "$ch" | tr '[:lower:]' '[:upper:]')
+            capitalize=false
+        else
+            result+="$ch"
+        fi
+    done
+    echo "$result"
+}
+
+CAMEL_CAPABILITY=$(to_camel "$CAPABILITY")
 
 if [[ -n "$STEP" ]]; then
-    CAMEL_STEP=$(echo "$STEP" | sed -E 's/-([a-z])/\U\1/g')
+    CAMEL_STEP=$(to_camel "$STEP")
 fi
 
-# Replace placeholders
-sed -e "s/{{capability}}/$CAPABILITY/g" \
-    -e "s/{{step}}/$STEP/g" \
-    -e "s/{{functionName}}/myFunction/g" \
-    -e "s/{{functionImport}}/\.\/my-function/g" \
-    "$TEMPLATE" > "$OUTPUT"
-
-# Replace camelCase pickFlags references
+# Replace placeholders (pickFlags first with camelCase, then global replacements)
 if [[ -n "$STEP" ]]; then
-    sed -i '' -e "s/pickFlags('{{capability}}.{{step}}')/pickFlags('$CAMEL_CAPABILITY.$CAMEL_STEP')/g" "$OUTPUT" 2>/dev/null || \
-    sed -i    -e "s/pickFlags('{{capability}}.{{step}}')/pickFlags('$CAMEL_CAPABILITY.$CAMEL_STEP')/g" "$OUTPUT"
+    sed -e "s/pickFlags('{{capability}}.{{step}}')/pickFlags('$CAMEL_CAPABILITY.$CAMEL_STEP')/g" \
+        -e "s/{{capability}}/$CAPABILITY/g" \
+        -e "s/{{step}}/$STEP/g" \
+        -e "s/{{functionName}}/myFunction/g" \
+        -e "s/{{functionImport}}/\.\/my-function/g" \
+        "$TEMPLATE" > "$OUTPUT"
 else
-    sed -i '' -e "s/pickFlags('{{capability}}')/pickFlags('$CAMEL_CAPABILITY')/g" "$OUTPUT" 2>/dev/null || \
-    sed -i    -e "s/pickFlags('{{capability}}')/pickFlags('$CAMEL_CAPABILITY')/g" "$OUTPUT"
+    sed -e "s/pickFlags('{{capability}}.{{step}}')/pickFlags('$CAMEL_CAPABILITY')/g" \
+        -e "s/pickFlags('{{capability}}')/pickFlags('$CAMEL_CAPABILITY')/g" \
+        -e "s/'{{capability}}-{{step}}'/'$CAPABILITY'/g" \
+        -e "s/{{capability}}/$CAPABILITY/g" \
+        -e "s/step: '{{step}}',/\/\/ step is optional/g" \
+        -e "s/{{step}}//g" \
+        -e "s/{{functionName}}/myFunction/g" \
+        -e "s/{{functionImport}}/\.\/my-function/g" \
+        "$TEMPLATE" > "$OUTPUT"
 fi
 
 echo "Created: $OUTPUT" >&2
