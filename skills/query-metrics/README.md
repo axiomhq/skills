@@ -31,11 +31,14 @@ Create `~/.axiom.toml` with your Axiom deployment(s):
 ```toml
 [deployments.prod]
 url = "https://api.axiom.co"
+metrics_url = "https://us-east-1.aws.edge.axiom.co"
 token = "xaat-your-api-token"
 org_id = "your-org-id"
 ```
 
-Get your org_id from Settings → Organization. For the token, use a **Personal Access Token** (Settings → Profile → Personal Access Tokens) for full query access.
+- **`metrics_url`** - The metrics query API is served from the edge URL, not `api.axiom.co`. Set this to your Axiom edge endpoint. If omitted, scripts fall back to `url`.
+- **`org_id`** - The organization ID. Get it from Settings → Organization.
+- **`token`** - Use an advanced API token with minimal privileges.
 
 **Tip:** Run `scripts/setup` from the `axiom-sre` skill for interactive configuration.
 
@@ -72,7 +75,8 @@ scripts/metrics-query prod \
 | `metrics-spec` | Fetch metrics query specification |
 | `metrics-query` | Execute a metrics query |
 | `metrics-info` | Discover metrics, tags, and values |
-| `axiom-api` | Low-level authenticated API calls |
+| `axiom-api` | Low-level authenticated API calls (uses `url`) |
+| `config` | Sourceable config reader (internal) |
 
 ## Related Skills
 

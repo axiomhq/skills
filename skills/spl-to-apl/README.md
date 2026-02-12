@@ -50,7 +50,8 @@ token = "xaat-your-api-token"
 org_id = "your-org-id"
 ```
 
-Get your org_id from Settings → Organization. For the token, use a **Personal Access Token** (Settings → Profile → Personal Access Tokens) for full query access.
+- **`org_id`** - The organization ID. Get it from Settings → Organization.
+- **`token`** - Use an advanced API token with minimal privileges.
 
 ## Related Skills
 

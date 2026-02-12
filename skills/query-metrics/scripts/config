@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Sourceable config reader for query-metrics
+#
+# Usage: source "$(dirname "${BASH_SOURCE[0]}")/config" <deployment>
+#
+# Reads ~/.axiom.toml and exports:
+#   AXIOM_URL         - Standard API URL (from 'url')
+#   AXIOM_TOKEN       - API token
+#   AXIOM_ORG_ID      - Organization ID
+#   AXIOM_METRICS_URL - Metrics API URL (from 'metrics_url', falls back to 'url')
+#
+# Config example (~/.axiom.toml):
+#   [deployments.prod]
+#   url = "https://api.axiom.co"
+#   metrics_url = "https://us-east-1.aws.edge.axiom.co"
+#   token = "xaat-your-token"
+#   org_id = "your-org-id"
+
+_CONFIG_DEPLOYMENT="${1:-}"
+
+if [[ -z "$_CONFIG_DEPLOYMENT" ]]; then
+    echo "Error: deployment name required" >&2
+    echo "Usage: source config <deployment>" >&2
+    return 1 2>/dev/null || exit 1
+fi
+
+_CONFIG_FILE="$HOME/.axiom.toml"
+if [[ ! -f "$_CONFIG_FILE" ]]; then
+    echo "Error: $_CONFIG_FILE not found. Run scripts/setup for help." >&2
+    return 1 2>/dev/null || exit 1
+fi
+
+_extract_value() {
+    local key="$1"
+    awk -v deployment="$_CONFIG_DEPLOYMENT" -v key="$key" '
+        /^\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
+        in_deployment && $1 == key { gsub(/[" ]/, "", $3); print $3; exit }
+    ' "$_CONFIG_FILE"
+}
+
+AXIOM_URL=$(_extract_value "url")
+AXIOM_TOKEN=$(_extract_value "token")
+AXIOM_ORG_ID=$(_extract_value "org_id")
+AXIOM_METRICS_URL=$(_extract_value "metrics_url")
+
+# Fall back to url if metrics_url is not set
+if [[ -z "$AXIOM_METRICS_URL" ]]; then
+    AXIOM_METRICS_URL="$AXIOM_URL"
+fi
+
+if [[ -z "$AXIOM_URL" || -z "$AXIOM_TOKEN" || -z "$AXIOM_ORG_ID" ]]; then
+    echo "Error: Could not find deployment '$_CONFIG_DEPLOYMENT' in $_CONFIG_FILE" >&2
+    echo "" >&2
+    echo "Available deployments:" >&2
+    grep '^\[deployments\.' "$_CONFIG_FILE" | sed 's/\[deployments\.\(.*\)\]/  - \1/' >&2
+    return 1 2>/dev/null || exit 1
+fi
+
+export AXIOM_URL AXIOM_TOKEN AXIOM_ORG_ID AXIOM_METRICS_URL
+
+# Clean up internal vars
+unset _CONFIG_DEPLOYMENT _CONFIG_FILE
+unset -f _extract_value

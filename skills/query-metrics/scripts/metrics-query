@@ -3,6 +3,7 @@
 #
 # Usage: metrics-query <deployment> <apl> <startTime> <endTime>
 #
+# Uses 'metrics_url' from ~/.axiom.toml (falls back to 'url').
 # Times must be RFC3339 (e.g. 2025-01-01T00:00:00Z). Relative expressions
 # like "now" or "now-1h" are NOT supported.
 #
@@ -27,10 +28,17 @@ if [[ -z "$DEPLOYMENT" || -z "$APL" || -z "$START_TIME" || -z "$END_TIME" ]]; th
     exit 1
 fi
 
+source "$SCRIPT_DIR/config" "$DEPLOYMENT"
+
 BODY=$(jq -n \
     --arg apl "$APL" \
     --arg start "$START_TIME" \
     --arg end "$END_TIME" \
     '{apl: $apl, startTime: $start, endTime: $end}')
 
-"$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" POST "/v1/query/_metrics?format=metrics-v1" "$BODY"
+curl -s -X POST "${AXIOM_METRICS_URL}/v1/query/_metrics?format=metrics-v1" \
+    -H "Authorization: Bearer $AXIOM_TOKEN" \
+    -H "X-Axiom-Org-Id: $AXIOM_ORG_ID" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json" \
+    -d "$BODY"

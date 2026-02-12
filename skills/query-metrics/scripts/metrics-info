@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # metrics-info: Discover metrics, tags, and tag values in a dataset
 #
+# Uses 'metrics_url' from ~/.axiom.toml (falls back to 'url').
+#
 # Usage:
 #   metrics-info <deployment> <dataset> metrics [--start T --end T]
 #   metrics-info <deployment> <dataset> tags    [--start T --end T]
@@ -69,27 +71,47 @@ if [[ -z "$END" ]]; then
     END=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 fi
 
-TIME_PARAMS="start=${START}&end=${END}"
-BASE="/v1/query/metrics/info/datasets/${DATASET}"
-
 if [[ ${#POSITIONAL[@]} -eq 0 ]]; then
     show_usage
 fi
+
+# Load config (gives us AXIOM_METRICS_URL, AXIOM_TOKEN, AXIOM_ORG_ID)
+source "$SCRIPT_DIR/config" "$DEPLOYMENT"
+
+TIME_PARAMS="start=${START}&end=${END}"
+BASE="${AXIOM_METRICS_URL}/v1/query/metrics/info/datasets/${DATASET}"
+
+# Common curl args for all info requests
+_curl_get() {
+    curl -s -H "Authorization: Bearer $AXIOM_TOKEN" \
+         -H "X-Axiom-Org-Id: $AXIOM_ORG_ID" \
+         -H "Accept: application/json" \
+         "$1"
+}
+
+_curl_post() {
+    curl -s -X POST \
+         -H "Authorization: Bearer $AXIOM_TOKEN" \
+         -H "X-Axiom-Org-Id: $AXIOM_ORG_ID" \
+         -H "Content-Type: application/json" \
+         -H "Accept: application/json" \
+         -d "$2" "$1"
+}
 
 case "${POSITIONAL[0]}" in
     metrics)
         if [[ ${#POSITIONAL[@]} -eq 1 ]]; then
             # List metrics
-            "$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET "${BASE}/metrics?${TIME_PARAMS}"
+            _curl_get "${BASE}/metrics?${TIME_PARAMS}"
         elif [[ ${#POSITIONAL[@]} -eq 3 && "${POSITIONAL[2]}" == "tags" ]]; then
             # List tags for a metric
             METRIC="${POSITIONAL[1]}"
-            "$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET "${BASE}/metrics/${METRIC}/tags?${TIME_PARAMS}"
+            _curl_get "${BASE}/metrics/${METRIC}/tags?${TIME_PARAMS}"
         elif [[ ${#POSITIONAL[@]} -eq 5 && "${POSITIONAL[2]}" == "tags" && "${POSITIONAL[4]}" == "values" ]]; then
             # List tag values for a metric+tag
             METRIC="${POSITIONAL[1]}"
             TAG="${POSITIONAL[3]}"
-            "$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET "${BASE}/metrics/${METRIC}/tags/${TAG}/values?${TIME_PARAMS}"
+            _curl_get "${BASE}/metrics/${METRIC}/tags/${TAG}/values?${TIME_PARAMS}"
         else
             show_usage
         fi
@@ -97,11 +119,11 @@ case "${POSITIONAL[0]}" in
     tags)
         if [[ ${#POSITIONAL[@]} -eq 1 ]]; then
             # List tags
-            "$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET "${BASE}/tags?${TIME_PARAMS}"
+            _curl_get "${BASE}/tags?${TIME_PARAMS}"
         elif [[ ${#POSITIONAL[@]} -eq 3 && "${POSITIONAL[2]}" == "values" ]]; then
             # List values for a tag
             TAG="${POSITIONAL[1]}"
-            "$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET "${BASE}/tags/${TAG}/values?${TIME_PARAMS}"
+            _curl_get "${BASE}/tags/${TAG}/values?${TIME_PARAMS}"
         else
             show_usage
         fi
@@ -112,7 +134,7 @@ case "${POSITIONAL[0]}" in
         fi
         VALUE="${POSITIONAL[1]}"
         BODY=$(jq -n --arg v "$VALUE" '{value: $v}')
-        "$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" POST "${BASE}/metrics?${TIME_PARAMS}" "$BODY"
+        _curl_post "${BASE}/metrics?${TIME_PARAMS}" "$BODY"
         ;;
     *)
         show_usage

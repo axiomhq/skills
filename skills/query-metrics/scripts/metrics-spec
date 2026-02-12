@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # metrics-spec: Fetch the metrics query specification from Axiom
 #
+# Uses 'metrics_url' from ~/.axiom.toml (falls back to 'url').
+#
 # Usage: metrics-spec <deployment>
 #
 # Calls OPTIONS /v1/query/_metrics to retrieve the complete metrics query
@@ -20,26 +22,6 @@ if [[ -z "$DEPLOYMENT" ]]; then
     exit 1
 fi
 
-CONFIG_FILE="$HOME/.axiom.toml"
-if [[ ! -f "$CONFIG_FILE" ]]; then
-    echo "Error: $CONFIG_FILE not found. Run scripts/setup for help." >&2
-    exit 1
-fi
+source "$SCRIPT_DIR/config" "$DEPLOYMENT"
 
-# Parse TOML for deployment config
-extract_value() {
-    local key="$1"
-    awk -v deployment="$DEPLOYMENT" -v key="$key" '
-        /^\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
-        in_deployment && $1 == key { gsub(/[" ]/, "", $3); print $3; exit }
-    ' "$CONFIG_FILE"
-}
-
-URL=$(extract_value "url")
-
-if [[ -z "$URL" ]]; then
-    echo "Error: Could not find deployment '$DEPLOYMENT' in $CONFIG_FILE" >&2
-    exit 1
-fi
-
-curl -s -X OPTIONS "${URL}/v1/query/_metrics"
+curl -s -X OPTIONS "${AXIOM_METRICS_URL}/v1/query/_metrics"

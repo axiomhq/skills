@@ -57,6 +57,18 @@ if [[ -f "$AXIOM_CONFIG" ]]; then
     # List deployments
     echo "  Deployments:"
     grep '^\[deployments\.' "$AXIOM_CONFIG" | sed 's/\[deployments\.\(.*\)\]/    - \1/'
+
+    # Check for metrics_url
+    if grep -q 'metrics_url' "$AXIOM_CONFIG" 2>/dev/null; then
+        echo ""
+        echo "  ✓ metrics_url configured"
+    else
+        echo ""
+        echo "  ⚠ No metrics_url found. Metrics scripts will use 'url' as fallback."
+        echo "    The metrics API is served from the edge URL, not api.axiom.co."
+        echo "    Add metrics_url to your deployment config:"
+        echo "      metrics_url = \"https://us-east-1.aws.edge.axiom.co\""
+    fi
 else
     echo "⚠ $AXIOM_CONFIG not found"
     echo ""
@@ -65,10 +77,12 @@ else
     cat << 'EOF'
 [deployments.prod]
 url = "https://api.axiom.co"
+metrics_url = "https://us-east-1.aws.edge.axiom.co"
 token = "xaat-your-token-here"
 org_id = "your-org-id"
 EOF
     echo ""
+    echo "metrics_url is the edge URL where the metrics query API is served."
     echo "Get your org_id from Settings → Organization."
     echo "For the token, use a Personal Access Token (Settings → Profile → Personal Access Tokens)."
 fi
