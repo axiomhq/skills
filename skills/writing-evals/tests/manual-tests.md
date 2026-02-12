@@ -168,7 +168,8 @@ Before testing:
 ### 9.1 eval-validate
 ```bash
 cd skills/writing-evals
-echo 'import { Eval, Scorer } from "axiom/ai/evals";
+echo 'import { Eval } from "axiom/ai/evals";
+import { Scorer } from "axiom/ai/evals/scorers";
 const S = Scorer("s", ({ output }: { output: string }) => true);
 Eval("test", { capability: "test", data: [{ input: "a", expected: "a" }], task: async ({ input }) => input, scorers: [S] });' > /tmp/test.eval.ts
 

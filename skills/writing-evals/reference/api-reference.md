@@ -252,10 +252,18 @@ function onlineEval<TInput, TOutput>(
   options: {
     input?: TInput;
     output: TOutput;
-    scorers: readonly ScorerLike<TInput, unknown, TOutput>[];
-    sampling?: { rate: number };  // 0.0–1.0, default 1.0
+    scorers: readonly OnlineEvalScorerEntry[];
   },
-): Promise<ScorerResult[]>;
+): Promise<Partial<Record<string, ScorerResult>>>;
+
+type OnlineEvalScorerEntry =
+  | Scorer                                          // bare scorer, always runs
+  | { scorer: Scorer; sampling?: ScorerSampling }   // scorer with per-scorer sampling
+  | { name: string; score: Score; metadata?: Record<string, unknown>; error?: string };  // precomputed result
+
+type ScorerSampling =
+  | number                                          // 0.0–1.0 rate
+  | ((args: { input?: TInput; output: TOutput }) => boolean | Promise<boolean>);
 ```
 
 ### ScorerResult

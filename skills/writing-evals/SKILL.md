@@ -662,8 +662,10 @@ void onlineEval(
   { capability: 'qa', step: 'answer' },
   {
     output: response.text,
-    scorers: [formatScorer, qualityScorer],
-    sampling: { rate: 0.1 },  // 10% of traffic
+    scorers: [
+      formatScorer,
+      { scorer: qualityScorer, sampling: 0.1 },  // 10% of traffic
+    ],
   },
 );
 ```
