@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# metrics-query: Execute a metrics query against Axiom MetricsDB
+#
+# Usage: metrics-query <deployment> <apl> <startTime> <endTime>
+#
+# Times must be RFC3339 (e.g. 2025-01-01T00:00:00Z). Relative expressions
+# like "now" or "now-1h" are NOT supported.
+#
+# Examples:
+#   metrics-query prod 'otel-metrics:http.server.duration | align to 5m using avg' \
+#     '2025-06-01T00:00:00Z' '2025-06-02T00:00:00Z'
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+DEPLOYMENT="${1:-}"
+APL="${2:-}"
+START_TIME="${3:-}"
+END_TIME="${4:-}"
+
+if [[ -z "$DEPLOYMENT" || -z "$APL" || -z "$START_TIME" || -z "$END_TIME" ]]; then
+    echo "Usage: metrics-query <deployment> <apl> <startTime> <endTime>" >&2
+    echo "" >&2
+    echo "Times must be RFC3339 (e.g. 2025-01-01T00:00:00Z)." >&2
+    echo "Relative expressions like 'now' or 'now-1h' are NOT supported." >&2
+    exit 1
+fi
+
+BODY=$(jq -n \
+    --arg apl "$APL" \
+    --arg start "$START_TIME" \
+    --arg end "$END_TIME" \
+    '{apl: $apl, startTime: $start, endTime: $end}')
+
+"$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" POST "/v1/query/_metrics?format=metrics-v1" "$BODY"
