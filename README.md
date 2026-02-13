@@ -39,18 +39,20 @@ Most skills require access to Axiom. Create `~/.axiom.toml` with your deployment
 ```toml
 [deployments.prod]
 url = "https://api.axiom.co"
-token = "xaat-your-api-token"
-org_id = "your-org-id"
+token = "API_TOKEN"
+org_id = "ORG_ID"
+edge_url = "AXIOM_DOMAIN"
 
 [deployments.staging]
 url = "https://api.axiom.co"
-token = "xaat-your-staging-token"
-org_id = "your-staging-org-id"
+token = "API_TOKEN"
+org_id = "ORG_ID"
+edge_url = "AXIOM_DOMAIN"
 ```
 
-**To get these values:**
-1. **org_id**: Settings → Organization → Copy the org ID (or from URL: `app.axiom.co/{org_id}/...`)
-2. **token**: Settings → Profile → Personal Access Tokens → Create token (use a Personal Access Token, not an API token, for full query access)
+- **`ORG_ID`** - The organization ID. Get it from Settings → Organization.
+- **`API_TOKEN`** - Use an advanced API token with minimal privileges.
+- **`AXIOM_DOMAIN`** - The edge domain of your Axiom deployment.
 
 The deployment name (e.g., `prod`, `staging`) is passed to scripts: `scripts/axiom-query prod "..."`
 

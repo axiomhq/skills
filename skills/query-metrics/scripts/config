@@ -7,12 +7,12 @@
 #   AXIOM_URL         - Standard API URL (from 'url')
 #   AXIOM_TOKEN       - API token
 #   AXIOM_ORG_ID      - Organization ID
-#   AXIOM_METRICS_URL - Metrics API URL (from 'metrics_url', falls back to 'url')
+#   AXIOM_EDGE_URL    - Edge API URL (from 'edge_url', falls back to 'url')
 #
 # Config example (~/.axiom.toml):
 #   [deployments.prod]
 #   url = "https://api.axiom.co"
-#   metrics_url = "https://us-east-1.aws.edge.axiom.co"
+#   edge_url = "https://us-east-1.aws.edge.axiom.co"
 #   token = "xaat-your-token"
 #   org_id = "your-org-id"
 
@@ -41,11 +41,11 @@ _extract_value() {
 AXIOM_URL=$(_extract_value "url")
 AXIOM_TOKEN=$(_extract_value "token")
 AXIOM_ORG_ID=$(_extract_value "org_id")
-AXIOM_METRICS_URL=$(_extract_value "metrics_url")
+AXIOM_EDGE_URL=$(_extract_value "edge_url")
 
-# Fall back to url if metrics_url is not set
-if [[ -z "$AXIOM_METRICS_URL" ]]; then
-    AXIOM_METRICS_URL="$AXIOM_URL"
+# Fall back to url if edge_url is not set
+if [[ -z "$AXIOM_EDGE_URL" ]]; then
+    AXIOM_EDGE_URL="$AXIOM_URL"
 fi
 
 if [[ -z "$AXIOM_URL" || -z "$AXIOM_TOKEN" || -z "$AXIOM_ORG_ID" ]]; then
@@ -56,7 +56,7 @@ if [[ -z "$AXIOM_URL" || -z "$AXIOM_TOKEN" || -z "$AXIOM_ORG_ID" ]]; then
     return 1 2>/dev/null || exit 1
 fi
 
-export AXIOM_URL AXIOM_TOKEN AXIOM_ORG_ID AXIOM_METRICS_URL
+export AXIOM_URL AXIOM_TOKEN AXIOM_ORG_ID AXIOM_EDGE_URL
 
 # Clean up internal vars
 unset _CONFIG_DEPLOYMENT _CONFIG_FILE

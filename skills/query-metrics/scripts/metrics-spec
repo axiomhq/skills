@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # metrics-spec: Fetch the metrics query specification from Axiom
 #
-# Uses 'metrics_url' from ~/.axiom.toml (falls back to 'url').
+# Uses 'edge_url' from ~/.axiom.toml (falls back to 'url').
 #
 # Usage: metrics-spec <deployment>
 #
@@ -24,4 +24,4 @@ fi
 
 source "$SCRIPT_DIR/config" "$DEPLOYMENT"
 
-curl -s -X OPTIONS "${AXIOM_METRICS_URL}/v1/query/_metrics"
+curl -s -X OPTIONS "${AXIOM_EDGE_URL}/v1/query/_metrics"

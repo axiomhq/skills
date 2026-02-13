@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # metrics-info: Discover metrics, tags, and tag values in a dataset
 #
-# Uses 'metrics_url' from ~/.axiom.toml (falls back to 'url').
+# Uses 'edge_url' from ~/.axiom.toml (falls back to 'url').
 #
 # Usage:
 #   metrics-info <deployment> <dataset> metrics [--start T --end T]
@@ -75,11 +75,11 @@ if [[ ${#POSITIONAL[@]} -eq 0 ]]; then
     show_usage
 fi
 
-# Load config (gives us AXIOM_METRICS_URL, AXIOM_TOKEN, AXIOM_ORG_ID)
+# Load config (gives us AXIOM_EDGE_URL, AXIOM_TOKEN, AXIOM_ORG_ID)
 source "$SCRIPT_DIR/config" "$DEPLOYMENT"
 
 TIME_PARAMS="start=${START}&end=${END}"
-BASE="${AXIOM_METRICS_URL}/v1/query/metrics/info/datasets/${DATASET}"
+BASE="${AXIOM_EDGE_URL}/v1/query/metrics/info/datasets/${DATASET}"
 
 # Common curl args for all info requests
 _curl_get() {

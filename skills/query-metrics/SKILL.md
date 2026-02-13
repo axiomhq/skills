@@ -17,12 +17,12 @@ Config in `~/.axiom.toml` (shared with axiom-sre):
 ```toml
 [deployments.prod]
 url = "https://api.axiom.co"
-metrics_url = "https://us-east-1.aws.edge.axiom.co"
+edge_url = "https://us-east-1.aws.edge.axiom.co"
 token = "xaat-your-token"
 org_id = "your-org-id"
 ```
 
-**`metrics_url` is required.** The metrics query API (`/v1/query/_metrics` and `/v1/query/metrics/info/...`) is served from the edge URL, not `api.axiom.co`. If `metrics_url` is omitted, scripts fall back to `url`, which will return 404 for metrics endpoints on `api.axiom.co`.
+**`edge_url` is required.** The metrics query API (`/v1/query/_metrics` and `/v1/query/metrics/info/...`) is served from the edge URL, not `api.axiom.co`. If `edge_url` is omitted, scripts fall back to `url`, which will return 404 for metrics endpoints on `api.axiom.co`.
 
 The target dataset must be of kind `otel-metrics-v1`.
 
@@ -160,7 +160,7 @@ On a **500 error**, re-run the failing script call with `curl -v` flags to captu
 | `scripts/metrics-spec <deploy>` | Fetch metrics query specification |
 | `scripts/metrics-query <deploy> <apl> <start> <end>` | Execute a metrics query |
 | `scripts/metrics-info <deploy> <dataset> ...` | Discover metrics, tags, and values |
-| `scripts/axiom-api <deploy> <method> <path> [body]` | Low-level API calls (uses `url`, not `metrics_url`) |
+| `scripts/axiom-api <deploy> <method> <path> [body]` | Low-level API calls (uses `url`, not `edge_url`) |
 | `scripts/config` | Sourceable config reader (used internally by other scripts) |
 
 Run any script without arguments to see full usage.

@@ -4,7 +4,7 @@
 # Usage: axiom-api <deployment> <method> <path> [json-body]
 #
 # Reads credentials from ~/.axiom.toml via scripts/config.
-# Uses the standard 'url' field (not metrics_url).
+# Uses the standard 'url' field (not edge_url).
 #
 # Examples:
 #   axiom-api prod GET /v1/datasets
