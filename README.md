@@ -46,11 +46,11 @@ edge_url = "AXIOM_DOMAIN"
 [deployments.staging]
 url = "https://api.axiom.co"
 token = "API_TOKEN"
-org_id = "ORG_ID"
+org_id = "ORGANIZATION_ID"
 edge_url = "AXIOM_DOMAIN"
 ```
 
-- **`ORG_ID`** - The organization ID. Get it from Settings → Organization.
+- **`ORGANIZATION_ID`** - The organization ID. Get it from Settings → Organization.
 - **`API_TOKEN`** - Use an advanced API token with minimal privileges.
 - **`AXIOM_DOMAIN`** - The edge domain of your Axiom deployment.
 
