@@ -102,6 +102,28 @@ For `['Ingest GB'] = round(sum(['properties.hourly_ingest_bytes']) / 1e9, 1)`:
 
 **Note:** The `field` value is the source field name without brackets or the `properties.` prefix path as written in the query.
 
+### View Mode (timeSeriesView)
+
+Controls what the TimeSeries panel displays. Set in `query.queryOptions.timeSeriesView`.
+
+| Value | Description |
+|-------|-------------|
+| `charts` | Chart only (default) |
+| `resultsTable` | Summary totals table only |
+| `charts\|resultsTable` | Chart with totals table below — shows both the time series and an aggregated summary |
+
+```json
+{
+  "type": "TimeSeries",
+  "query": {
+    "apl": "['logs'] | summarize count() by bin_auto(_time), service",
+    "queryOptions": {
+      "timeSeriesView": "charts|resultsTable"
+    }
+  }
+}
+```
+
 ### Per-Series Options (inside aggChartOpts)
 
 | Option | Values | Description |
