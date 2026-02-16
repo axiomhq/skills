@@ -50,7 +50,7 @@ list_tools() {
         echo "Config file not found: $CONFIG_FILE" >&2
         exit 1
     fi
-    grep -E '^\s*\[' "$CONFIG_FILE" | sed 's/^[[:space:]]*//' | sed 's/\[//' | sed 's/\..*//' | sort -u
+    grep -E '^\[' "$CONFIG_FILE" | sed 's/\[//' | sed 's/\..*//' | sort -u
 }
 
 # List deployments for a tool
@@ -63,13 +63,12 @@ list_deployments() {
     
     local section_pattern
     if [[ "$tool" == "slack" ]]; then
-        section_pattern="^\s*\[slack\.workspaces\."
+        section_pattern="^\[slack\.workspaces\."
     else
-        section_pattern="^\s*\[${tool}\.deployments\."
+        section_pattern="^\[${tool}\.deployments\."
     fi
     
     grep -E "$section_pattern" "$CONFIG_FILE" 2>/dev/null | \
-        sed 's/^[[:space:]]*//' | \
         sed "s/^\[${tool}\.deployments\.//" | \
         sed "s/^\[${tool}\.workspaces\.//" | \
         sed 's/\]$//' || echo "(none configured)"
@@ -81,19 +80,15 @@ extract_value() {
     local key="$2"
     
     awk -v section="$section" -v key="$key" '
-        /\[/ {
-            line = $0
-            gsub(/^[[:space:]]+/, "", line)
-            in_section = (line == "[" section "]")
+        /^\[/ { 
+            in_section = ($0 == "[" section "]")
         }
-        in_section {
-            gsub(/^[[:space:]]+/, "")
-            if ($1 == key) {
-                sub(/^[^=]*=[[:space:]]*/, "")
-                gsub(/^"|"$/, "")
-                print
-                exit
-            }
+        in_section && $1 == key { 
+            # Handle key = "value" or key = value
+            sub(/^[^=]*=[[:space:]]*/, "")
+            gsub(/^"|"$/, "")
+            print
+            exit 
         }
     ' "$CONFIG_FILE"
 }
