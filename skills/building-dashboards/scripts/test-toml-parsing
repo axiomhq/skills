@@ -30,13 +30,16 @@ assert_eq() {
 run_extract_value() {
     local config_file="$1" deployment="$2" key="$3"
     awk -v deployment="$deployment" -v key="$key" '
-        /\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
+        /^[[:space:]]*\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
         in_deployment {
             gsub(/^[[:space:]]+/, "")
             if ($1 == key) {
                 sub(/^[^=]*=[[:space:]]*/, "")
-                sub(/[[:space:]]*#.*$/, "")
-                gsub(/^"|"$/, "")
+                if (match($0, /^"[^"]*"/)) {
+                    $0 = substr($0, RSTART+1, RLENGTH-2)
+                } else {
+                    sub(/[[:space:]]*#.*$/, "")
+                }
                 print
                 exit
             }
@@ -142,6 +145,23 @@ token = "xaat-prod-token" # keep secret
 org_id = "org-prod-123"
 EOF
 
+
+# Fixture: values with hash inside quotes
+cat > "$TMPDIR_TEST/hash_in_value.toml" << 'EOF'
+[deployments.prod]
+url = "https://example.com/path#fragment"
+token = "xaat-prod-token"
+org_id = "org-prod-123"
+EOF
+
+# Fixture: values with brackets in values (e.g. IPv6)
+cat > "$TMPDIR_TEST/brackets.toml" << 'EOF'
+[deployments.prod]
+url = "http://[::1]:3000"
+token = "xaat-prod-token"
+org_id = "org-prod-123"
+EOF
+
 # Fixture: empty (no deployments)
 cat > "$TMPDIR_TEST/empty.toml" << 'EOF'
 # No deployments configured
@@ -189,6 +209,18 @@ echo "=== extract_value: inline comments ==="
 assert_eq "url with comment"    "https://api.axiom.co"  "$(run_extract_value "$TMPDIR_TEST/comments.toml" prod url)"
 assert_eq "token with comment"  "xaat-prod-token"       "$(run_extract_value "$TMPDIR_TEST/comments.toml" prod token)"
 assert_eq "org_id no comment"   "org-prod-123"          "$(run_extract_value "$TMPDIR_TEST/comments.toml" prod org_id)"
+
+
+echo ""
+echo "=== extract_value: hash inside quoted value ==="
+assert_eq "url with hash fragment"  "https://example.com/path#fragment"  "$(run_extract_value "$TMPDIR_TEST/hash_in_value.toml" prod url)"
+assert_eq "token after hash url"    "xaat-prod-token"                    "$(run_extract_value "$TMPDIR_TEST/hash_in_value.toml" prod token)"
+
+echo ""
+echo "=== extract_value: brackets inside value ==="
+assert_eq "ipv6 url"             "http://[::1]:3000"  "$(run_extract_value "$TMPDIR_TEST/brackets.toml" prod url)"
+assert_eq "token after bracket"  "xaat-prod-token"    "$(run_extract_value "$TMPDIR_TEST/brackets.toml" prod token)"
+assert_eq "org_id after bracket" "org-prod-123"       "$(run_extract_value "$TMPDIR_TEST/brackets.toml" prod org_id)"
 
 echo ""
 echo "=== extract_value: missing deployment ==="
