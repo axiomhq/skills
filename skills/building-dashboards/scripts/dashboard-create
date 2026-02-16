@@ -27,8 +27,18 @@ if [[ ! -f "$JSON_FILE" ]]; then
     exit 1
 fi
 
-# Read and strip server-managed fields
-BODY=$(jq 'del(.id, .version, .createdAt, .updatedAt, .createdBy, .updatedBy)' "$JSON_FILE")
+# Read, strip server-managed fields, and normalize layout for react-grid-layout
+BODY=$(jq '
+  del(.id, .version, .createdAt, .updatedAt, .createdBy, .updatedBy) |
+
+  # Normalize layout entries (required by react-grid-layout in the console)
+  .layout = [.layout[] |
+    .minH = (.minH // (if .h <= 2 then .h else 2 end)) |
+    .minW = (.minW // 2) |
+    .moved = (.moved // false) |
+    .static = (.static // false)
+  ]
+' "$JSON_FILE")
 
 # Validate required fields
 for field in name owner; do
