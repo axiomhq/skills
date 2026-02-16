@@ -35,6 +35,7 @@ run_extract_value() {
             gsub(/^[[:space:]]+/, "")
             if ($1 == key) {
                 sub(/^[^=]*=[[:space:]]*/, "")
+                sub(/[[:space:]]*#.*$/, "")
                 gsub(/^"|"$/, "")
                 print
                 exit
@@ -133,6 +134,14 @@ token =    "xaat-prod-token"
 org_id =  "org-prod-123"
 EOF
 
+# Fixture: inline comments
+cat > "$TMPDIR_TEST/comments.toml" << 'EOF'
+[deployments.prod]
+url = "https://api.axiom.co" # production API
+token = "xaat-prod-token" # keep secret
+org_id = "org-prod-123"
+EOF
+
 # Fixture: empty (no deployments)
 cat > "$TMPDIR_TEST/empty.toml" << 'EOF'
 # No deployments configured
@@ -174,6 +183,12 @@ echo "=== extract_value: extra spacing ==="
 assert_eq "url with spacing"     "https://api.axiom.co"  "$(run_extract_value "$TMPDIR_TEST/spacing.toml" prod url)"
 assert_eq "token with spacing"   "xaat-prod-token"       "$(run_extract_value "$TMPDIR_TEST/spacing.toml" prod token)"
 assert_eq "org_id no space before ="  "org-prod-123"     "$(run_extract_value "$TMPDIR_TEST/spacing.toml" prod org_id)"
+
+echo ""
+echo "=== extract_value: inline comments ==="
+assert_eq "url with comment"    "https://api.axiom.co"  "$(run_extract_value "$TMPDIR_TEST/comments.toml" prod url)"
+assert_eq "token with comment"  "xaat-prod-token"       "$(run_extract_value "$TMPDIR_TEST/comments.toml" prod token)"
+assert_eq "org_id no comment"   "org-prod-123"          "$(run_extract_value "$TMPDIR_TEST/comments.toml" prod org_id)"
 
 echo ""
 echo "=== extract_value: missing deployment ==="

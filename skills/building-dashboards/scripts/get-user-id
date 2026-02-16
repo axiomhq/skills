@@ -35,6 +35,7 @@ extract_value() {
             gsub(/^[[:space:]]+/, "")
             if ($1 == key) {
                 sub(/^[^=]*=[[:space:]]*/, "")
+                sub(/[[:space:]]*#.*$/, "")
                 gsub(/^"|"$/, "")
                 print
                 exit
