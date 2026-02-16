@@ -42,6 +42,17 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         run: _gilfoyle/scripts/test-build skills/sre
 
+      - name: Verify no extra files from repo root
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          # Ensure no .meta, site, or other non-skill files leaked
+          for dir in .meta site .github; do
+            if [[ -d "skills/sre/$dir" ]]; then
+              echo "ERROR: $dir should not be in synced output"
+              exit 1
+            fi
+          done
+
       - name: Commit and push
         if: steps.check.outputs.skip != 'true'
         run: |
