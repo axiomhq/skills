@@ -2,12 +2,11 @@ name: Sync SRE from Gilfoyle
 
 on:
   schedule:
-    - cron: '0 8 * * *' # Daily at 8am UTC
+    - cron: '*/15 * * * *' # Every 15 minutes
   workflow_dispatch:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   sync:
@@ -22,45 +21,37 @@ jobs:
           repository: axiomhq/gilfoyle
           path: _gilfoyle
 
+      - name: Check for new commits
+        id: check
+        run: |
+          GILFOYLE_SHA=$(git -C _gilfoyle rev-parse HEAD)
+          LAST_SYNCED=$(git log -1 --format=%s -- skills/sre/ | grep -oP '(?<=gilfoyle@)[a-f0-9]+' || echo "")
+          if [[ "${GILFOYLE_SHA:0:7}" == "$LAST_SYNCED" ]]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Already synced to gilfoyle@${GILFOYLE_SHA:0:7}"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "New commits: last synced $LAST_SYNCED, gilfoyle at ${GILFOYLE_SHA:0:7}"
+          fi
+
       - name: Run sync
+        if: steps.check.outputs.skip != 'true'
         run: _gilfoyle/scripts/sync-to-skills skills/sre
 
       - name: Run tests
+        if: steps.check.outputs.skip != 'true'
         run: _gilfoyle/scripts/test-build skills/sre
 
-      - name: Check for changes
-        id: changes
-        run: |
-          git diff --quiet skills/sre/ && echo "changed=false" >> $GITHUB_OUTPUT || echo "changed=true" >> $GITHUB_OUTPUT
-
-      - name: Create or update PR
-        if: steps.changes.outputs.changed == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Commit and push
+        if: steps.check.outputs.skip != 'true'
         run: |
           GILFOYLE_SHA=$(git -C _gilfoyle rev-parse --short HEAD)
-          BRANCH="sync/gilfoyle"
-
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Always start fresh from main — delete stale remote branch if it exists
-          git push origin --delete "$BRANCH" 2>/dev/null || true
-          git checkout -b "$BRANCH"
-
           git add skills/sre/
-          git commit -m "sre: sync from gilfoyle@${GILFOYLE_SHA}" || exit 0
-          git push -f origin "$BRANCH"
-
-          # Create PR if one doesn't exist
-          if ! gh pr list --head "$BRANCH" --state open --json number -q '.[0].number' | grep -q .; then
-            gh pr create \
-              --title "sre: sync from gilfoyle" \
-              --body "Automated sync from [axiomhq/gilfoyle@\`${GILFOYLE_SHA}\`](https://github.com/axiomhq/gilfoyle/commit/$(git -C _gilfoyle rev-parse HEAD)).
-
-          This PR is kept up to date automatically. Merge when ready." \
-              --base main
-          fi
+          git diff --cached --quiet && exit 0
+          git commit -m "sre: sync from gilfoyle@${GILFOYLE_SHA}"
+          git push
 
       - name: Clean up
         if: always()
