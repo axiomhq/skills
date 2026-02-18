@@ -114,6 +114,12 @@ if [[ "$schema_version" != "2" ]]; then
     warn "schemaVersion is $schema_version, expected 2"
 fi
 
+# 9. Check layout entries have minH/minW
+missing_min=$(jq -r '.layout[] | select(.minH == null or .minW == null) | .i' "$FILE" 2>/dev/null || true)
+if [[ -n "$missing_min" ]]; then
+    info "$(echo "$missing_min" | wc -l | tr -d ' ') layout entries missing minH/minW (will be auto-fixed on deploy)"
+fi
+
 # Summary
 echo ""
 echo "Validation complete: $errors errors, $warnings warnings"

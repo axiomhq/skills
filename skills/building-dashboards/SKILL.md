@@ -94,6 +94,12 @@ Raw events that answer "what exactly happened?"
 
 ---
 
+## Layout Auto-Normalization
+
+The console uses `react-grid-layout` which requires `minH`, `minW`, `moved`, and `static` on every layout entry. The `dashboard-create` and `dashboard-update` scripts auto-fill these if omitted, so layout entries only need `i`, `x`, `y`, `w`, `h`.
+
+---
+
 ## Chart Types
 
 **Note:** Dashboard queries inherit time from the UI picker—no explicit `_time` filter needed.
