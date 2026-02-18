@@ -28,16 +28,10 @@ if [[ ! -f "$JSON_FILE" ]]; then
 fi
 
 # Read, strip server-managed fields, and normalize layout for react-grid-layout
-BODY=$(jq '
+BODY=$(jq -L "$SCRIPT_DIR" '
+  include "dashboard-normalize";
   del(.id, .version, .createdAt, .updatedAt, .createdBy, .updatedBy) |
-
-  # Normalize layout entries (required by react-grid-layout in the console)
-  .layout = [.layout[] |
-    .minH = (.minH // (if .h <= 2 then .h else 2 end)) |
-    .minW = (.minW // 2) |
-    .moved = (.moved // false) |
-    .static = (.static // false)
-  ]
+  normalize_dashboard_layout
 ' "$JSON_FILE")
 
 # Validate required fields
