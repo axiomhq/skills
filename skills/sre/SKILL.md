@@ -311,31 +311,14 @@ Measure customer-facing health. Applies to any telemetry source—metrics, logs,
 
 **Grafana (metrics):** See `reference/grafana.md` for PromQL equivalents.
 
-### B. RED METHOD (Services)
+### B. RED (Services) & USE (Resources)
 
-For request-driven services. Measures the *work* the service does.
+- **RED** (request-driven): Rate, Errors, Duration — measures the *work* a service does.
+- **USE** (infrastructure): Utilization, Saturation, Errors — measures *capacity* of CPU/memory/disk/network.
 
-| Signal | What to measure |
-|:-------|:----------------|
-| **Rate** | Request throughput per service |
-| **Errors** | Error rate (5xx / total) |
-| **Duration** | Latency percentiles (p50, p95, p99) |
+Measure via APL (`reference/apl.md`) or PromQL (`reference/grafana.md`).
 
-Measure via logs (APL — see `reference/apl.md`) or metrics (PromQL — see `reference/grafana.md`).
-
-### C. USE METHOD (Resources)
-
-For infrastructure resources (CPU, memory, disk, network). Measures the *capacity* of the resource.
-
-| Signal | What to measure |
-|:-------|:----------------|
-| **Utilization** | CPU, memory, disk usage |
-| **Saturation** | Queue depth, load average, waiting threads |
-| **Errors** | Hardware/network errors |
-
-Typically measured via metrics. See `reference/grafana.md` for PromQL patterns.
-
-### D. DIFFERENTIAL ANALYSIS
+### C. DIFFERENTIAL ANALYSIS
 
 Compare a "bad" cohort or time window against a "good" baseline to find what changed. Find dimensions that are statistically over- or under-represented in the problem window.
 
@@ -350,7 +333,7 @@ Compare a "bad" cohort or time window against a "good" baseline to find what cha
 
 For jq parsing and interpretation of spotlight output, see `reference/apl.md` → Differential Analysis.
 
-### E. CODE FORENSICS
+### D. CODE FORENSICS
 
 - **Log to Code:** Grep for exact static string part of log message
 - **Metric to Code:** Grep for metric name to find instrumentation point
@@ -362,13 +345,47 @@ For jq parsing and interpretation of spotlight output, see `reference/apl.md` �
 
 See `reference/apl.md` for full operator, function, and pattern reference.
 
-**Critical rules:**
-- **Time filter FIRST**—always `where _time between (ago(1h) .. now())` before other conditions
-- **Use `has_cs` over `contains`**—5-10x faster, case-sensitive
-- **Prefer `_cs` operators**—case-sensitive variants are always faster
-- **Use duration literals**—`where duration > 10s` not manual conversion
-- **Avoid `search`**—scans ALL fields. Last resort only.
-- **Field escaping**—dots need `\\.`: `['kubernetes.node_labels.nodepool\\.axiom\\.co/name']`
+### Query cost discipline
+
+**Queries are expensive. Every query scans real data and costs money. Be surgical.**
+
+**Probe before you investigate.** Always start with the smallest possible query to understand dataset size, shape, and field names before running anything heavier:
+
+```apl
+// 1. Schema discovery (cheap—metadata-focused; still counts as a query)
+['dataset'] | getschema
+
+// 2. Sample ONE event to see actual field values and types
+['dataset'] | where _time > ago(5m) | take 1
+
+// 3. Check cardinality of fields you plan to filter/group on
+['dataset'] | where _time > ago(5m) | summarize count() by level | top 10 by count_
+```
+
+**Never skip probing.** Running queries with wrong field names or unexpected types means wasted iterations and re-runs. Probe, then query.
+
+### Read the cost line after every query
+
+Every query prints a stats line: `# matched/examined rows, blocks, elapsed_ms`. **Read it.** Use it to calibrate:
+
+- **High rows examined, low matched?** Your filters are too broad. Add more selective `where` clauses or tighten the time range.
+- **Many blocks examined?** You're scanning too much data. Narrow `_time`, add selective filters before expensive ones.
+- **Slow elapsed time (>5s)?** Consider shorter time ranges, add `project`, or use `take` to sample before running the full query.
+- **Costs climbing?** If queries are getting progressively more expensive, pause and ask whether you're on the right track. Widening scope is fine when deliberate — but runaway cost means you're guessing, not investigating.
+
+### Query performance rules
+
+1. **`_time` filter FIRST**—always `where _time between (ago(1h) .. now())` before other filters. Without it, every block is scanned.
+2. **Most selective filter first**—Axiom does NOT reorder `where` clauses. Put the filter that eliminates the most rows earliest.
+3. **`project` early**—specify only the fields you need. `project *` on wide datasets (1000+ fields) wastes I/O and can OOM (HTTP 432).
+4. **Prefer simple, case-sensitive string ops**—`_cs` variants are faster. Prefer `startswith`/`endswith` over `contains` when applicable. `matches regex` is last resort.
+5. **Use `has`/`has_cs` for unique-looking strings**—IDs, UUIDs, trace IDs, error codes, session tokens. `has` leverages full-text indexes when available and is much faster than `contains` for high-entropy terms. Use `contains` only when you need true substring matching (e.g., partial paths).
+6. **Use duration literals**—`where duration > 10s` not manual conversion.
+7. **Avoid `search`**—scans ALL fields. Use `has`/`contains` on specific fields.
+8. **Avoid runtime `parse_json()`**—CPU-heavy, no indexing. Filter before parsing if unavoidable.
+9. **Avoid `pack(*)`**—creates dict of ALL fields per row. Use `pack` with named fields only.
+10. **Limit results**—use `take 10` or `top 20` instead of default 1000 when exploring.
+11. **Field quoting**—quote identifiers with dots/dashes/spaces: `['geo.country']`. For map field keys, use index notation: `['attributes.custom']['http.protocol']`.
 
 **Need more?** Open `reference/apl.md` for operators/functions, `reference/query-patterns.md` for ready-to-use investigation queries.
 
@@ -385,7 +402,9 @@ Every finding must link to its source — dashboards, queries, error reports, PR
 4. **Documented patterns**—In `kb/queries.md` and `kb/patterns.md`
 5. **Data responses**—Any answer citing tool-derived numbers (e.g. burn rates, error counts, usage stats, etc). Questions don't require investigation, but if you cite numbers from a query, include the source link.
 
-**Rule: If you ran a query and cite its results, generate a permalink.** Run the appropriate link tool for every query whose results appear in your response:
+**Rule: If you ran a query and cite its results, generate a permalink.** Run the appropriate link tool for every query whose results appear in your response.
+
+**Axiom chart-friendly links:** When your query aggregates over time (`summarize ... by bin(_time, ...)` or `bin_auto(_time)`), pass a simplified version to `scripts/axiom-link` that keeps the `summarize` as the last operator — strip any trailing `extend`, `order by`, or `project-reorder`. This lets Axiom render the result as a time-series chart instead of a flat table. If the query has no time binning, pass it as-is.
 - **Axiom:** `scripts/axiom-link`
 - **Grafana:** `scripts/grafana-link`
 - **Pyroscope:** `scripts/pyroscope-link`
@@ -527,15 +546,4 @@ scripts/slack-upload <env> <channel> ./file.png --comment "Description" --thread
 
 ## Reference Files
 
-- `reference/apl.md`—APL operators, functions, and spotlight analysis
-- `reference/axiom.md`—Axiom API endpoints (70+)
-- `reference/blocks.md`—Slack Block Kit formatting
-- `reference/failure-modes.md`—Common failure patterns
-- `reference/grafana.md`—Grafana queries and PromQL patterns
-- `reference/memory-system.md`—Full memory documentation
-- `reference/postmortem-template.md`—Incident retrospective template
-- `reference/pyroscope.md`—Continuous profiling with Pyroscope
-- `reference/query-patterns.md`—Ready-to-use APL investigation queries
-- `reference/sentry.md`—Sentry API endpoints and examples
-- `reference/slack.md`—Slack script usage and operations
-- `reference/slack-api.md`—Slack API method reference
+All in `reference/`: `apl.md` (operators/functions/spotlight), `axiom.md` (API), `blocks.md` (Slack Block Kit), `failure-modes.md`, `grafana.md` (PromQL), `memory-system.md`, `postmortem-template.md`, `pyroscope.md` (profiling), `query-patterns.md` (APL recipes), `sentry.md`, `slack.md`, `slack-api.md`.
