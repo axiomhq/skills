@@ -34,13 +34,11 @@ BODY=$(jq -L "$SCRIPT_DIR" '
   normalize_dashboard_layout
 ' "$JSON_FILE")
 
-# Validate required fields
-for field in name owner; do
-    if [[ $(echo "$BODY" | jq -r ".$field // empty") == "" ]]; then
-        echo "Error: Missing required field: $field" >&2
-        exit 1
-    fi
-done
+# Validate dashboard structure before deploying
+if ! "$SCRIPT_DIR/dashboard-validate" "$JSON_FILE" --strict; then
+    echo "Error: Dashboard validation failed. Fix the errors above before deploying." >&2
+    exit 1
+fi
 
 RESPONSE=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" POST "/internal/dashboards" "$BODY")
 
