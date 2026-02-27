@@ -30,7 +30,7 @@ if [[ ! -f "$JSON_FILE" ]]; then
 fi
 
 # Validate dashboard structure before deploying
-if ! "$SCRIPT_DIR/dashboard-validate" "$JSON_FILE" --strict; then
+if ! "$SCRIPT_DIR/dashboard-validate" "$JSON_FILE" --strict >&2; then
     echo "Error: Dashboard validation failed. Fix the errors above before deploying." >&2
     exit 1
 fi
