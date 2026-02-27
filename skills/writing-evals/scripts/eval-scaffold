@@ -105,6 +105,7 @@ fi
 # Replace placeholders (pickFlags first with camelCase, then global replacements)
 if [[ -n "$STEP" ]]; then
     sed -e "s/pickFlags('{{capability}}.{{step}}')/pickFlags('$CAMEL_CAPABILITY.$CAMEL_STEP')/g" \
+        -e "s/pickFlags('{{capability}}')/pickFlags('$CAMEL_CAPABILITY')/g" \
         -e "s/{{capability}}/$CAPABILITY/g" \
         -e "s/{{step}}/$STEP/g" \
         -e "s/{{functionName}}/myFunction/g" \
