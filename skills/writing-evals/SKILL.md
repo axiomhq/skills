@@ -7,6 +7,16 @@ description: Scaffolds evaluation suites for the Axiom AI SDK. Generates eval fi
 
 You write evaluations that prove AI capabilities work. Evals are the test suite for non-deterministic systems: they measure whether a capability still behaves correctly after every change.
 
+## Prerequisites
+
+Before writing eval code, check if the SDK is installed:
+
+```bash
+ls node_modules/axiom/dist/
+```
+
+If not installed, install it using the project's package manager (e.g., `pnpm add axiom`).
+
 ## Philosophy
 
 1. **Evals are tests for AI.** Every eval answers: "does this capability still work?"
@@ -703,11 +713,24 @@ Pre-built templates in `reference/templates/`:
 
 ---
 
-## Reference
+## API Documentation Lookup
+
+For exact type signatures, check the SDK's bundled docs first (matches the installed version):
+
+```bash
+ls node_modules/axiom/dist/docs/
+```
+
+Key paths:
+- `node_modules/axiom/dist/docs/evals/functions/Eval.md`
+- `node_modules/axiom/dist/docs/evals/scorers/functions/Scorer.md`
+- `node_modules/axiom/dist/docs/evals/online/functions/onlineEval.md`
+- `node_modules/axiom/dist/docs/evals/aggregations/README.md`
+- `node_modules/axiom/dist/docs/config/README.md`
+
+If the SDK is not installed, fall back to the bundled reference files:
 
 - `reference/api-reference.md` — Full type signatures for Eval, Scorer, Score, Aggregation
 - `reference/scorer-patterns.md` — Scorer cookbook with examples
 - `reference/flag-schema-guide.md` — Flag schema rules, patterns, CLI overrides
 - `reference/templates/` — Ready-to-use eval file templates
-
-For SDK docs: https://github.com/axiomhq/ai
