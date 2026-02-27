@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Setup building-dashboards skill
+# Setup query-metrics skill
 # Usage: scripts/setup
 #
 # This script:
@@ -11,7 +11,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "=== building-dashboards Setup ==="
+echo "=== query-metrics Setup ==="
 echo ""
 
 # --- Check required tools ---
@@ -51,43 +51,34 @@ echo "[3/3] Checking Axiom configuration..."
 
 AXIOM_CONFIG="$HOME/.axiom.toml"
 if [[ -f "$AXIOM_CONFIG" ]]; then
-    DEPLOYMENTS=$(grep -cE '^\s*\[deployments\.' "$AXIOM_CONFIG" 2>/dev/null || echo 0)
+    DEPLOYMENTS=$(grep -c '^\[deployments\.' "$AXIOM_CONFIG" 2>/dev/null || echo 0)
     echo "✓ Found $AXIOM_CONFIG with $DEPLOYMENTS deployment(s)"
-    
+
     # List deployments
     echo "  Deployments:"
-    grep -E '^\s*\[deployments\.' "$AXIOM_CONFIG" | sed 's/^[[:space:]]*//' | sed 's/\[deployments\.\(.*\)\]/    - \1/'
+    grep '^\[deployments\.' "$AXIOM_CONFIG" | sed 's/\[deployments\.\(.*\)\]/    - \1/'
 else
     echo "⚠ $AXIOM_CONFIG not found"
     echo ""
-    echo "Create it to enable dashboard operations:"
+    echo "Create it to enable metrics queries:"
     echo ""
     cat << 'EOF'
 [deployments.prod]
 url = "https://api.axiom.co"
 token = "xaat-your-token-here"
 org_id = "your-org-id"
-
-[deployments.staging]
-url = "https://api.axiom.co"
-token = "xaat-your-staging-token"
-org_id = "your-org-id"
 EOF
     echo ""
+    echo "Get your org_id from Settings → Organization."
+    echo "For the token, use a Personal Access Token (Settings → Profile → Personal Access Tokens)."
 fi
 
 echo ""
 echo "=== Setup Complete ==="
 echo ""
 echo "Usage:"
-echo "  scripts/get-user-id prod              # Get your user ID"
-echo "  scripts/dashboard-list prod           # List dashboards"
-echo "  scripts/dashboard-get prod <id>       # Get dashboard JSON"
-echo "  scripts/dashboard-create prod <file>  # Create dashboard"
-echo "  scripts/dashboard-copy prod <id>      # Clone dashboard"
-echo "  scripts/dashboard-link prod <id>      # Get dashboard URL"
-echo ""
-echo "Templates:"
-echo "  USER_ID=\$(scripts/get-user-id prod)"
-echo "  scripts/dashboard-from-template service-overview <service> \$USER_ID <dataset>"
+echo "  scripts/metrics-spec prod                              # Fetch query spec"
+echo "  scripts/metrics-info prod <dataset> metrics             # List metrics"
+echo "  scripts/metrics-info prod <dataset> tags                # List tags"
+echo "  scripts/metrics-query prod '<apl>' '<start>' '<end>'   # Run query"
 echo ""

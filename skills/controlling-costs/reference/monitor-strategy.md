@@ -15,7 +15,7 @@
 |---|---------|------|------------|---------|
 | 1 | Total Ingest Guard | Threshold + Trend | 2 hours | Catches overspend (>1.2x contract) OR gradual growth (>15% week-over-week) |
 | 2 | Per-Dataset Spike | Robust Z-Score | 2+ hours | Attribution: "which dataset's ingest changed" |
-| 3 | Query Cost Spike | Robust Z-Score | 2+ hours | Attribution: "which dataset's query cost changed" |
+| 3 | Query Cost Spike | Hardened Z-Score (30d baseline, 5d gap) | 4+ hours | Attribution: "which dataset's query cost changed" |
 
 ## Monitor Details
 
@@ -80,16 +80,60 @@ Purpose: Statistical attribution - identifies *which* dataset's ingest pattern c
 
 **Query:** See "Robust Z-Score Spike Detection" section below for full query and rationale.
 
-### 3. Query Cost Spike
+### 3. Query Cost Spike (Hardened)
 
 - **Type:** Threshold (on robust z-score output)
-- **Query:** Same approach as Per-Dataset Spike, using `hourly_billable_query_gbms` instead of bytes
+- **Query:** 30d baseline with 5d exclusion gap, persistence-based gating (median_z > 3, p25_z > 2.5)
 - **Threshold:** 1 (any dataset with sustained spikes)
 - **Frequency:** Hourly
-- **Range:** 7 days (10080 minutes)
+- **Range:** 30 days (43200 minutes)
 - **Trigger after:** 1 run (persistence built into query)
 
-Purpose: Detect changes in query cost patterns (different cost driver than ingest). Uses identical robust z-score approach as ingest spike detection.
+Purpose: Detect changes in query cost patterns (different cost driver than ingest). Uses a **hardened** approach developed from a production investigation, where a sustained spike from automated queries poisoned a 15d baseline. Key improvements over the ingest spike detector:
+
+1. **30d baseline with 5d exclusion gap** — `ago(30d)` to `ago(5d)` prevents multi-day sustained spikes from contaminating baseline statistics
+2. **Persistence-based gating** — requires `median_z > 3` AND `p25_z > 2.5` (the entire current window must be anomalous, not just the peak hour)
+3. **Current window percentiles** — uses `percentileif` (p50, p25) instead of `maxif`, making detection resistant to single-hour outliers
+4. **Minimum data requirements** — `baseline_hours >= 168` (7 full days) and `current_hours >= 4`
+5. **Floor filter** — `current_p50_gbms > 100,000,000` filters out low-usage noise
+
+**The Query:**
+
+```apl
+['axiom-audit']
+| where _time >= ago(30d) and action == "usageCalculated"
+| extend gbms = toreal(['properties.hourly_billable_query_gbms']), dataset = tostring(['properties.dataset'])
+| where isfinite(gbms) and gbms >= 0
+| extend is_current = _time >= ago(6h) and _time < bin(now(), 1h)
+| extend is_baseline = _time < ago(5d)
+| summarize hourly_gbms = sum(gbms) by bucket = bin(_time, 1h), dataset, is_current, is_baseline
+| extend hourly_y = log(hourly_gbms + 1)
+| summarize 
+    current_hours = countif(is_current),
+    baseline_hours = countif(is_baseline),
+    baseline_y_p50 = percentileif(hourly_y, 50, is_baseline),
+    baseline_y_p25 = percentileif(hourly_y, 25, is_baseline),
+    baseline_y_p75 = percentileif(hourly_y, 75, is_baseline),
+    baseline_gbms_p50 = percentileif(hourly_gbms, 50, is_baseline),
+    current_p50_y = percentileif(hourly_y, 50, is_current),
+    current_p25_y = percentileif(hourly_y, 25, is_current),
+    current_p50_gbms = percentileif(hourly_gbms, 50, is_current)
+  by dataset
+| where baseline_hours >= 168 and current_hours >= 4
+| extend iqr = baseline_y_p75 - baseline_y_p25
+| where iqr > 0
+| extend sigma_y = iqr / 1.349
+| extend median_z = (current_p50_y - baseline_y_p50) / sigma_y
+| extend p25_z = (current_p25_y - baseline_y_p50) / sigma_y
+| extend excess_gbms = current_p50_gbms - baseline_gbms_p50
+| where median_z > 3 and p25_z > 2.5 and excess_gbms > 0 and current_p50_gbms > 100000000
+| project dataset, median_z, p25_z, current_p50_gbms, baseline_gbms_p50, excess_gbms
+| order by median_z desc
+```
+
+**Why the 5d exclusion gap?** If an automated service starts hammering queries without time filters (e.g., scanning 156B rows per query, 255K queries/day), that sustained spike poisons a 15d baseline within 2-3 days — the "new normal" absorbs the anomaly. The 5d gap ensures the baseline never includes recent sustained anomalies.
+
+**Why persistence-based gating (median + p25)?** A single outlier hour can produce `max_z > 3` but a `median_z < 1`. By requiring the 25th percentile of the current window to also be anomalous (`p25_z > 2.5`), we ensure the *entire* window is elevated, not just a transient spike.
 
 ## Units
 
@@ -150,7 +194,7 @@ All thresholds are specified in **bytes**. Human-readable output auto-formats to
 | summarize spike_count = count()
 ```
 
-The query cost spike detection uses the same pattern with `hourly_billable_query_gbms` instead of `hourly_ingest_bytes`.
+The **ingest** spike detection uses the query above. The **query cost** spike detection uses a hardened variant — see "Query Cost Spike (Hardened)" section above for the full query with 30d baseline, 5d exclusion gap, and persistence-based gating.
 
 **Why single-pass instead of join?** The single-pass approach is more efficient and reliable than complex joins with multiple `summarize` operations. It uses `is_current`/`is_baseline` flags with conditional aggregation functions (`countif`, `percentileif`, `maxif`) to compute baseline and current statistics in one pass.
 

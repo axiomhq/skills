@@ -16,6 +16,7 @@
 # Examples:
 #   curl-auth grafana prod https://grafana.internal/api/health
 #   curl-auth grafana prod -X POST -d '{"query":"..."}' https://grafana.internal/api/ds/query
+#   curl-auth sentry prod https://sentry.io/api/0/organizations/my-org/issues/
 
 set -euo pipefail
 
@@ -65,7 +66,7 @@ CONFIG_OUTPUT="$("$SCRIPT_DIR/config" "$TOOL" "$DEPLOYMENT")" || exit 1
 eval "$CONFIG_OUTPUT"
 
 # Build base curl args
-CURL_ARGS=(-s -X "$METHOD")
+CURL_ARGS=(-s --connect-timeout 10 --max-time 30 -X "$METHOD")
 if [[ -n "$DATA" ]]; then
     CURL_ARGS+=(-H "Content-Type: application/json" -d "$DATA")
 fi
@@ -80,11 +81,11 @@ run_curl() {
 case "$TOOL" in
     grafana)
         if [[ -n "${GRAFANA_ACCESS_CMD:-}" ]]; then
-            # cloudflared access curl requires URL first
+            # cloudflared access curl requires URL as the first positional argument
             if [[ -n "$DATA" ]]; then
-                $GRAFANA_ACCESS_CMD -s "$URL" -X "$METHOD" -H "Content-Type: application/json" -d "$DATA" "$@"
+                $GRAFANA_ACCESS_CMD "$URL" -s -X "$METHOD" -H "Content-Type: application/json" -d "$DATA" "$@"
             else
-                $GRAFANA_ACCESS_CMD -s "$URL" "$@"
+                $GRAFANA_ACCESS_CMD "$URL" -s "$@"
             fi
         elif [[ -n "${GRAFANA_CF_ACCESS_CLIENT_ID:-}" && -n "${GRAFANA_CF_ACCESS_CLIENT_SECRET:-}" ]]; then
             curl "${CURL_ARGS[@]}" \
@@ -102,10 +103,11 @@ case "$TOOL" in
     
     pyroscope)
         if [[ -n "${PYROSCOPE_ACCESS_CMD:-}" ]]; then
+            # cloudflared access curl requires URL as the first positional argument
             if [[ -n "$DATA" ]]; then
-                $PYROSCOPE_ACCESS_CMD -s "$URL" -X "$METHOD" -H "Content-Type: application/json" -d "$DATA" "$@"
+                $PYROSCOPE_ACCESS_CMD "$URL" -s -X "$METHOD" -H "Content-Type: application/json" -d "$DATA" "$@"
             else
-                $PYROSCOPE_ACCESS_CMD -s "$URL" "$@"
+                $PYROSCOPE_ACCESS_CMD "$URL" -s "$@"
             fi
         elif [[ -n "${PYROSCOPE_CF_ACCESS_CLIENT_ID:-}" && -n "${PYROSCOPE_CF_ACCESS_CLIENT_SECRET:-}" ]]; then
             curl "${CURL_ARGS[@]}" \
@@ -116,6 +118,14 @@ case "$TOOL" in
             curl "${CURL_ARGS[@]}" -H "Authorization: Bearer $PYROSCOPE_TOKEN" "$URL" "$@"
         elif [[ -n "${PYROSCOPE_USERNAME:-}" ]]; then
             curl "${CURL_ARGS[@]}" -u "$PYROSCOPE_USERNAME:$PYROSCOPE_PASSWORD" "$URL" "$@"
+        else
+            curl "${CURL_ARGS[@]}" "$URL" "$@"
+        fi
+        ;;
+
+    sentry)
+        if [[ -n "${SENTRY_TOKEN:-}" ]]; then
+            curl "${CURL_ARGS[@]}" -H "Authorization: Bearer $SENTRY_TOKEN" "$URL" "$@"
         else
             curl "${CURL_ARGS[@]}" "$URL" "$@"
         fi

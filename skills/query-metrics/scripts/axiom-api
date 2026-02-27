@@ -6,10 +6,8 @@
 # Reads credentials from ~/.axiom.toml (shared with axiom-sre)
 #
 # Examples:
-#   axiom-api prod GET /internal/dashboards
-#   axiom-api prod GET /internal/dashboards/abc123
-#   axiom-api prod POST /internal/dashboards '{"name":"Test",...}'
-#   axiom-api prod GET /v2/user
+#   axiom-api prod GET /v1/datasets
+#   axiom-api prod POST /v1/query/_metrics '{"apl":"..."}'
 
 set -euo pipefail
 
@@ -25,7 +23,7 @@ fi
 
 CONFIG_FILE="$HOME/.axiom.toml"
 if [[ ! -f "$CONFIG_FILE" ]]; then
-    echo "Error: $CONFIG_FILE not found" >&2
+    echo "Error: $CONFIG_FILE not found. Run scripts/setup for help." >&2
     exit 1
 fi
 
@@ -33,20 +31,8 @@ fi
 extract_value() {
     local key="$1"
     awk -v deployment="$DEPLOYMENT" -v key="$key" '
-        /^[[:space:]]*\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
-        in_deployment {
-            gsub(/^[[:space:]]+/, "")
-            if ($1 == key) {
-                sub(/^[^=]*=[[:space:]]*/, "")
-                if (match($0, /^"[^"]*"/)) {
-                    $0 = substr($0, RSTART+1, RLENGTH-2)
-                } else {
-                    sub(/[[:space:]]*#.*$/, "")
-                }
-                print
-                exit
-            }
-        }
+        /^\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
+        in_deployment && $1 == key { gsub(/[" ]/, "", $3); print $3; exit }
     ' "$CONFIG_FILE"
 }
 
@@ -56,11 +42,11 @@ ORG_ID=$(extract_value "org_id")
 
 if [[ -z "$URL" || -z "$TOKEN" || -z "$ORG_ID" ]]; then
     echo "Error: Could not find deployment '$DEPLOYMENT' in $CONFIG_FILE" >&2
+    echo "" >&2
+    echo "Available deployments:" >&2
+    grep '^\[deployments\.' "$CONFIG_FILE" | sed 's/\[deployments\.\(.*\)\]/  - \1/' >&2
     exit 1
 fi
-
-# Dashboard API uses app.* instead of api.*
-API_URL="${URL/api./app.}/api"
 
 CURL_ARGS=(
     -s
@@ -75,4 +61,4 @@ if [[ -n "$BODY" ]]; then
     CURL_ARGS+=(-d "$BODY")
 fi
 
-curl "${CURL_ARGS[@]}" "${API_URL}${PATH_}"
+curl "${CURL_ARGS[@]}" "${URL}${PATH_}"

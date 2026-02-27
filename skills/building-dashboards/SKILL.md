@@ -94,6 +94,36 @@ Raw events that answer "what exactly happened?"
 
 ---
 
+## Layout Auto-Normalization
+
+The console uses `react-grid-layout` which requires `minH`, `minW`, `moved`, and `static` on every layout entry. The `dashboard-create` and `dashboard-update` scripts auto-fill these if omitted, so layout entries only need `i`, `x`, `y`, `w`, `h`.
+
+---
+
+## Required Chart Structure
+
+**Every chart MUST have a unique `id` field.** Every layout entry's `i` field MUST reference a chart `id`. Missing or mismatched IDs will corrupt the dashboard in the UI (blank state, unable to save/revert).
+
+```json
+{
+  "charts": [
+    {
+      "id": "error-rate",
+      "name": "Error Rate",
+      "type": "Statistic",
+      "query": { "apl": "..." }
+    }
+  ],
+  "layout": [
+    {"i": "error-rate", "x": 0, "y": 0, "w": 3, "h": 2}
+  ]
+}
+```
+
+Use descriptive kebab-case IDs (e.g. `error-rate`, `p95-latency`, `traffic-rps`). The `dashboard-validate` and deploy scripts enforce this automatically.
+
+---
+
 ## Chart Types
 
 **Note:** Dashboard queries inherit time from the UI picker—no explicit `_time` filter needed.

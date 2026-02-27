@@ -147,8 +147,18 @@ bin(_time, 1h)         // Hourly bins
 | `dayofweek/month/year(dt)` | Day number |
 | `getyear(dt)` / `getmonth(dt)` | Year/month number |
 | `hourofday(dt)` | Hour (0-23) |
-| `format_datetime(dt, fmt)` | Format to string |
 | `unixtime_seconds_todatetime(n)` | Unix epoch → datetime |
+
+> **Note:** `format_datetime` does not exist in Axiom APL. To format a datetime as a string, use `datetime_part` + `strcat`:
+> ```kusto
+> extend pretty = strcat(
+>   datetime_part("year", dt), "-",
+>   iff(datetime_part("month", dt) < 10, strcat("0", tostring(datetime_part("month", dt))), tostring(datetime_part("month", dt))), "-",
+>   iff(datetime_part("day", dt) < 10, strcat("0", tostring(datetime_part("day", dt))), tostring(datetime_part("day", dt))), " ",
+>   iff(datetime_part("hour", dt) < 10, strcat("0", tostring(datetime_part("hour", dt))), tostring(datetime_part("hour", dt))), ":",
+>   iff(datetime_part("minute", dt) < 10, strcat("0", tostring(datetime_part("minute", dt))), tostring(datetime_part("minute", dt)))
+> )
+> ```
 
 ### Time Literals
 | Literal | Duration |

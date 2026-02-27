@@ -27,8 +27,20 @@ fi
 extract_value() {
     local key="$1"
     awk -v deployment="$DEPLOYMENT" -v key="$key" '
-        /^\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
-        in_deployment && $1 == key { gsub(/[" ]/, "", $3); print $3; exit }
+        /^[[:space:]]*\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
+        in_deployment {
+            gsub(/^[[:space:]]+/, "")
+            if ($1 == key) {
+                sub(/^[^=]*=[[:space:]]*/, "")
+                if (match($0, /^"[^"]*"/)) {
+                    $0 = substr($0, RSTART+1, RLENGTH-2)
+                } else {
+                    sub(/[[:space:]]*#.*$/, "")
+                }
+                print
+                exit
+            }
+        }
     ' "$CONFIG_FILE"
 }
 

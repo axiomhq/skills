@@ -115,7 +115,7 @@ Creates 3 monitors:
 
 1. **Total Ingest Guard** — alerts when daily ingest >1.2x contract OR 7-day avg grows >15% vs baseline
 2. **Per-Dataset Spike** — robust z-score detection, alerts per dataset with attribution
-3. **Query Cost Spike** — same z-score approach for query costs (GB·ms)
+3. **Query Cost Spike** — hardened z-score with 30d baseline, 5d exclusion gap, persistence-based gating (median_z > 3, p25_z > 2.5)
 
 The spike monitors use `notifyByGroup: true` so each dataset triggers a separate alert.
 
