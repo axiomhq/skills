@@ -278,6 +278,92 @@ type ScorerResult = {
 
 ---
 
+## Streaming Tasks
+
+Tasks can return an `AsyncIterable` for evaluating streaming AI functions (e.g., `streamText()`):
+
+```typescript
+import { streamText } from 'ai';
+
+Eval('stream-eval', {
+  capability: 'qa',
+  data: [{ input: 'What is 2+2?', expected: '4' }],
+  task: async function* ({ input }) {
+    const result = streamText({ model: openai('gpt-4o-mini'), prompt: input });
+    for await (const chunk of result.textStream) {
+      yield chunk;
+    }
+  },
+  scorers: [ExactMatch],
+});
+```
+
+**Concatenation rules:**
+- **String chunks** → joined together (`chunks.join('')`)
+- **Object chunks** → last chunk returned (streaming typically overwrites)
+- **Empty stream** → returns empty string
+
+---
+
+## Dynamic Data Loading
+
+Data can be a static array, a function, or a Promise:
+
+```typescript
+// Static array
+data: [{ input: 'hello', expected: 'hello' }],
+
+// Function (called once at eval startup)
+data: () => [{ input: 'hello', expected: 'hello' }],
+
+// Async function (fetch from API, database, CSV, etc.)
+data: async () => {
+  const response = await fetch('https://api.example.com/test-cases');
+  return response.json();
+},
+
+// Direct Promise
+data: Promise.resolve([{ input: 'hello', expected: 'hello' }]),
+```
+
+Functions are called **once** during eval setup — data is loaded fresh each run but not re-fetched between cases.
+
+---
+
+## Manual Token Tracking (Non-Vercel AI SDK)
+
+Automatic token capture works with Vercel AI SDK (`ai` package). For other SDKs (`@google/generative-ai`, `openai`, `@anthropic-ai/sdk`, etc.), manually set token attributes in your task function:
+
+```typescript
+import { trace } from '@opentelemetry/api';
+
+task: async ({ input }) => {
+  const span = trace.getActiveSpan();
+
+  // Example: Google Generative AI
+  const result = await model.generateContent(input);
+  if (span && result.response.usageMetadata) {
+    span.setAttribute('gen_ai.usage.input_tokens', result.response.usageMetadata.promptTokenCount);
+    span.setAttribute('gen_ai.usage.output_tokens', result.response.usageMetadata.candidatesTokenCount);
+    span.setAttribute('gen_ai.request.model', 'gemini-2.0-flash');
+    span.setAttribute('gen_ai.response.model', result.response.modelVersion);
+  }
+  return result.response.text();
+
+  // Example: OpenAI SDK
+  // const result = await openai.chat.completions.create({ ... });
+  // if (span && result.usage) {
+  //   span.setAttribute('gen_ai.usage.input_tokens', result.usage.prompt_tokens);
+  //   span.setAttribute('gen_ai.usage.output_tokens', result.usage.completion_tokens);
+  //   span.setAttribute('gen_ai.request.model', 'gpt-4o-mini');
+  //   span.setAttribute('gen_ai.response.model', result.model);
+  // }
+  // return result.choices[0].message.content;
+},
+```
+
+---
+
 ## CLI Options
 
 ```

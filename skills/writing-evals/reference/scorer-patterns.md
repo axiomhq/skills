@@ -294,6 +294,55 @@ Return a number 0-1 where 1 is perfect match.`,
 
 ---
 
+## Pattern 10: Using the `autoevals` Library
+
+**When:** You need prebuilt scorers for common NLP metrics (text similarity, factuality, semantic similarity).
+
+```bash
+npm install autoevals
+```
+
+```typescript
+import { Scorer } from 'axiom/ai/evals/scorers';
+import { Levenshtein, Factuality } from 'autoevals';
+
+const LevenshteinScorer = Scorer(
+  'levenshtein',
+  ({ output, expected }: { output: string; expected: string }) => {
+    return Levenshtein({ output, expected });
+  },
+);
+
+const FactualityScorer = Scorer(
+  'factuality',
+  async ({ output, expected }: { output: string; expected: string }) => {
+    return await Factuality({ output, expected });
+  },
+);
+```
+
+Combine autoevals with custom scorers for thorough coverage:
+```typescript
+scorers: [ExactMatch, LevenshteinScorer, FactualityScorer],
+```
+
+---
+
+## Score Return Types
+
+- `boolean` — `true` = pass (1.0), `false` = fail (0.0)
+- `number` — raw score (0.0–1.0 typical, but any number works)
+- `{ score: number | boolean | null, metadata?: Record<string, any> }` — score with debug info
+
+---
+
+## Reference-Free vs Reference-Based
+
+- **Reference-based:** Compares `output` to `expected`. Used in offline evals with ground truth.
+- **Reference-free:** Evaluates `output` quality without `expected` (e.g., coherence, toxicity). Used for online evals where no ground truth exists. Also works alongside reference-based scorers in offline evals.
+
+---
+
 ## Scorer Typing Tips
 
 Always explicitly type the scorer args object:
