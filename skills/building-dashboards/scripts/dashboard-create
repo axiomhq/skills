@@ -27,20 +27,18 @@ if [[ ! -f "$JSON_FILE" ]]; then
     exit 1
 fi
 
+# Validate dashboard structure before deploying
+if ! "$SCRIPT_DIR/dashboard-validate" "$JSON_FILE" --strict >&2; then
+    echo "Error: Dashboard validation failed. Fix the errors above before deploying." >&2
+    exit 1
+fi
+
 # Read, strip server-managed fields, and normalize layout for react-grid-layout
 BODY=$(jq -L "$SCRIPT_DIR" '
   include "dashboard-normalize";
   del(.id, .version, .createdAt, .updatedAt, .createdBy, .updatedBy) |
   normalize_dashboard_layout
 ' "$JSON_FILE")
-
-# Validate required fields
-for field in name owner; do
-    if [[ $(echo "$BODY" | jq -r ".$field // empty") == "" ]]; then
-        echo "Error: Missing required field: $field" >&2
-        exit 1
-    fi
-done
 
 RESPONSE=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" POST "/internal/dashboards" "$BODY")
 
