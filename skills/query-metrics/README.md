@@ -60,7 +60,7 @@ scripts/metrics-info prod my-dataset find-metrics "frontend"
 
 # Run a metrics query
 scripts/metrics-query prod \
-  'my-dataset:http.server.duration | align to 5m using avg' \
+  '`my-dataset`:`http.server.duration` | align to 5m using avg | group by `endpoint` using sum' \
   '2025-06-01T00:00:00Z' '2025-06-02T00:00:00Z'
 ```
 
