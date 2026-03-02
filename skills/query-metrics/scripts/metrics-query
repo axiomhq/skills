@@ -7,7 +7,7 @@
 # like "now" or "now-1h" are NOT supported.
 #
 # Examples:
-#   metrics-query prod 'otel-metrics:http.server.duration | align to 5m using avg' \
+#   metrics-query prod '`otel-metrics`:`http.server.duration` | align to 5m using avg | group by `endpoint` using sum' \
 #     '2025-06-01T00:00:00Z' '2025-06-02T00:00:00Z'
 
 set -euo pipefail
