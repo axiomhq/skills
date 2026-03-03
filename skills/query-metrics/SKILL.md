@@ -15,13 +15,18 @@ Run `scripts/setup` to check requirements (curl, jq, ~/.axiom.toml).
 
 Config in `~/.axiom.toml` (shared with axiom-sre):
 ```toml
+active_deployment = "prod"
+
 [deployments.prod]
 url = "https://api.axiom.co"
+edge_url = "https://<region>.aws.edge.axiom.co"
 token = "xaat-your-token"
 org_id = "your-org-id"
 ```
 
 The target dataset must be of kind `otel-metrics-v1`.
+
+> **IMPORTANT:** The `edge_url` field is required for metrics queries. Metrics endpoints (`/v1/query/_metrics`, `/v1/query/metrics/info/...`) are served from the edge URL, not the main API URL. If `edge_url` is not set, the scripts fall back to `url`.
 
 ---
 
@@ -39,6 +44,7 @@ This returns the complete metrics query specification with syntax, operators, an
 
 ## Workflow
 
+0. **Detect deployment**: Read `~/.axiom.toml` to find the `active_deployment` value. Use that as the `<deployment>` name in all script calls. Do NOT assume `prod` — the deployment name varies per user (e.g., `bedrock`, `staging`, `prod`).
 1. **Learn the language**: Run `scripts/metrics-spec <deployment>` to read the metrics query spec
 2. **Discover metrics**: If possible use the find-metrics command, otherwise list available metrics via the info scripts
 3. **Explore tags**: List tags and tag values to understand filtering options
@@ -63,7 +69,7 @@ scripts/metrics-query <deployment> '<apl>' '<startTime>' '<endTime>'
 
 **Example:**
 ```bash
-scripts/metrics-query prod \
+scripts/metrics-query <deployment> \
   'my-dataset:http.server.duration | align to 5m using avg' \
   '2025-06-01T00:00:00Z' \
   '2025-06-02T00:00:00Z'
@@ -71,7 +77,7 @@ scripts/metrics-query prod \
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `deployment` | Yes | Name from `~/.axiom.toml` (e.g., `prod`) |
+| `deployment` | Yes | Name from `~/.axiom.toml` `active_deployment` field (e.g., `prod`, `bedrock`) |
 | `apl` | Yes | Metrics query string. Dataset is extracted from the query itself. |
 | `startTime` | Yes | RFC3339 timestamp only (e.g., `2025-01-01T00:00:00Z`). Relative expressions like `now-1h` are **not** supported. |
 | `endTime` | Yes | RFC3339 timestamp only (e.g., `2025-01-02T00:00:00Z`). Relative expressions like `now` are **not** supported. |
@@ -123,7 +129,7 @@ scripts/metrics-info <deployment> <dataset> find-metrics "<search-value>"
 All info commands accept `--start` and `--end` for custom time ranges:
 
 ```bash
-scripts/metrics-info prod my-dataset metrics \
+scripts/metrics-info <deployment> my-dataset metrics \
   --start 2025-06-01T00:00:00Z \
   --end 2025-06-02T00:00:00Z
 ```

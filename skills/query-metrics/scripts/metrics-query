@@ -33,4 +33,4 @@ BODY=$(jq -n \
     --arg end "$END_TIME" \
     '{apl: $apl, startTime: $start, endTime: $end}')
 
-"$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" POST "/v1/query/_metrics?format=metrics-v1" "$BODY"
+"$SCRIPT_DIR/axiom-api" --edge "$DEPLOYMENT" POST "/v1/query/_metrics?format=metrics-v1" "$BODY"

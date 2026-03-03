@@ -29,11 +29,16 @@ npx skills add axiomhq/skills -s query-metrics
 Create `~/.axiom.toml` with your Axiom deployment(s):
 
 ```toml
+active_deployment = "prod"
+
 [deployments.prod]
 url = "https://api.axiom.co"
+edge_url = "https://<region>.aws.edge.axiom.co"
 token = "xaat-your-api-token"
 org_id = "your-org-id"
 ```
+
+> **Note:** `edge_url` is required for metrics queries. Replace `<region>` with your deployment region (e.g., `us-east-1`, `eu-west-1`).
 
 Get your org_id from Settings → Organization. For the token, use a **Personal Access Token** (Settings → Profile → Personal Access Tokens) for full query access.
 
@@ -42,24 +47,24 @@ Get your org_id from Settings → Organization. For the token, use a **Personal 
 ## Usage
 
 ```bash
-# Setup and check requirements
+# Setup and check requirements (shows your active deployment name)
 scripts/setup
 
 # Fetch the metrics query spec
-scripts/metrics-spec prod
+scripts/metrics-spec <deployment>
 
 # List available metrics in a dataset
-scripts/metrics-info prod my-dataset metrics
+scripts/metrics-info <deployment> my-dataset metrics
 
 # List tags and tag values
-scripts/metrics-info prod my-dataset tags
-scripts/metrics-info prod my-dataset tags service.name values
+scripts/metrics-info <deployment> my-dataset tags
+scripts/metrics-info <deployment> my-dataset tags service.name values
 
 # Find metrics matching a value
-scripts/metrics-info prod my-dataset find-metrics "frontend"
+scripts/metrics-info <deployment> my-dataset find-metrics "frontend"
 
 # Run a metrics query
-scripts/metrics-query prod \
+scripts/metrics-query <deployment> \
   '`my-dataset`:`http.server.duration` | align to 5m using avg | group by `endpoint` using sum' \
   '2025-06-01T00:00:00Z' '2025-06-02T00:00:00Z'
 ```
