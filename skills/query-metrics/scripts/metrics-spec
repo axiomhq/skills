@@ -6,6 +6,8 @@
 # Calls OPTIONS /v1/query/_metrics to retrieve the complete metrics query
 # spec with syntax, operators, and examples. Read this before composing queries.
 #
+# Uses edge_url if configured, otherwise falls back to url.
+#
 # Example:
 #   metrics-spec prod
 
@@ -36,10 +38,16 @@ extract_value() {
 }
 
 URL=$(extract_value "url")
+EDGE_URL=$(extract_value "edge_url")
 
 if [[ -z "$URL" ]]; then
     echo "Error: Could not find deployment '$DEPLOYMENT' in $CONFIG_FILE" >&2
     exit 1
+fi
+
+# Prefer edge_url for metrics endpoints
+if [[ -n "$EDGE_URL" ]]; then
+    URL="$EDGE_URL"
 fi
 
 curl -s -X OPTIONS "${URL}/v1/query/_metrics"

@@ -54,17 +54,41 @@ if [[ -f "$AXIOM_CONFIG" ]]; then
     DEPLOYMENTS=$(grep -c '^\[deployments\.' "$AXIOM_CONFIG" 2>/dev/null || echo 0)
     echo "✓ Found $AXIOM_CONFIG with $DEPLOYMENTS deployment(s)"
 
+    # Show active deployment
+    ACTIVE=$(awk '$1 == "active_deployment" { gsub(/[" ]/, "", $3); print $3; exit }' "$AXIOM_CONFIG")
+    if [[ -n "$ACTIVE" ]]; then
+        echo "  Active deployment: $ACTIVE"
+    else
+        echo "  ⚠ No active_deployment set in config"
+    fi
+
     # List deployments
     echo "  Deployments:"
     grep '^\[deployments\.' "$AXIOM_CONFIG" | sed 's/\[deployments\.\(.*\)\]/    - \1/'
+
+    # Check edge_url for active deployment
+    if [[ -n "$ACTIVE" ]]; then
+        EDGE_URL=$(awk -v deployment="$ACTIVE" -v key="edge_url" '
+            /^\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
+            in_deployment && $1 == key { gsub(/[" ]/, "", $3); print $3; exit }
+        ' "$AXIOM_CONFIG")
+        if [[ -n "$EDGE_URL" ]]; then
+            echo "  Edge URL: $EDGE_URL"
+        else
+            echo "  ⚠ No edge_url configured for '$ACTIVE' — metrics scripts will use the main url"
+        fi
+    fi
 else
     echo "⚠ $AXIOM_CONFIG not found"
     echo ""
     echo "Create it to enable metrics queries:"
     echo ""
     cat << 'EOF'
+active_deployment = "prod"
+
 [deployments.prod]
 url = "https://api.axiom.co"
+edge_url = "https://<region>.aws.edge.axiom.co"
 token = "xaat-your-token-here"
 org_id = "your-org-id"
 EOF
@@ -76,9 +100,10 @@ fi
 echo ""
 echo "=== Setup Complete ==="
 echo ""
-echo "Usage:"
-echo "  scripts/metrics-spec prod                              # Fetch query spec"
-echo "  scripts/metrics-info prod <dataset> metrics             # List metrics"
-echo "  scripts/metrics-info prod <dataset> tags                # List tags"
-echo "  scripts/metrics-query prod '<apl>' '<start>' '<end>'   # Run query"
+DEPLOY_NAME="${ACTIVE:-<deployment>}"
+echo "Usage (deployment: $DEPLOY_NAME):"
+echo "  scripts/metrics-spec $DEPLOY_NAME                              # Fetch query spec"
+echo "  scripts/metrics-info $DEPLOY_NAME <dataset> metrics             # List metrics"
+echo "  scripts/metrics-info $DEPLOY_NAME <dataset> tags                # List tags"
+echo "  scripts/metrics-query $DEPLOY_NAME '<apl>' '<start>' '<end>'   # Run query"
 echo ""

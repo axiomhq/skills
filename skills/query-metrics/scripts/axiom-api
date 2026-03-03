@@ -1,15 +1,26 @@
 #!/usr/bin/env bash
 # axiom-api: Make authenticated requests to Axiom API
 #
-# Usage: axiom-api <deployment> <method> <path> [json-body]
+# Usage: axiom-api [--edge] <deployment> <method> <path> [json-body]
 #
 # Reads credentials from ~/.axiom.toml (shared with axiom-sre)
 #
+# Options:
+#   --edge   Use edge_url instead of url (for metrics endpoints).
+#            Falls back to url if edge_url is not configured.
+#
 # Examples:
 #   axiom-api prod GET /v1/datasets
-#   axiom-api prod POST /v1/query/_metrics '{"apl":"..."}'
+#   axiom-api --edge prod POST /v1/query/_metrics '{"apl":"..."}'
 
 set -euo pipefail
+
+# Parse --edge flag
+USE_EDGE=false
+if [[ "${1:-}" == "--edge" ]]; then
+    USE_EDGE=true
+    shift
+fi
 
 DEPLOYMENT="${1:-}"
 METHOD="${2:-}"
@@ -17,7 +28,7 @@ PATH_="${3:-}"
 BODY="${4:-}"
 
 if [[ -z "$DEPLOYMENT" || -z "$METHOD" || -z "$PATH_" ]]; then
-    echo "Usage: axiom-api <deployment> <method> <path> [json-body]" >&2
+    echo "Usage: axiom-api [--edge] <deployment> <method> <path> [json-body]" >&2
     exit 1
 fi
 
@@ -46,6 +57,14 @@ if [[ -z "$URL" || -z "$TOKEN" || -z "$ORG_ID" ]]; then
     echo "Available deployments:" >&2
     grep '^\[deployments\.' "$CONFIG_FILE" | sed 's/\[deployments\.\(.*\)\]/  - \1/' >&2
     exit 1
+fi
+
+# Use edge_url for metrics endpoints when --edge is specified
+if [[ "$USE_EDGE" == true ]]; then
+    EDGE_URL=$(extract_value "edge_url")
+    if [[ -n "$EDGE_URL" ]]; then
+        URL="$EDGE_URL"
+    fi
 fi
 
 CURL_ARGS=(
