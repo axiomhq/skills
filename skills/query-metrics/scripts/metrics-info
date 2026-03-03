@@ -72,6 +72,12 @@ fi
 TIME_PARAMS="start=${START}&end=${END}"
 BASE="/v1/query/metrics/info/datasets/${DATASET}"
 
+# Resolve the regional edge URL for this dataset
+RESOLVED_URL=$("$SCRIPT_DIR/resolve-url" "$DEPLOYMENT" "$DATASET" 2>/dev/null || true)
+if [[ -n "$RESOLVED_URL" ]]; then
+    export AXIOM_URL_OVERRIDE="$RESOLVED_URL"
+fi
+
 if [[ ${#POSITIONAL[@]} -eq 0 ]]; then
     show_usage
 fi

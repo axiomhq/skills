@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# resolve-url: Resolve the regional edge URL for a dataset
+#
+# Usage: resolve-url <deployment> <dataset>
+#
+# Fetches the dataset's region from the Axiom API and maps it to the
+# correct edge URL. Prints the URL to stdout.
+#
+# Region mapping:
+#   cloud.us-east-1.aws    → https://us-east-1.aws.edge.axiom.co
+#   cloud.eu-central-1.aws → https://eu-central-1.aws.edge.axiom.co
+#   (null/empty)           → falls back to deployment URL from config
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+DEPLOYMENT="${1:-}"
+DATASET="${2:-}"
+
+if [[ -z "$DEPLOYMENT" || -z "$DATASET" ]]; then
+    echo "Usage: resolve-url <deployment> <dataset>" >&2
+    exit 1
+fi
+
+CONFIG_FILE="$HOME/.axiom.toml"
+
+extract_value() {
+    local key="$1"
+    awk -v deployment="$DEPLOYMENT" -v key="$key" '
+        /^\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
+        in_deployment && $1 == key { gsub(/[" ]/, "", $3); print $3; exit }
+    ' "$CONFIG_FILE"
+}
+
+FALLBACK_URL=$(extract_value "url")
+
+REGION=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET /v1/datasets \
+    | jq -r --arg name "$DATASET" '.[] | select(.name == $name) | .region // empty')
+
+if [[ -z "$REGION" || "$REGION" == "null" ]]; then
+    echo "$FALLBACK_URL"
+    exit 0
+fi
+
+# cloud.us-east-1.aws → https://us-east-1.aws.edge.axiom.co
+EDGE_HOST="${REGION#cloud.}"
+echo "https://${EDGE_HOST}.edge.axiom.co"

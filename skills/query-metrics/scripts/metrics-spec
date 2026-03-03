@@ -3,7 +3,7 @@
 #
 # Usage: metrics-spec <deployment>
 #
-# Calls OPTIONS /v1/query/_metrics to retrieve the complete metrics query
+# Calls OPTIONS /v1/query/_mpl to retrieve the complete metrics query
 # spec with syntax, operators, and examples. Read this before composing queries.
 #
 # Example:
@@ -42,4 +42,4 @@ if [[ -z "$URL" ]]; then
     exit 1
 fi
 
-curl -s -X OPTIONS "${URL}/v1/query/_metrics"
+curl -s -X OPTIONS "${URL}/v1/query/_mpl"

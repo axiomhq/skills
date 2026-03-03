@@ -4,10 +4,11 @@
 # Usage: axiom-api <deployment> <method> <path> [json-body]
 #
 # Reads credentials from ~/.axiom.toml (shared with axiom-sre)
+# Set AXIOM_URL_OVERRIDE to route requests to a specific regional endpoint.
 #
 # Examples:
 #   axiom-api prod GET /v1/datasets
-#   axiom-api prod POST /v1/query/_metrics '{"apl":"..."}'
+#   axiom-api prod POST /v1/query/_mpl '{"mpl":"..."}'
 
 set -euo pipefail
 
@@ -36,7 +37,7 @@ extract_value() {
     ' "$CONFIG_FILE"
 }
 
-URL=$(extract_value "url")
+URL="${AXIOM_URL_OVERRIDE:-$(extract_value "url")}"
 TOKEN=$(extract_value "token")
 ORG_ID=$(extract_value "org_id")
 
