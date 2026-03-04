@@ -51,12 +51,12 @@ echo "[3/3] Checking Axiom configuration..."
 
 AXIOM_CONFIG="$HOME/.axiom.toml"
 if [[ -f "$AXIOM_CONFIG" ]]; then
-    DEPLOYMENTS=$(grep -c '^\[deployments\.' "$AXIOM_CONFIG" 2>/dev/null || echo 0)
+    DEPLOYMENTS=$(grep -c '[[:space:]]*\[deployments\.' "$AXIOM_CONFIG" 2>/dev/null || echo 0)
     echo "✓ Found $AXIOM_CONFIG with $DEPLOYMENTS deployment(s)"
 
     # List deployments
     echo "  Deployments:"
-    grep '^\[deployments\.' "$AXIOM_CONFIG" | sed 's/\[deployments\.\(.*\)\]/    - \1/'
+    grep '[[:space:]]*\[deployments\.' "$AXIOM_CONFIG" | sed 's/.*\[deployments\.\(.*\)\]/    - \1/'
 else
     echo "⚠ $AXIOM_CONFIG not found"
     echo ""
@@ -77,8 +77,10 @@ echo ""
 echo "=== Setup Complete ==="
 echo ""
 echo "Usage:"
-echo "  scripts/metrics-spec prod                              # Fetch query spec"
-echo "  scripts/metrics-info prod <dataset> metrics             # List metrics"
-echo "  scripts/metrics-info prod <dataset> tags                # List tags"
-echo "  scripts/metrics-query prod '<apl>' '<start>' '<end>'   # Run query"
+echo "  scripts/datasets prod                                   # List datasets"
+echo "  scripts/datasets prod --kind otel:metrics:v1            # List metrics datasets"
+echo "  scripts/metrics-spec prod <dataset>                      # Fetch query spec"
+echo "  scripts/metrics-info prod <dataset> metrics              # List metrics"
+echo "  scripts/metrics-info prod <dataset> tags                 # List tags"
+echo "  scripts/metrics-query prod '<mpl>' '<start>' '<end>'    # Run query"
 echo ""

@@ -21,7 +21,38 @@ token = "xaat-your-token"
 org_id = "your-org-id"
 ```
 
-The target dataset must be of kind `otel-metrics-v1`.
+The target dataset must be of kind `otel:metrics:v1`.
+
+---
+
+## Discovering Datasets
+
+List all datasets in a deployment:
+
+```bash
+scripts/datasets <deployment>
+```
+
+Filter to only metrics datasets:
+
+```bash
+scripts/datasets <deployment> --kind otel:metrics:v1
+```
+
+This returns each dataset's `name`, `region`, and `kind`. Use the dataset name in subsequent `metrics-info` and `metrics-query` calls.
+
+---
+
+## Region Resolution
+
+Datasets can live in different regions (e.g., `us-east-1` vs `eu-central-1`). The scripts **automatically resolve** the correct regional edge URL before querying. No manual configuration is needed — `metrics-info` and `metrics-query` detect the dataset's region and route requests to the right endpoint.
+
+| Dataset Region | Edge Endpoint |
+|---|---|
+| `cloud.us-east-1.aws` | `https://us-east-1.aws.edge.axiom.co` |
+| `cloud.eu-central-1.aws` | `https://eu-central-1.aws.edge.axiom.co` |
+
+If resolution fails or the region is unknown, requests fall back to the deployment URL in `~/.axiom.toml`.
 
 ---
 
@@ -30,7 +61,7 @@ The target dataset must be of kind `otel-metrics-v1`.
 The query endpoint is self-describing. Before writing any query, fetch the full specification:
 
 ```bash
-scripts/metrics-spec <deployment>
+scripts/metrics-spec <deployment> <dataset>
 ```
 
 This returns the complete metrics query specification with syntax, operators, and examples. Read it to understand query structure before composing queries.
@@ -39,11 +70,12 @@ This returns the complete metrics query specification with syntax, operators, an
 
 ## Workflow
 
-1. **Learn the language**: Run `scripts/metrics-spec <deployment>` to read the metrics query spec
-2. **Discover metrics**: If possible use the find-metrics command, otherwise list available metrics via the info scripts
-3. **Explore tags**: List tags and tag values to understand filtering options
-4. **Write and execute query**: Compose a metrics query and run it via `scripts/metrics-query`
-5. **Iterate**: Refine filters, aggregations, and groupings based on results
+1. **List datasets**: Run `scripts/datasets <deployment>` to see available datasets and their regions
+2. **Learn the language**: Run `scripts/metrics-spec <deployment>` to read the metrics query spec
+3. **Discover metrics**: If possible use the find-metrics command, otherwise list available metrics via the info scripts
+4. **Explore tags**: List tags and tag values to understand filtering options
+5. **Write and execute query**: Compose a metrics query and run it via `scripts/metrics-query`
+6. **Iterate**: Refine filters, aggregations, and groupings based on results
 
 If you are unsure what to query, start by searching for metrics that match a relevant tag value:
 ```bash
@@ -58,7 +90,7 @@ This finds metrics associated with a known value (e.g., a service name or host),
 Execute a metrics query against a dataset:
 
 ```bash
-scripts/metrics-query <deployment> '<apl>' '<startTime>' '<endTime>'
+scripts/metrics-query <deployment> '<mpl>' '<startTime>' '<endTime>'
 ```
 
 **Example:**
@@ -72,9 +104,9 @@ scripts/metrics-query prod \
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `deployment` | Yes | Name from `~/.axiom.toml` (e.g., `prod`) |
-| `apl` | Yes | Metrics query string. Dataset is extracted from the query itself. |
-| `startTime` | Yes | RFC3339 timestamp only (e.g., `2025-01-01T00:00:00Z`). Relative expressions like `now-1h` are **not** supported. |
-| `endTime` | Yes | RFC3339 timestamp only (e.g., `2025-01-02T00:00:00Z`). Relative expressions like `now` are **not** supported. |
+| `mpl` | Yes | Metrics query string. Dataset is extracted from the query itself. |
+| `startTime` | Yes | RFC3339 (e.g., `2025-01-01T00:00:00Z`) or relative expression (e.g., `now-1h`, `now-1d`) |
+| `endTime` | Yes | RFC3339 (e.g., `2025-01-02T00:00:00Z`) or relative expression (e.g., `now`) |
 
 ---
 
@@ -132,9 +164,9 @@ scripts/metrics-info prod my-dataset metrics \
 
 ## Error Handling
 
-HTTP errors return JSON with `message` and `error` fields:
+HTTP errors return JSON with `message`, `code`, and optional `detail` fields:
 ```json
-{"message": "description", "error": "detail"}
+{"message": "description", "code": 400, "detail": {"errorType": 1, "message": "raw error"}}
 ```
 
 Common status codes:
@@ -154,9 +186,11 @@ On a **500 error**, re-run the failing script call with `curl -v` flags to captu
 | Script | Usage |
 |--------|-------|
 | `scripts/setup` | Check requirements and config |
-| `scripts/metrics-spec <deploy>` | Fetch metrics query specification |
-| `scripts/metrics-query <deploy> <apl> <start> <end>` | Execute a metrics query |
+| `scripts/datasets <deploy> [--kind <kind>]` | List datasets (with region info) |
+| `scripts/metrics-spec <deploy> <dataset>` | Fetch metrics query specification |
+| `scripts/metrics-query <deploy> <mpl> <start> <end>` | Execute a metrics query |
 | `scripts/metrics-info <deploy> <dataset> ...` | Discover metrics, tags, and values |
 | `scripts/axiom-api <deploy> <method> <path> [body]` | Low-level API calls |
+| `scripts/resolve-url <deploy> <dataset>` | Resolve dataset to regional edge URL |
 
 Run any script without arguments to see full usage.

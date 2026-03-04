@@ -4,6 +4,7 @@ Runs metrics queries against Axiom MetricsDB and discovers available metrics, ta
 
 ## What It Does
 
+- **Dataset Discovery** - List datasets with region info, auto-resolve regional edge URLs
 - **Metrics Queries** - Execute queries against OpenTelemetry metrics stored in Axiom MetricsDB
 - **Discovery** - List metrics, tags, and tag values in a dataset before writing queries
 - **Search** - Find metrics matching a known tag value (e.g., a service name)
@@ -21,7 +22,7 @@ npx skills add axiomhq/skills -s query-metrics
 
 ## Prerequisites
 
-- Target dataset must be of kind `otel-metrics-v1`
+- Target dataset must be of kind `otel:metrics:v1`
 - Tools: `jq`, `curl`
 
 ## Configuration
@@ -44,6 +45,12 @@ Get your org_id from Settings → Organization. For the token, use a **Personal 
 ```bash
 # Setup and check requirements
 scripts/setup
+
+# List all datasets (with region info)
+scripts/datasets prod
+
+# List only metrics datasets
+scripts/datasets prod --kind otel:metrics:v1
 
 # Fetch the metrics query spec
 scripts/metrics-spec prod
@@ -69,9 +76,11 @@ scripts/metrics-query prod \
 | Script | Purpose |
 |--------|---------|
 | `setup` | Check requirements and config |
+| `datasets` | List datasets with region info |
 | `metrics-spec` | Fetch metrics query specification |
-| `metrics-query` | Execute a metrics query |
-| `metrics-info` | Discover metrics, tags, and values |
+| `metrics-query` | Execute a metrics query (auto-resolves region) |
+| `metrics-info` | Discover metrics, tags, and values (auto-resolves region) |
+| `resolve-url` | Resolve dataset to regional edge URL |
 | `axiom-api` | Low-level authenticated API calls |
 
 ## Related Skills
