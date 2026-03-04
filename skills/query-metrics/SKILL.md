@@ -61,7 +61,7 @@ If resolution fails or the region is unknown, requests fall back to the deployme
 The query endpoint is self-describing. Before writing any query, fetch the full specification:
 
 ```bash
-scripts/metrics-spec <deployment>
+scripts/metrics-spec <deployment> <dataset>
 ```
 
 This returns the complete metrics query specification with syntax, operators, and examples. Read it to understand query structure before composing queries.
@@ -187,7 +187,7 @@ On a **500 error**, re-run the failing script call with `curl -v` flags to captu
 |--------|-------|
 | `scripts/setup` | Check requirements and config |
 | `scripts/datasets <deploy> [--kind <kind>]` | List datasets (with region info) |
-| `scripts/metrics-spec <deploy>` | Fetch metrics query specification |
+| `scripts/metrics-spec <deploy> <dataset>` | Fetch metrics query specification |
 | `scripts/metrics-query <deploy> <mpl> <start> <end>` | Execute a metrics query |
 | `scripts/metrics-info <deploy> <dataset> ...` | Discover metrics, tags, and values |
 | `scripts/axiom-api <deploy> <method> <path> [body]` | Low-level API calls |

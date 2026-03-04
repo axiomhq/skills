@@ -28,7 +28,7 @@ CONFIG_FILE="$HOME/.axiom.toml"
 extract_value() {
     local key="$1"
     awk -v deployment="$DEPLOYMENT" -v key="$key" '
-        /^\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
+        /^[[:space:]]*\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
         in_deployment && $1 == key { gsub(/[" ]/, "", $3); print $3; exit }
     ' "$CONFIG_FILE"
 }

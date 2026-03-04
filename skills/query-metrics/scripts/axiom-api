@@ -32,7 +32,7 @@ fi
 extract_value() {
     local key="$1"
     awk -v deployment="$DEPLOYMENT" -v key="$key" '
-        /^\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
+        /^[[:space:]]*\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
         in_deployment && $1 == key { gsub(/[" ]/, "", $3); print $3; exit }
     ' "$CONFIG_FILE"
 }
@@ -45,7 +45,7 @@ if [[ -z "$URL" || -z "$TOKEN" || -z "$ORG_ID" ]]; then
     echo "Error: Could not find deployment '$DEPLOYMENT' in $CONFIG_FILE" >&2
     echo "" >&2
     echo "Available deployments:" >&2
-    grep '^\[deployments\.' "$CONFIG_FILE" | sed 's/\[deployments\.\(.*\)\]/  - \1/' >&2
+    grep '[[:space:]]*\[deployments\.' "$CONFIG_FILE" | sed 's/.*\[deployments\.\(.*\)\]/  - \1/' >&2
     exit 1
 fi
 
