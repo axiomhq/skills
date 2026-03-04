@@ -4,11 +4,19 @@ Scaffolds evaluation suites for the Axiom AI SDK. Generates eval files, scorers,
 
 ## What It Does
 
+### Offline Evals
+
 - **Eval Generation** - Creates `*.eval.ts` files with typed scorers, test data, and task functions
 - **Scorer Patterns** - Exact match, set match, structured output, tool-use validation
 - **Flag Schemas** - Generates `createAppScope()` with typed Zod schemas for model/parameter tuning
 - **Config Setup** - Creates `axiom.config.ts` with instrumentation hooks and glob patterns
 - **Data Design** - Happy path, adversarial, boundary, and negative test cases
+
+### Online Evals
+
+- **Production Scoring** - Reference-free scoring on live traffic with `onlineEval`
+- **Sampling** - Per-scorer sampling rates and conditional sampling functions
+- **Trace Linking** - Auto-linking inside `withSpan` or deferred via `links`
 
 ## Installation
 

@@ -17,6 +17,8 @@ ls node_modules/axiom/dist/
 
 If not installed, install it using the project's package manager (e.g., `pnpm add axiom`).
 
+**Always check `node_modules/axiom/dist/docs/` first** for the correct API signatures, import paths, and patterns for the installed SDK version. The bundled docs are the source of truth — do not rely on the examples in this skill if they conflict.
+
 ## Philosophy
 
 1. **Evals are tests for AI.** Every eval answers: "does this capability still work?"
@@ -146,8 +148,8 @@ Standard structure of an eval file:
 ```typescript
 import { pickFlags } from '@/app-scope';       // or relative path
 import { Eval } from 'axiom/ai/evals';
-import { Scorer } from 'axiom/ai/evals/scorers';
-import { Mean, PassHatK } from 'axiom/ai/evals/aggregations';
+import { Scorer } from 'axiom/ai/scorers';
+import { Mean, PassHatK } from 'axiom/ai/scorers/aggregations';
 import { myFunction } from './my-function';
 
 const MyScorer = Scorer('my-scorer', ({ output, expected }: { output: string; expected: string }) => {
@@ -311,22 +313,50 @@ Always add `metadata: { purpose: '...' }` to each test case for categorization.
 
 ## Online Evals (Production)
 
-For production scoring (not offline evals):
+Online evaluations score your AI capability's outputs on **live production traffic**. Unlike offline evals that run against a fixed collection with expected values, online evals are **reference-free** — scorers receive `input` and `output` but no `expected`.
+
+Use online evals to: monitor quality in production, catch format regressions, run heuristic checks, or sample traffic for LLM-as-judge scoring without affecting your capability's response.
+
+### When to use online vs offline
+
+| | Offline | Online |
+|---|---|---|
+| **Data** | Curated collection with ground truth | Live production traffic |
+| **Scorers** | Reference-based (`expected`) + reference-free | Reference-free only |
+| **When** | Before deploy (CI, local) | After deploy (production) |
+| **Purpose** | Prevent regressions | Monitor quality |
+
+### Import paths
 
 ```typescript
-import { Scorer } from 'axiom/ai/evals/scorers';
 import { onlineEval } from 'axiom/ai/evals/online';
+import { Scorer } from 'axiom/ai/scorers';
+```
 
-void onlineEval(
-  { capability: 'qa', step: 'answer' },
-  {
-    output: response.text,
-    scorers: [
-      formatScorer,
-      { scorer: qualityScorer, sampling: 0.1 },  // 10% of traffic
-    ],
-  },
-);
+### Function signature
+
+`onlineEval` takes a **mandatory name** (first arg) and params:
+
+```typescript
+void onlineEval('my-eval-name', {
+  capability: 'qa',
+  step: 'answer',           // optional
+  input: userMessage,        // optional, passed to scorers
+  output: response.text,
+  scorers: [formatScorer],
+});
+```
+
+Name must match `[A-Za-z0-9\-_]` only.
+
+Online scorers use the same `Scorer` API as offline (see `reference/scorer-patterns.md`), but are **reference-free** — they receive `input` and `output` but no `expected`. Online evals never throw errors into your app's code; scorer failures are recorded on the eval span as OTel events.
+
+Key differences from offline: per-scorer **sampling** (number or async function), **trace linking** via `links` param or auto-detection inside `withSpan`, and **fire-and-forget** (`void`) vs **await** for short-lived processes.
+
+**Before writing online eval code, always read the SDK's bundled docs first** — they match the installed version and contain the latest API, parameters, and patterns:
+
+```bash
+cat node_modules/axiom/dist/docs/evals/online/functions/onlineEval.md
 ```
 
 ---
@@ -355,7 +385,7 @@ ls node_modules/axiom/dist/docs/
 
 Key paths:
 - `node_modules/axiom/dist/docs/evals/functions/Eval.md`
-- `node_modules/axiom/dist/docs/evals/scorers/functions/Scorer.md`
+- `node_modules/axiom/dist/docs/scorers/scorers/functions/Scorer.md`
 - `node_modules/axiom/dist/docs/evals/online/functions/onlineEval.md`
-- `node_modules/axiom/dist/docs/evals/aggregations/README.md`
+- `node_modules/axiom/dist/docs/scorers/aggregations/README.md`
 - `node_modules/axiom/dist/docs/config/README.md`
