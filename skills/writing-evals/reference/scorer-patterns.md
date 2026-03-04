@@ -9,7 +9,7 @@ Common scoring patterns for Axiom AI evaluations.
 **When:** Output must equal expected exactly.
 
 ```typescript
-import { Scorer } from 'axiom/ai/evals/scorers';
+import { Scorer } from 'axiom/ai/scorers';
 
 const ExactMatch = Scorer(
   'exact-match',
@@ -35,8 +35,8 @@ return output.toLowerCase().trim() === expected.toLowerCase().trim();
 **When:** Running multiple trials and need aggregated scores.
 
 ```typescript
-import { Scorer } from 'axiom/ai/evals/scorers';
-import { Mean } from 'axiom/ai/evals/aggregations';
+import { Scorer } from 'axiom/ai/scorers';
+import { Mean } from 'axiom/ai/scorers/aggregations';
 
 const ExactMatchMean = Scorer(
   'exact-match-mean',
@@ -51,7 +51,7 @@ const ExactMatchMean = Scorer(
 
 **Variants:**
 ```typescript
-import { PassHatK, PassAtK } from 'axiom/ai/evals/aggregations';
+import { PassHatK, PassAtK } from 'axiom/ai/scorers/aggregations';
 
 // Pass if ALL trials match
 const ExactMatchAllPass = Scorer('exact-match-all', scorerFn, { aggregation: PassHatK() });
@@ -303,7 +303,7 @@ npm install autoevals
 ```
 
 ```typescript
-import { Scorer } from 'axiom/ai/evals/scorers';
+import { Scorer } from 'axiom/ai/scorers';
 import { Levenshtein, Factuality } from 'autoevals';
 
 const LevenshteinScorer = Scorer(

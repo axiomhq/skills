@@ -1,5 +1,5 @@
 import { Eval } from 'axiom/ai/evals';
-import { Scorer } from 'axiom/ai/evals/scorers';
+import { Scorer } from 'axiom/ai/scorers';
 // import { pickFlags } from '@/app-scope';
 
 // TODO: import or define your agent result type

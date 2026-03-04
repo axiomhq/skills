@@ -149,7 +149,7 @@ Standard structure of an eval file:
 import { pickFlags } from '@/app-scope';       // or relative path
 import { Eval } from 'axiom/ai/evals';
 import { Scorer } from 'axiom/ai/scorers';
-import { Mean, PassHatK } from 'axiom/ai/evals/aggregations';
+import { Mean, PassHatK } from 'axiom/ai/scorers/aggregations';
 import { myFunction } from './my-function';
 
 const MyScorer = Scorer('my-scorer', ({ output, expected }: { output: string; expected: string }) => {
@@ -385,7 +385,7 @@ ls node_modules/axiom/dist/docs/
 
 Key paths:
 - `node_modules/axiom/dist/docs/evals/functions/Eval.md`
-- `node_modules/axiom/dist/docs/scorers/functions/Scorer.md`
+- `node_modules/axiom/dist/docs/scorers/scorers/functions/Scorer.md`
 - `node_modules/axiom/dist/docs/evals/online/functions/onlineEval.md`
-- `node_modules/axiom/dist/docs/evals/aggregations/README.md`
+- `node_modules/axiom/dist/docs/scorers/aggregations/README.md`
 - `node_modules/axiom/dist/docs/config/README.md`

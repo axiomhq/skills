@@ -10,9 +10,9 @@ Exact type signatures for the Axiom AI SDK evaluation APIs.
 |--------|---------|
 | `axiom/ai` | `createAppScope`, `initAxiomAI`, `withSpan`, `wrapAISDKModel`, `wrapTool`, `axiomAIMiddleware`, `RedactionPolicy` |
 | `axiom/ai/evals` | `Eval`, `EvalTask`, `EvalParams` |
-| `axiom/ai/evals/scorers` | `Scorer` |
+| `axiom/ai/scorers` | `Scorer` |
 | `axiom/ai/evals/online` | `onlineEval` |
-| `axiom/ai/evals/aggregations` | `Mean`, `Median`, `PassAtK`, `PassHatK`, `AtLeastOneTrialPasses`, `AllTrialsPass` |
+| `axiom/ai/scorers/aggregations` | `Mean`, `Median`, `PassAtK`, `PassHatK`, `AtLeastOneTrialPasses`, `AllTrialsPass` |
 | `axiom/ai/config` | `defineConfig` |
 | `axiom/ai/feedback` | `createFeedbackClient` |
 
