@@ -198,6 +198,50 @@ Test each chart type APL pattern against `sample-http-logs` in Axiom Playground.
 - [ ] Returns ≤100 rows
 - [ ] Only specified columns shown
 
+### 5.7 Metrics Filter Tree Shape Regression (logical root vs leaf root)
+
+Use this to prevent regressions where metrics filters serialize as a leaf root with nested children.
+
+**Prompt:**
+"Create a metrics TimeSeries chart for `otel-metrics:http.server.duration` filtered to `service.name=api` and `deployment.environment=prod`, with `align to 1m using avg`."
+
+**Expected chart query shape (good):**
+```json
+{
+  "query": {
+    "metricsFilter": {
+      "op": "and",
+      "children": [
+        { "op": "==", "field": "service.name", "value": "api" },
+        { "op": "==", "field": "deployment.environment", "value": "prod" }
+      ]
+    }
+  }
+}
+```
+
+**Malformed shape to reject (bad):**
+```json
+{
+  "query": {
+    "metricsFilter": {
+      "op": "==",
+      "field": "service.name",
+      "value": "api",
+      "children": [
+        { "op": "==", "field": "deployment.environment", "value": "prod" }
+      ]
+    }
+  }
+}
+```
+
+**Validation:**
+- [ ] Agent always outputs `and` as the logical root for metrics filter trees (including zero/one predicate cases)
+- [ ] Leaf nodes only contain `op`, `field`, `value`
+- [ ] Agent rejects/rewrites malformed leaf-root-with-children shape
+- [ ] `metricsTransformations` order in JSON matches intended execution order
+
 ---
 
 ## Test 6: Layout Recommendations
