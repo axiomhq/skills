@@ -12,6 +12,64 @@ Charts support JSON configuration options beyond the query. These are set at the
 }
 ```
 
+## Metrics Query Fields (MetricsDB Charts)
+
+Metrics charts use `query.metrics*` fields in addition to `query.apl`.
+
+### Minimal Metrics Query
+
+```json
+{
+  "type": "TimeSeries",
+  "query": {
+    "apl": "`otel-metrics`:`system.cpu.utilization`",
+    "metricsDataset": "otel-metrics",
+    "metricsMetric": "system.cpu.utilization",
+    "metricsFilter": {
+      "op": "and",
+      "children": []
+    },
+    "metricsTransformations": []
+  }
+}
+```
+
+### Metrics Query with Filters and Transformations
+
+```json
+{
+  "type": "TimeSeries",
+  "query": {
+    "apl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| where `deployment.environment` == \"prod\"\n| align to 1m using avg\n| group by `service.name` using avg",
+    "metricsDataset": "otel-metrics",
+    "metricsMetric": "http.server.duration",
+    "metricsFilter": {
+      "op": "and",
+      "children": [
+        { "op": "==", "field": "service.name", "value": "api" },
+        { "op": "==", "field": "deployment.environment", "value": "prod" }
+      ]
+    },
+    "metricsTransformations": [
+      { "type": "align", "to": "1m", "using": "avg", "uuid": "align-1" },
+      { "type": "group", "by": ["service.name"], "using": "avg", "uuid": "group-1" }
+    ]
+  }
+}
+```
+
+### Metrics Filter Shape Rules
+
+- Root of `metricsFilter` must be an `and` logical node, even for a single predicate: `{"op":"and","children":[...]}`.
+- Leaf nodes use: `{ "op": "==|!=|>|<|>=|<=", "field": "...", "value": "..." }`.
+- Do not attach `children` to a leaf root.
+
+### Transformation Ordering
+
+`metricsTransformations` are applied in array order. If you place `map` before `align`, that exact order is executed.
+
+For full contract details, see `reference/metrics-mpl.md`.
+
 ## Statistic Options
 
 ```json

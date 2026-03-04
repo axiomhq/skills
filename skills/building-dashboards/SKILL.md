@@ -1,6 +1,6 @@
 ---
 name: building-dashboards
-description: Designs and builds Axiom dashboards via API. Covers chart types, APL patterns, SmartFilters, layout, and configuration options. Use when creating dashboards, migrating from Splunk, or configuring chart options.
+description: Designs and builds Axiom dashboards via API. Covers chart types, APL and metrics/MPL query patterns, SmartFilters, layout, and configuration options. Use when creating dashboards, migrating from Splunk, or configuring chart options.
 ---
 
 # Building Dashboards
@@ -58,6 +58,13 @@ Before designing, clarify:
 
 5. **Drilldown dimensions**
    - What do users filter/group by? (service, route, status, pod, customer_id)
+
+6. **Metrics/MPL-specific (when dataset is metrics)**
+   - Which metric names should be charted (`metricsMetric`)?
+   - Which tag filters are required, and are there multiple predicates?
+   - Should filters be authored as a logical root (`{"op":"and","children":[...]}`)?
+   - Which transformations are needed (`map`, `align`, `group`, `bucket`) and in what exact order?
+   - Do we need `query-metrics` first to discover available metrics/tags/values?
 
 ---
 
@@ -121,6 +128,35 @@ The console uses `react-grid-layout` which requires `minH`, `minW`, `moved`, and
 ```
 
 Use descriptive kebab-case IDs (e.g. `error-rate`, `p95-latency`, `traffic-rps`). The `dashboard-validate` and deploy scripts enforce this automatically.
+
+---
+
+## Metrics/MPL Chart Contract
+
+Metrics-backed charts are not driven by plain APL alone. Persist and validate these fields in `chart.query`:
+
+- `metricsDataset`
+- `metricsMetric`
+- `metricsFilter`
+- `metricsTransformations`
+
+**Filter shape rule (critical):** the root of `metricsFilter` must be an `and` logical node, including single-predicate payloads (`{"op":"and","children":[...]}`).
+
+```json
+{
+  "op": "and",
+  "children": [
+    {"op": "==", "field": "service.name", "value": "api"},
+    {"op": "==", "field": "deployment.environment", "value": "prod"}
+  ]
+}
+```
+
+Do **not** use a leaf root with children. That shape is malformed and child predicates are ignored.
+
+**Transformation execution rule:** `metricsTransformations` run in array order. Keep authored order exactly as intended.
+
+See `reference/metrics-mpl.md` for full JSON contracts, valid node shapes, and ordering examples.
 
 ---
 
@@ -478,6 +514,8 @@ org_id = "your-org-id"
 
 **axiom-sre:** Discover schema with `getschema`, explore baselines, identify dimensions, then productize into panels.
 
+**query-metrics:** Discover metrics datasets, metric names, tags, and tag values before authoring `metricsFilter` / `metricsTransformations` payloads.
+
 ---
 
 ## Templates
@@ -521,6 +559,7 @@ scripts/dashboard-create prod ./dashboard.json
 ## Reference
 
 - `reference/chart-config.md` — All chart configuration options (JSON)
+- `reference/metrics-mpl.md` — Metrics/MPL chart payload contract (`metricsFilter` + transformations)
 - `reference/smartfilter.md` — SmartFilter/FilterBar full configuration
 - `reference/chart-cookbook.md` — APL patterns per chart type
 - `reference/layout-recipes.md` — Grid layouts and section blueprints
