@@ -159,7 +159,7 @@ If the array is:
 [
   { "type": "align", "to": "1m", "using": "avg", "uuid": "align-1" },
   { "type": "group", "by": ["service.name"], "using": "sum", "uuid": "group-1" },
-  { "type": "map", "expression": "_value * 8", "uuid": "map-1" }
+  { "type": "map", "expression": "* 8", "uuid": "map-1" }
 ]
 ```
 
@@ -168,7 +168,7 @@ The generated pipeline order is:
 ```apl
 | align to 1m using avg
 | group by `service.name` using sum
-| map _value * 8
+| map * 8
 ```
 
 ## Authoring Checklist
@@ -180,20 +180,3 @@ When generating metrics chart JSON:
 3. Keep each filter leaf as `{op, field, value}` only.
 4. Preserve `metricsTransformations` order.
 5. Keep `query.apl` aligned with the metrics payload (for UI preview/debugging), but treat metrics fields as source-of-truth.
-
-## Source Verification
-
-Behavior above is verified in `axiomhq/app`:
-
-- Metrics filter schema, logical/leaf union, and supported operators:
-  - `packages/swagger/api/dashboards/dashboard.schema.ts`
-- Metrics filter guards/constructors (logical root is `and`; non-logical leaves are separate shape):
-  - `apps/console/src/hubs/dash/routes/query/builderHelpers/filterManipulation.ts`
-- APL generation order (`dataset/metric` → `where` from filter → transformations in sequence, including `bucket`):
-  - `apps/console/src/hubs/dash/util/apl/queryRequestToAplRequest.ts`
-- Query-builder normalization/de-normalization behavior while editing metrics filters:
-  - `apps/console/src/hubs/dash/routes/query/components/QueryFormBuilder.tsx`
-- Raw `metricsTransformations` merge to preserve extended fields during form submit:
-  - `apps/console/src/hubs/dash/routes/query/components/QueryForm.tsx`
-- Assistant-side metrics filter schema for generated dashboards:
-  - `apps/console/src/routes/frapi/-trpc/routers/assistant/generateDashboard.ts`
