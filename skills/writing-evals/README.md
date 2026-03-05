@@ -26,21 +26,28 @@ npx skills add axiomhq/skills
 
 ## Prerequisites
 
+- Complete the [Axiom AI SDK Quickstart](https://axiom.co/docs/ai-engineering/quickstart) (instrumentation + authentication)
 - Node.js 18+
 - `vitest` installed as dev dependency
 - Axiom AI SDK (`axiom`) installed
 
-## Configuration
+## Authentication
 
-Set environment variables or create `axiom.config.ts`:
+### Option 1: OAuth login (recommended for local development)
+
+```bash
+npx axiom auth login
+```
+
+This stores credentials locally. The SDK reads them automatically.
+
+### Option 2: Environment variables
 
 ```bash
 export AXIOM_URL="https://api.axiom.co"
 export AXIOM_TOKEN="xaat-your-token"
 export AXIOM_DATASET="your-dataset"
 ```
-
-Or use `axiom.config.ts`:
 
 ```typescript
 import { defineConfig } from 'axiom/ai/config';

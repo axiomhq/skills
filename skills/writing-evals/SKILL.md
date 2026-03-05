@@ -9,7 +9,9 @@ You write evaluations that prove AI capabilities work. Evals are the test suite 
 
 ## Prerequisites
 
-Before writing eval code, check if the SDK is installed:
+- Complete the [Axiom AI SDK Quickstart](https://axiom.co/docs/ai-engineering/quickstart) (instrumentation + authentication)
+
+Verify the SDK is installed:
 
 ```bash
 ls node_modules/axiom/dist/
@@ -185,7 +187,7 @@ For detailed patterns and type signatures, read these on demand:
 
 ## Authentication Setup
 
-Before running evals, the user must authenticate with the Axiom CLI. Check if they've already done this before suggesting it.
+Before running evals, the user must authenticate. Check if they've already done this before suggesting it.
 
 ### Option 1: OAuth login (recommended)
 
@@ -203,6 +205,8 @@ npx axiom auth switch
 npx axiom auth logout
 ```
 
+OAuth stores credentials locally. The SDK reads them automatically.
+
 ### Option 2: Environment variables
 
 Store in `.env` at the project root:
@@ -214,7 +218,7 @@ AXIOM_DATASET="DATASET_NAME"
 AXIOM_ORG_ID="ORGANIZATION_ID"
 ```
 
-The CLI uses OAuth credentials first, then falls back to environment variables. Environment variables in `axiom.config.ts` (`process.env.AXIOM_TOKEN`, etc.) are used for the eval framework's data transport, while CLI auth is used for eval run attribution in the Console.
+**Online evals** run inside your production app, not via the CLI — they use your app's existing credentials. OAuth CLI login is not involved. See the Online Evals section.
 
 ---
 
