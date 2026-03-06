@@ -41,6 +41,8 @@ npx axiom auth login
 
 This stores credentials locally. The SDK reads them automatically.
 
+> **Note:** OAuth CLI login does not apply to online evals — they run inside your app, not the CLI.
+
 ### Option 2: Environment variables
 
 ```bash
