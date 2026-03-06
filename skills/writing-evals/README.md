@@ -33,17 +33,7 @@ npx skills add axiomhq/skills
 
 ## Authentication
 
-### Option 1: OAuth login (recommended for local development)
-
-```bash
-npx axiom auth login
-```
-
-This stores credentials locally. The SDK reads them automatically.
-
-> **Note:** OAuth CLI login does not apply to online evals — they run inside your app, not the CLI.
-
-### Option 2: Environment variables
+Set environment variables — this works for both offline and online evals:
 
 ```bash
 export AXIOM_URL="https://api.axiom.co"

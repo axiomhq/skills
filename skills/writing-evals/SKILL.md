@@ -189,27 +189,7 @@ For detailed patterns and type signatures, read these on demand:
 
 Before running evals, the user must authenticate. Check if they've already done this before suggesting it.
 
-### Option 1: OAuth login (recommended)
-
-```bash
-# Login via browser OAuth
-npx axiom auth login
-
-# Verify authentication
-npx axiom auth status
-
-# Switch organizations (if multiple)
-npx axiom auth switch
-
-# Logout
-npx axiom auth logout
-```
-
-OAuth stores credentials locally. The SDK reads them automatically.
-
-### Option 2: Environment variables
-
-Store in `.env` at the project root:
+Set environment variables (works for both offline and online evals). Store in `.env` at the project root:
 
 ```bash
 AXIOM_URL="https://api.axiom.co"
@@ -217,8 +197,6 @@ AXIOM_TOKEN="API_TOKEN"
 AXIOM_DATASET="DATASET_NAME"
 AXIOM_ORG_ID="ORGANIZATION_ID"
 ```
-
-**Online evals** run inside your production app, not via the CLI — they use your app's existing credentials. OAuth CLI login is not involved. See the Online Evals section.
 
 ---
 
