@@ -21,7 +21,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 eval "$("$SCRIPT_DIR/config" axiom "$DEPLOYMENT")"
 
 # Auto-resolve edge URL for query and ingest endpoints
+# Edge uses /v1/query/_apl for queries (not /v1/datasets/_apl)
 REQUEST_URL="$AXIOM_URL"
+REQUEST_ENDPOINT="$ENDPOINT"
 case "$ENDPOINT" in
   /v1/datasets/_apl*|/v1/ingest/*)
     DATASET=""
@@ -33,15 +35,18 @@ case "$ENDPOINT" in
     fi
     if [[ -n "$DATASET" ]]; then
       RESOLVED=$("$SCRIPT_DIR/resolve-url" "$DEPLOYMENT" "$DATASET" 2>/dev/null || true)
-      if [[ -n "$RESOLVED" ]]; then
+      if [[ -n "$RESOLVED" && "$RESOLVED" != "$AXIOM_URL" ]]; then
         REQUEST_URL="$RESOLVED"
+        if [[ "$ENDPOINT" == /v1/datasets/_apl* ]]; then
+          REQUEST_ENDPOINT="/v1/query/_apl${ENDPOINT#/v1/datasets/_apl}"
+        fi
       fi
     fi
     ;;
 esac
 
 if [[ -n "$BODY" ]]; then
-  "$SCRIPT_DIR/curl-auth" axiom "$DEPLOYMENT" -X "$METHOD" -d "$BODY" "${REQUEST_URL}${ENDPOINT}"
+  "$SCRIPT_DIR/curl-auth" axiom "$DEPLOYMENT" -X "$METHOD" -d "$BODY" "${REQUEST_URL}${REQUEST_ENDPOINT}"
 else
-  "$SCRIPT_DIR/curl-auth" axiom "$DEPLOYMENT" -X "$METHOD" "${REQUEST_URL}${ENDPOINT}"
+  "$SCRIPT_DIR/curl-auth" axiom "$DEPLOYMENT" -X "$METHOD" "${REQUEST_URL}${REQUEST_ENDPOINT}"
 fi

@@ -42,7 +42,7 @@ eval "$("$SCRIPT_DIR/config" axiom "$DEPLOYMENT")"
 
 # Step 1: get dataset region
 REGION=$("$SCRIPT_DIR/curl-auth" axiom "$DEPLOYMENT" -X GET "${AXIOM_URL}/v1/datasets" \
-    | jq -r --arg name "$DATASET" '.[] | select(.name == $name) | .region // empty' 2>/dev/null)
+    | jq -r --arg name "$DATASET" '.[] | select(.name == $name) | .edgeDeployment // .region // empty' 2>/dev/null)
 
 if [[ -z "$REGION" || "$REGION" == "null" ]]; then
     echo "$AXIOM_URL"

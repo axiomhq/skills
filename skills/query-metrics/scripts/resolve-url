@@ -36,7 +36,7 @@ extract_value() {
 FALLBACK_URL=$(extract_value "url")
 
 REGION=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET /v1/datasets \
-    | jq -r --arg name "$DATASET" '.[] | select(.name == $name) | .region // empty')
+    | jq -r --arg name "$DATASET" '.[] | select(.name == $name) | .edgeDeployment // .region // empty')
 
 if [[ -z "$REGION" || "$REGION" == "null" ]]; then
     echo "$FALLBACK_URL"
