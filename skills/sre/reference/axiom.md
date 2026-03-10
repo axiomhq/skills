@@ -1,13 +1,12 @@
 # Axiom API Capabilities
 
-Summary of all operations available via Axiom API with a personal access token (PAT).
+Summary of all operations available via Axiom API.
 
-**Base URL:** `https://api.axiom.co` (for all endpoints except ingestion)  
-**Ingest URL:** Use edge deployment domain (e.g., `https://us-east-1.aws.edge.axiom.co`)
+**Base URL:** `https://api.axiom.co` (for management endpoints)  
+**Query & Ingest URL:** Auto-resolved per dataset via `scripts/resolve-url`
 
 **Authentication:**
-- PAT: `Authorization: Bearer $PAT` + `x-axiom-org-id: $ORG_ID`
-- API Token: `Authorization: Bearer $API_TOKEN`
+- `Authorization: Bearer $API_TOKEN` — use an advanced API token with minimal privileges
 
 ---
 

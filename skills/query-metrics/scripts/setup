@@ -70,7 +70,7 @@ org_id = "your-org-id"
 EOF
     echo ""
     echo "Get your org_id from Settings → Organization."
-    echo "For the token, use a Personal Access Token (Settings → Profile → Personal Access Tokens)."
+    echo "For the token, create a scoped API token (Settings → API Tokens) with the permissions your workflow needs."
 fi
 
 echo ""

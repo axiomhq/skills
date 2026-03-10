@@ -148,9 +148,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Auto-resolve edge URL
+QUERY_URL="$AXIOM_URL"
+DATASET=$(echo "$APL" | grep -oE "^\['[^']+'\]|^\[\"[^\"]+\"\]|^\[[a-zA-Z0-9_-]+\]" | head -1 | tr -d "[]'\"" || true)
+if [[ -n "$DATASET" ]]; then
+  RESOLVED=$("$SCRIPT_DIR/resolve-url" "$DEPLOYMENT" "$DATASET" 2>/dev/null || true)
+  if [[ -n "$RESOLVED" ]]; then
+    QUERY_URL="$RESOLVED"
+  fi
+fi
+
 # Execute query and pipe to formatter
 HTTP_CODE=$(curl -sS -o "$RESP_BODY" -D "$RESP_HEADERS" -w "%{http_code}" \
-  -X POST "$AXIOM_URL/v1/datasets/_apl?format=tabular" \
+  -X POST "$QUERY_URL/v1/datasets/_apl?format=tabular" \
   -H "Authorization: Bearer $AXIOM_TOKEN" \
   -H "X-Axiom-Org-Id: $AXIOM_ORG_ID" \
   -H "Content-Type: application/json" \
