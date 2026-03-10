@@ -58,6 +58,8 @@ If resolution fails or the region is unknown, requests fall back to the deployme
 
 ## Learning the Metrics Query Syntax
 
+> **CRITICAL:** You MUST run `metrics-spec` before composing your first query in a session. NEVER guess MPL syntax.
+
 The query endpoint is self-describing. Before writing any query, fetch the full specification:
 
 ```bash
@@ -68,10 +70,56 @@ This returns the complete metrics query specification with syntax, operators, an
 
 ---
 
+## MPL Quick Reference
+
+This is a minimal reference to avoid common mistakes. Always run `metrics-spec` for the full specification.
+
+### Identifiers
+
+Identifiers that contain anything other than ASCII letters, digits, or `_` **must** be backtick-escaped:
+
+```mpl
+// CORRECT — dots require backticks
+`host.name`
+`service.name`
+`k8s.namespace.name`
+
+// WRONG — parser will fail on the dot
+host.name
+```
+
+### Filtering with `where`
+
+Use `| where` to filter series by tag values. Chain multiple `| where` clauses (equivalent to `and`):
+
+```mpl
+my-dataset:cpu_usage
+| where `service.name` == "query"
+| where namespace == "production"
+| align to 5m using avg
+```
+
+You can also combine conditions in a single `where` using `and`, `or`, `not`, and parentheses:
+
+```mpl
+my-dataset:http_requests
+| where method == "GET" and status_code >= 400
+| where `service.name` == "frontend" or `service.name` == "gateway"
+| align to 5m using sum
+```
+
+**Important:**
+- Use `where`, not `filter` (`filter` is deprecated and produces a warning)
+- Boolean operators are `and`, `or`, `not` — do NOT use `&&` or `||` (these are not valid MPL)
+- String values must be double-quoted: `"value"`
+- Regular expressions use slashes: `/.*pattern.*/`
+
+---
+
 ## Workflow
 
 1. **List datasets**: Run `scripts/datasets <deployment>` to see available datasets and their regions
-2. **Learn the language**: Run `scripts/metrics-spec <deployment>` to read the metrics query spec
+2. **Learn the language**: Run `scripts/metrics-spec <deployment> <dataset>` to read the metrics query spec — **this step is mandatory**
 3. **Discover metrics**: If possible use the find-metrics command, otherwise list available metrics via the info scripts
 4. **Explore tags**: List tags and tag values to understand filtering options
 5. **Write and execute query**: Compose a metrics query and run it via `scripts/metrics-query`
@@ -93,12 +141,19 @@ Execute a metrics query against a dataset:
 scripts/metrics-query <deployment> '<mpl>' '<startTime>' '<endTime>'
 ```
 
-**Example:**
+**Examples:**
 ```bash
+# Simple query
 scripts/metrics-query prod \
   'my-dataset:http.server.duration | align to 5m using avg' \
   '2025-06-01T00:00:00Z' \
   '2025-06-02T00:00:00Z'
+
+# Query with filtering (note backticks on dotted tag names)
+scripts/metrics-query prod \
+  'my-dataset:http.server.duration | where `service.name` == "frontend" and method == "GET" | align to 5m using avg | group by status_code using sum' \
+  'now-1d' \
+  'now'
 ```
 
 | Parameter | Required | Description |
