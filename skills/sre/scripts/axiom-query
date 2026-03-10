@@ -149,6 +149,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Auto-resolve edge URL
+QUERY_URL="$AXIOM_URL"
 QUERY_PATH="/v1/datasets/_apl?format=tabular"
 DATASET=$(echo "$APL" | grep -oE "^\['[^']+'\]|^\[\"[^\"]+\"\]|^\[[a-zA-Z0-9_-]+\]" | head -1 | tr -d "[]'\"" || true)
 if [[ -n "$DATASET" ]]; then
