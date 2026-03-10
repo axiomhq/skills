@@ -37,7 +37,6 @@ if [[ -f "$DATASET_CACHE" ]]; then
     fi
 fi
 
-# Load config to get the base URL as fallback
 eval "$("$SCRIPT_DIR/config" axiom "$DEPLOYMENT")"
 
 # Step 1: get dataset region

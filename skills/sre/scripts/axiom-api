@@ -21,7 +21,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 eval "$("$SCRIPT_DIR/config" axiom "$DEPLOYMENT")"
 
 # Auto-resolve edge URL for query and ingest endpoints
-# Edge uses /v1/query/_apl for queries (not /v1/datasets/_apl)
 REQUEST_URL="$AXIOM_URL"
 REQUEST_ENDPOINT="$ENDPOINT"
 case "$ENDPOINT" in
