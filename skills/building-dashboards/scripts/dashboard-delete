@@ -28,5 +28,5 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     exit 0
 fi
 
-"$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" DELETE "/internal/dashboards/$ID"
+"$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" DELETE "/dashboards/uid/$ID"
 echo "Deleted: $ID"

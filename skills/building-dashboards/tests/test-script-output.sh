@@ -64,11 +64,11 @@ METHOD="${2:-}"
 PATH_="${3:-}"
 
 case "$METHOD:$PATH_" in
-  "POST:/internal/dashboards")
-    echo '{"id":"created-id"}'
+  "POST:/dashboards")
+    echo '{"status":"created","dashboard":{"uid":"created-uid","id":"created-id","version":1,"dashboard":{"name":"Test Dashboard"},"createdAt":"2026-02-01T10:00:00Z","updatedAt":"2026-02-01T10:00:00Z","createdBy":"alice@example.com","updatedBy":"alice@example.com"}}'
     ;;
-  "PUT:/internal/dashboards/dashboard-root-id")
-    echo '{"id":"dashboard-root-id","updated":true}'
+  "PUT:/dashboards/uid/dashboard-root-id")
+    echo '{"status":"updated","dashboard":{"uid":"dashboard-root-id","id":"dashboard-root-id","version":2,"dashboard":{"name":"Test Dashboard","updated":true},"createdAt":"2026-02-01T10:00:00Z","updatedAt":"2026-02-02T11:00:00Z","createdBy":"alice@example.com","updatedBy":"bob@example.com"}}'
     ;;
   *)
     echo "Unexpected call: $METHOD $PATH_" >&2
@@ -83,14 +83,14 @@ echo "Script Stdout Contract"
 echo "======================"
 
 create_out=$("$TMPDIR/dashboard-create" prod "$TMPDIR/input.json")
-if [[ "$create_out" == "created-id" ]]; then
-    ok "dashboard-create outputs only dashboard ID"
+if [[ "$create_out" == "created-uid" ]]; then
+    ok "dashboard-create outputs only dashboard UID"
 else
-    fail "dashboard-create outputs only dashboard ID" "got: $create_out"
+    fail "dashboard-create outputs only dashboard UID" "got: $create_out"
 fi
 
 update_out=$("$TMPDIR/dashboard-update" prod dashboard-root-id "$TMPDIR/input.json")
-if echo "$update_out" | jq -e '.id == "dashboard-root-id" and .updated == true' > /dev/null 2>&1; then
+if echo "$update_out" | jq -e '.dashboard.uid == "dashboard-root-id" and .dashboard.dashboard.updated == true' > /dev/null 2>&1; then
     ok "dashboard-update outputs valid JSON only"
 else
     fail "dashboard-update outputs valid JSON only" "got: $update_out"
