@@ -145,13 +145,13 @@ scripts/metrics-query <deployment> '<mpl>' '<startTime>' '<endTime>'
 ```bash
 # Simple query
 scripts/metrics-query prod \
-  'my-dataset:http.server.duration | align to 5m using avg' \
+  '`my-dataset`:`http.server.duration` | align to 5m using avg' \
   '2025-06-01T00:00:00Z' \
   '2025-06-02T00:00:00Z'
 
 # Query with filtering (note backticks on dotted tag names)
 scripts/metrics-query prod \
-  'my-dataset:http.server.duration | where `service.name` == "frontend" and method == "GET" | align to 5m using avg | group by status_code using sum' \
+  '`my-dataset`:`http.server.duration` | where `service.name` == "frontend" and method == "GET" | align to 5m using avg | group by status_code using sum' \
   'now-1d' \
   'now'
 ```
