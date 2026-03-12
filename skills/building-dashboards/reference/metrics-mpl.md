@@ -2,14 +2,9 @@
 
 This reference documents the chart query contract for *metrics-backed* dashboard charts.
 
-Unlike event charts (which are driven by APL in `query.apl`), metrics charts are persisted with metrics-specific fields:
+Metrics charts place the MPL pipeline string in the `query.apl` field (the same field used for APL queries) and add a required `metricsDataset` field that tells the frontend to route the query to the metrics backend.
 
-- `query.metricsDataset`
-- `query.metricsMetric`
-- `query.metricsFilter`
-- `query.metricsTransformations`
-
-The console still generates an APL preview from these fields, but the source of truth for metrics charts is the metrics payload.
+> **CRITICAL:** Run `scripts/metrics/metrics-spec <deployment> <dataset>` before composing your first MPL query in a session. NEVER guess MPL syntax.
 
 ## Canonical JSON Shape
 
@@ -18,165 +13,42 @@ The console still generates an APL preview from these fields, but the source of 
   "type": "TimeSeries",
   "query": {
     "apl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| align to 1m using avg\n| group by `service.name` using avg",
-    "metricsDataset": "otel-metrics",
-    "metricsMetric": "http.server.duration",
-    "metricsFilter": {
-      "op": "and",
-      "children": [
-        {
-          "op": "==",
-          "field": "service.name",
-          "value": "api"
-        }
-      ]
-    },
-    "metricsTransformations": [
-      {
-        "type": "align",
-        "to": "1m",
-        "using": "avg",
-        "uuid": "align-1"
-      },
-      {
-        "type": "group",
-        "by": ["service.name"],
-        "using": "avg",
-        "uuid": "group-1"
-      }
-    ]
+    "metricsDataset": "otel-metrics"
   }
 }
 ```
 
-## `metricsFilter` Node Shapes
+### Required and Optional Fields
 
-`metricsFilter` is a recursive union.
+| Field | Required? | Description |
+|-------|-----------|-------------|
+| `apl` | ✅ Yes | The MPL pipeline string |
+| `metricsDataset` | ✅ Yes | Dataset name — triggers the metrics query path |
+| `metricsMetric` | ❌ No | Metric name (used by the UI form editor) |
+| `metricsFilter` | ❌ No | Structured filter tree (used by the UI form editor) |
+| `metricsTransformations` | ❌ No | Structured transformations (used by the UI form editor) |
 
-The only supported logical operator is `and`.
-
-1. **Logical node**
-
-```json
-{
-  "op": "and",
-  "children": [
-    { "op": "==", "field": "service.name", "value": "api" },
-    { "op": ">", "field": "status.code", "value": "499" }
-  ]
-}
-```
-
-2. **Leaf node**
-
-```json
-{
-  "op": "==",
-  "field": "service.name",
-  "value": "api"
-}
-```
-
-Supported leaf operators: `==`, `!=`, `>`, `<`, `>=`, `<=`.
-
-## Logical-Root Rule (Critical)
-
-The root of `metricsFilter` must be an `and` logical node, even for a single filter or no filters.
-
-### ✅ Correct (single filter)
-
-```json
-{
-  "op": "and",
-  "children": [
-    { "op": "==", "field": "service.name", "value": "api" }
-  ]
-}
-```
-
-### ✅ Correct (multiple filters)
-
-```json
-{
-  "op": "and",
-  "children": [
-    { "op": "==", "field": "service.name", "value": "api" },
-    { "op": "==", "field": "deployment.environment", "value": "prod" }
-  ]
-}
-```
-
-### ❌ Incorrect (children on a leaf root)
-
-```json
-{
-  "op": "==",
-  "field": "service.name",
-  "value": "api",
-  "children": [
-    { "op": "==", "field": "deployment.environment", "value": "prod" }
-  ]
-}
-```
-
-In this malformed shape, the leaf is treated as a leaf and child predicates are effectively dropped/ignored during processing.
-
-The UI may temporarily represent a single filter as a leaf while editing. For skill-generated JSON and persisted chart payloads, normalize back to an `and` root before writing dashboard config.
-
-## Supported `metricsTransformations` Shapes
-
-```json
-[
-  { "type": "align", "to": "1m", "using": "avg", "uuid": "align-1" },
-  { "type": "group", "by": ["service.name"], "using": "sum", "uuid": "group-1" },
-  { "type": "map", "expression": "rate", "uuid": "map-1" },
-  {
-    "type": "bucket",
-    "to": "1m",
-    "by": ["service.name"],
-    "fn": "histogram",
-    "histogramRateKind": "rate",
-    "using": [
-      { "fn": "avg" },
-      { "fn": "percentile", "argument": 95 }
-    ],
-    "uuid": "bucket-1"
-  }
-]
-```
-
-Notes:
-- `bucket.fn` is optional and defaults to `histogram`.
-- `histogramRateKind` applies to histogram interpolation variants.
-- Preserve additional transformation fields (for example `bucket.fn`, `bucket.histogramRateKind`, `map.argument`) when round-tripping form values.
-
-## Transformation Order
-
-`metricsTransformations` are applied **in array order**. Do not reorder unless requested.
-
-If the array is:
-
-```json
-[
-  { "type": "align", "to": "1m", "using": "avg", "uuid": "align-1" },
-  { "type": "group", "by": ["service.name"], "using": "sum", "uuid": "group-1" },
-  { "type": "map", "expression": "* 8", "uuid": "map-1" }
-]
-```
-
-The generated pipeline order is:
-
-```apl
-| align to 1m using avg
-| group by `service.name` using sum
-| map * 8
-```
+> **Why `apl`?** The dashboard schema uses `apl` as the query text field for both APL and MPL queries. The presence of `metricsDataset` is what distinguishes a metrics chart from an APL chart.
 
 ## Authoring Checklist
 
 When generating metrics chart JSON:
 
-1. Set `metricsDataset` and `metricsMetric`.
-2. Use `metricsFilter` with a logical `{"op":"and","children":[]}` root **always** (even for zero or one predicate).
-3. Keep each filter leaf as `{op, field, value}` only.
-4. Preserve `metricsTransformations` order.
-5. Keep `query.apl` aligned with the metrics payload (for UI preview/debugging), but treat metrics fields as source-of-truth.
+1. Confirm dataset kind is `otel:metrics:v1` via `scripts/metrics/datasets <deploy>`.
+2. Run `scripts/metrics/metrics-spec` to learn the full MPL syntax — **mandatory, never guess**.
+3. Discover available metrics and tags with `scripts/metrics/metrics-info`. If results are empty, retry with `--start` set to 7 days ago (sparse metrics may not have data in the default 24h window).
+4. Put the full MPL pipeline in `query.apl` and set `query.metricsDataset` to the dataset name.
+5. Validate your query with `scripts/metrics/metrics-query` before embedding in the dashboard.
+
+> **Note:** `find-metrics <value>` searches tag values, not metric names. Use `metrics-info <deploy> <dataset> metrics` to list metric names.
+
+## Metrics Discovery & Query Scripts
+
+| Script | Usage |
+|--------|-------|
+| `scripts/metrics/datasets <deploy> [--kind <kind>]` | List datasets (with edge deployment info) |
+| `scripts/metrics/metrics-spec <deploy> <dataset>` | Fetch MPL query specification |
+| `scripts/metrics/metrics-info <deploy> <dataset> ...` | Discover metrics, tags, and values |
+| `scripts/metrics/metrics-query <deploy> <mpl> <start> <end>` | Execute a metrics query |
+
+> These scripts are vendored from `query-metrics`. Keep in sync if upstream behavior changes.
