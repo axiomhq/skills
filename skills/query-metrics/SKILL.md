@@ -39,20 +39,20 @@ Filter to only metrics datasets:
 scripts/datasets <deployment> --kind otel:metrics:v1
 ```
 
-This returns each dataset's `name`, `region`, and `kind`. Use the dataset name in subsequent `metrics-info` and `metrics-query` calls.
+This returns each dataset's `name`, `edgeDeployment`, and `kind`. Use the dataset name in subsequent `metrics-info` and `metrics-query` calls.
 
 ---
 
-## Region Resolution
+## Edge Deployment Resolution
 
-Datasets can live in different regions (e.g., `us-east-1` vs `eu-central-1`). The scripts **automatically resolve** the correct regional edge URL before querying. No manual configuration is needed — `metrics-info` and `metrics-query` detect the dataset's region and route requests to the right endpoint.
+Datasets can live in different edge deployments (e.g., `us-east-1` vs `eu-central-1`). The scripts **automatically resolve** the correct regional edge URL before querying. No manual configuration is needed — `metrics-info` and `metrics-query` detect the dataset's edge deployment and route requests to the right endpoint.
 
-| Dataset Region | Edge Endpoint |
+| Edge Deployment | Edge Endpoint |
 |---|---|
 | `cloud.us-east-1.aws` | `https://us-east-1.aws.edge.axiom.co` |
 | `cloud.eu-central-1.aws` | `https://eu-central-1.aws.edge.axiom.co` |
 
-If resolution fails or the region is unknown, requests fall back to the deployment URL in `~/.axiom.toml`.
+If resolution fails or the edge deployment is unknown, requests fall back to the deployment URL in `~/.axiom.toml`.
 
 ---
 
@@ -118,7 +118,7 @@ my-dataset:http_requests
 
 ## Workflow
 
-1. **List datasets**: Run `scripts/datasets <deployment>` to see available datasets and their regions
+1. **List datasets**: Run `scripts/datasets <deployment>` to see available datasets and their edge deployments
 2. **Learn the language**: Run `scripts/metrics-spec <deployment> <dataset>` to read the metrics query spec — **this step is mandatory**
 3. **Discover metrics**: If possible use the find-metrics command, otherwise list available metrics via the info scripts
 4. **Explore tags**: List tags and tag values to understand filtering options
@@ -241,11 +241,11 @@ On a **500 error**, re-run the failing script call with `curl -v` flags to captu
 | Script | Usage |
 |--------|-------|
 | `scripts/setup` | Check requirements and config |
-| `scripts/datasets <deploy> [--kind <kind>]` | List datasets (with region info) |
+| `scripts/datasets <deploy> [--kind <kind>]` | List datasets (with edge deployment info) |
 | `scripts/metrics-spec <deploy> <dataset>` | Fetch metrics query specification |
 | `scripts/metrics-query <deploy> <mpl> <start> <end>` | Execute a metrics query |
 | `scripts/metrics-info <deploy> <dataset> ...` | Discover metrics, tags, and values |
 | `scripts/axiom-api <deploy> <method> <path> [body]` | Low-level API calls |
-| `scripts/resolve-url <deploy> <dataset>` | Resolve dataset to regional edge URL |
+| `scripts/resolve-url <deploy> <dataset>` | Resolve dataset to edge deployment URL |
 
 Run any script without arguments to see full usage.

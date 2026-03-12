@@ -29,14 +29,14 @@ fi
 # Extract dataset name from MPL: `dataset`:`metric` ... or dataset:`metric` ...
 DATASET=$(echo "$MPL" | sed 's/`//g' | cut -d: -f1 | tr -d '[:space:]')
 
-QUERY_REGION=""
+QUERY_EDGE_DEPLOYMENT=""
 if [[ -n "$DATASET" ]]; then
     RESOLVED_URL=$("$SCRIPT_DIR/resolve-url" "$DEPLOYMENT" "$DATASET" 2>/dev/null || true)
     if [[ -n "$RESOLVED_URL" ]]; then
         export AXIOM_URL_OVERRIDE="$RESOLVED_URL"
-        # Derive queryRegion from edge URL: https://eu-central-1.aws.edge.axiom.co → cloud.eu-central-1.aws
+        # Derive queryEdgeDeployment from edge URL: https://eu-central-1.aws.edge.axiom.co → cloud.eu-central-1.aws
         if [[ "$RESOLVED_URL" == *".edge.axiom.co" ]]; then
-            QUERY_REGION="cloud.$(echo "$RESOLVED_URL" | sed 's|https://||;s|\.edge\.axiom\.co||')"
+            QUERY_EDGE_DEPLOYMENT="cloud.$(echo "$RESOLVED_URL" | sed 's|https://||;s|\.edge\.axiom\.co||')"
         fi
     fi
 fi
@@ -48,9 +48,9 @@ JQ_ARGS=(
 )
 JQ_EXPR='{apl: $apl, startTime: $start, endTime: $end}'
 
-if [[ -n "$QUERY_REGION" ]]; then
-    JQ_ARGS+=(--arg region "$QUERY_REGION")
-    JQ_EXPR='{apl: $apl, startTime: $start, endTime: $end, queryRegion: $region}'
+if [[ -n "$QUERY_EDGE_DEPLOYMENT" ]]; then
+    JQ_ARGS+=(--arg edgeDeployment "$QUERY_EDGE_DEPLOYMENT")
+    JQ_EXPR='{apl: $apl, startTime: $start, endTime: $end, queryEdgeDeployment: $edgeDeployment}'
 fi
 
 BODY=$(jq -n "${JQ_ARGS[@]}" "$JQ_EXPR")

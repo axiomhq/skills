@@ -4,7 +4,7 @@
 # Usage: axiom-api <deployment> <method> <path> [json-body]
 #
 # Reads credentials from ~/.axiom.toml (shared with axiom-sre)
-# Set AXIOM_URL_OVERRIDE to route requests to a specific regional endpoint.
+# Set AXIOM_URL_OVERRIDE to route requests to a specific edge deployment endpoint.
 #
 # Examples:
 #   axiom-api prod GET /v1/datasets
