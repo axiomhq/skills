@@ -33,7 +33,7 @@ RESPONSE=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET /v1/datasets)
 
 if [[ -n "$KIND_FILTER" ]]; then
     echo "$RESPONSE" | jq --arg kind "$KIND_FILTER" \
-        '[.[] | select(.kind == $kind) | {name, region, kind}]'
+        '[.[] | select(.kind == $kind) | {name, edgeDeployment, kind}]'
 else
-    echo "$RESPONSE" | jq '[.[] | {name, region, kind}]'
+    echo "$RESPONSE" | jq '[.[] | {name, edgeDeployment, kind}]'
 fi
