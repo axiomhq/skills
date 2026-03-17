@@ -4,7 +4,7 @@ Runs metrics queries against Axiom MetricsDB and discovers available metrics, ta
 
 ## What It Does
 
-- **Dataset Discovery** - List datasets with region info, auto-resolve regional edge URLs
+- **Dataset Discovery** - List datasets with edge deployment info, auto-resolve regional edge URLs
 - **Metrics Queries** - Execute queries against OpenTelemetry metrics stored in Axiom MetricsDB
 - **Discovery** - List metrics, tags, and tag values in a dataset before writing queries
 - **Search** - Find metrics matching a known tag value (e.g., a service name)
@@ -46,7 +46,7 @@ Get your org_id from Settings → Organization. For the token, create a scoped *
 # Setup and check requirements
 scripts/setup
 
-# List all datasets (with region info)
+# List all datasets (with edge deployment info)
 scripts/datasets prod
 
 # List only metrics datasets
@@ -76,11 +76,11 @@ scripts/metrics-query prod \
 | Script | Purpose |
 |--------|---------|
 | `setup` | Check requirements and config |
-| `datasets` | List datasets with region info |
+| `datasets` | List datasets with edge deployment info |
 | `metrics-spec` | Fetch metrics query specification |
-| `metrics-query` | Execute a metrics query (auto-resolves region) |
-| `metrics-info` | Discover metrics, tags, and values (auto-resolves region) |
-| `resolve-url` | Resolve dataset to regional edge URL |
+| `metrics-query` | Execute a metrics query (auto-resolves edge deployment) |
+| `metrics-info` | Discover metrics, tags, and values (auto-resolves edge deployment) |
+| `resolve-url` | Resolve dataset to edge deployment URL |
 | `axiom-api` | Low-level authenticated API calls |
 
 ## Related Skills

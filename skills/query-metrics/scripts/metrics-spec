@@ -6,7 +6,7 @@
 # Calls OPTIONS /v1/query/_mpl to retrieve the complete metrics query
 # spec with syntax, operators, and examples. Read this before composing queries.
 #
-# The dataset is needed to resolve the correct regional edge URL.
+# The dataset is needed to resolve the correct edge deployment URL.
 #
 # Example:
 #   metrics-spec prod my-metrics-dataset
