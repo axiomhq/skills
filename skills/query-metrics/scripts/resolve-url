@@ -24,22 +24,6 @@ if [[ -z "$DEPLOYMENT" || -z "$DATASET" ]]; then
 fi
 
 CONFIG_FILE="$HOME/.axiom.toml"
-CACHE_DIR="${TMPDIR:-/tmp}/axiom-resolve-url"
-CACHE_FILE="${CACHE_DIR}/${DEPLOYMENT}__${DATASET}"
-CACHE_TTL=3600  # 1 hour
-
-# Return cached result if fresh
-if [[ -f "$CACHE_FILE" ]]; then
-    if [[ "$(uname)" == "Darwin" ]]; then
-        FILE_AGE=$(( $(date +%s) - $(stat -f %m "$CACHE_FILE") ))
-    else
-        FILE_AGE=$(( $(date +%s) - $(stat -c %Y "$CACHE_FILE") ))
-    fi
-    if [[ "$FILE_AGE" -lt "$CACHE_TTL" ]]; then
-        cat "$CACHE_FILE"
-        exit 0
-    fi
-fi
 
 extract_value() {
     local key="$1"
@@ -54,15 +38,11 @@ FALLBACK_URL=$(extract_value "url")
 EDGE_DEPLOYMENT=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET /v1/datasets \
     | jq -r --arg name "$DATASET" '.[] | select(.name == $name) | .edgeDeployment // empty')
 
-RESOLVED_URL=""
 if [[ -z "$EDGE_DEPLOYMENT" || "$EDGE_DEPLOYMENT" == "null" ]]; then
-    RESOLVED_URL="$FALLBACK_URL"
-else
-    # cloud.us-east-1.aws → https://us-east-1.aws.edge.axiom.co
-    EDGE_HOST="${EDGE_DEPLOYMENT#cloud.}"
-    RESOLVED_URL="https://${EDGE_HOST}.edge.axiom.co"
+    echo "$FALLBACK_URL"
+    exit 0
 fi
 
-mkdir -p "$CACHE_DIR"
-echo "$RESOLVED_URL" > "$CACHE_FILE"
-echo "$RESOLVED_URL"
+# cloud.us-east-1.aws → https://us-east-1.aws.edge.axiom.co
+EDGE_HOST="${EDGE_DEPLOYMENT#cloud.}"
+echo "https://${EDGE_HOST}.edge.axiom.co"
