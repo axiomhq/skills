@@ -1,7 +1,7 @@
 {
   "name": "{{name}}",
   "description": "{{description}}",
-  "owner": "{{owner_id}}",
+  "owner": "X-AXIOM-EVERYONE",
   "datasets": ["{{dataset}}"],
   "refreshTime": 60,
   "schemaVersion": 2,

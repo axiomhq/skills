@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests for TOML parsing logic used across building-dashboards scripts.
 #
-# Covers extract_value (from axiom-api, dashboard-link, get-user-id) and
+# Covers extract_value (from axiom-api, dashboard-link) and
 # the grep-based deployment listing in setup.
 #
 # Usage: scripts/test-toml-parsing
@@ -24,7 +24,7 @@ assert_eq() {
     fi
 }
 
-# --- extract_value (shared by axiom-api, dashboard-link, get-user-id) ---
+# --- extract_value (shared by axiom-api, dashboard-link) ---
 # Extracts a value from ~/.axiom.toml for a given deployment.
 # We inline the awk logic here to test it in isolation.
 run_extract_value() {
