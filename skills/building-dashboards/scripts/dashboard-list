@@ -19,10 +19,10 @@ if [[ -z "$DEPLOYMENT" ]]; then
     exit 1
 fi
 
-RESPONSE=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET "/internal/dashboards?limit=1000")
+RESPONSE=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET "/dashboards?limit=1000")
 
 if [[ "$FORMAT" == "--json" ]]; then
     echo "$RESPONSE" | jq .
 else
-    echo "$RESPONSE" | jq -r '.[] | [.id, .name] | @tsv'
+    echo "$RESPONSE" | jq -r '.[] | [.uid, .dashboard.name] | @tsv'
 fi

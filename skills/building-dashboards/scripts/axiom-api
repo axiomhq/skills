@@ -9,10 +9,10 @@
 # Reads credentials from ~/.axiom.toml (shared with axiom-sre)
 #
 # Examples:
-#   axiom-api prod GET /internal/dashboards
-#   axiom-api prod GET /internal/dashboards/abc123
-#   axiom-api prod POST /internal/dashboards '{"name":"Test",...}'
-#   axiom-api prod GET /v2/user
+#   axiom-api prod GET /dashboards
+#   axiom-api prod GET /dashboards/abc123
+#   axiom-api prod POST /dashboards '{"name":"Test",...}'
+#   axiom-api prod GET /user
 
 set -euo pipefail
 
@@ -71,8 +71,7 @@ if [[ -z "$URL" || -z "$TOKEN" || -z "$ORG_ID" ]]; then
     exit 1
 fi
 
-# Dashboard API uses app.* instead of api.*
-API_URL="${URL/api./app.}/api"
+API_URL="${URL%/}/v2"
 
 CURL_ARGS=(
     -s
