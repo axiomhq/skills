@@ -36,14 +36,16 @@ fi
 # Read, strip server-managed fields, and normalize layout for react-grid-layout
 BODY=$(jq -L "$SCRIPT_DIR" '
   include "dashboard-normalize";
-  del(.id, .version, .createdAt, .updatedAt, .createdBy, .updatedBy) |
+  del(.id, .uid, .version, .createdAt, .updatedAt, .createdBy, .updatedBy) |
   normalize_dashboard_layout
 ' "$JSON_FILE")
 
-RESPONSE=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" POST "/internal/dashboards" "$BODY")
+BODY=$(echo "$BODY" | jq '{dashboard: .}')
 
-# Extract and print the new dashboard ID
-ID=$(echo "$RESPONSE" | jq -r '.id // empty')
+RESPONSE=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" POST "/dashboards" "$BODY")
+
+# Extract and print the new dashboard UID
+ID=$(echo "$RESPONSE" | jq -r '.dashboard.uid // empty')
 if [[ -n "$ID" ]]; then
     echo "$ID"
 else

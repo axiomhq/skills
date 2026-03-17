@@ -49,6 +49,12 @@ if [[ -z "$VERSION" ]]; then
     exit 1
 fi
 
-RESPONSE=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" PUT "/internal/dashboards/$ID" "$BODY")
+# Wrap body in v2 envelope: {dashboard: {...}, version: N}
+# Version must be a numeric int64. jq loses precision on large integers,
+# so we inject it via string substitution.
+DASHBOARD=$(echo "$BODY" | jq 'del(.version)')
+BODY="{\"dashboard\":${DASHBOARD},\"version\":${VERSION}}"
+
+RESPONSE=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" PUT "/dashboards/uid/$ID" "$BODY")
 
 echo "$RESPONSE" | jq .
