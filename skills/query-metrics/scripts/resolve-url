@@ -3,10 +3,10 @@
 #
 # Usage: resolve-url <deployment> <dataset>
 #
-# Fetches the dataset's region from the Axiom API and maps it to the
+# Fetches the dataset's edgeDeployment from the Axiom API and maps it to the
 # correct edge URL. Prints the URL to stdout.
 #
-# Region mapping:
+# Edge deployment mapping:
 #   cloud.us-east-1.aws    → https://us-east-1.aws.edge.axiom.co
 #   cloud.eu-central-1.aws → https://eu-central-1.aws.edge.axiom.co
 #   (null/empty)           → falls back to deployment URL from config
@@ -35,14 +35,14 @@ extract_value() {
 
 FALLBACK_URL=$(extract_value "url")
 
-REGION=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET /v1/datasets \
-    | jq -r --arg name "$DATASET" '.[] | select(.name == $name) | .edgeDeployment // .region // empty')
+EDGE_DEPLOYMENT=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET /v1/datasets \
+    | jq -r --arg name "$DATASET" '.[] | select(.name == $name) | .edgeDeployment // empty')
 
-if [[ -z "$REGION" || "$REGION" == "null" ]]; then
+if [[ -z "$EDGE_DEPLOYMENT" || "$EDGE_DEPLOYMENT" == "null" ]]; then
     echo "$FALLBACK_URL"
     exit 0
 fi
 
 # cloud.us-east-1.aws → https://us-east-1.aws.edge.axiom.co
-EDGE_HOST="${REGION#cloud.}"
+EDGE_HOST="${EDGE_DEPLOYMENT#cloud.}"
 echo "https://${EDGE_HOST}.edge.axiom.co"
