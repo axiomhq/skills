@@ -60,16 +60,16 @@ Before testing:
 
 ## Test 3: Template Usage
 
-**Prompt:** "Create a service overview dashboard for 'payment-api' using the 'http-logs' dataset, owner_id is 12345678-1234-1234-1234-123456789abc"
+**Prompt:** "Create a service overview dashboard for 'payment-api' using the 'http-logs' dataset"
 
 **Expected behavior:**
 - Agent uses `dashboard-from-template` or manually applies service-overview template
-- Replaces placeholders with provided values (use get-user-id to obtain owner UUID)
+- Replaces placeholders with provided values
 - Outputs valid dashboard JSON
 
 **Validation:**
 - [ ] Uses service-overview template
-- [ ] Replaces {{service}}, {{dataset}}, {{owner_id}} correctly
+- [ ] Replaces {{service}}, {{dataset}} correctly
 - [ ] Output is valid JSON
 - [ ] Chart queries reference correct dataset
 
@@ -223,8 +223,7 @@ Test each chart type APL pattern against `sample-http-logs` in Axiom Playground.
 ### 7.1 dashboard-new
 ```bash
 cd skills/building-dashboards
-USER_ID=$(./scripts/get-user-id prod)
-./scripts/dashboard-new "Test Dashboard" "$USER_ID" "synthetic_http" /tmp/test-new.json
+./scripts/dashboard-new "Test Dashboard" "synthetic_http" /tmp/test-new.json
 cat /tmp/test-new.json | jq .
 ```
 
@@ -236,8 +235,7 @@ cat /tmp/test-new.json | jq .
 
 ### 7.2 dashboard-from-template
 ```bash
-USER_ID=$(./scripts/get-user-id prod)
-./scripts/dashboard-from-template service-overview "test-api" "$USER_ID" "synthetic_http" /tmp/test-template.json
+./scripts/dashboard-from-template service-overview "test-api" "synthetic_http" /tmp/test-template.json
 cat /tmp/test-template.json | jq .
 ```
 
@@ -291,10 +289,10 @@ echo '{"name": "bad"}' > /tmp/bad-dashboard.json
 
 ### 7.7 axiom-api (low-level)
 ```bash
-./scripts/axiom-api prod GET /v2/user | jq .id
+./scripts/axiom-api prod GET /dashboards | jq '.[0].uid'
 ```
 
-**Expected:** Returns your user ID
+**Expected:** Returns a dashboard UID
 
 - [ ] Script runs without error
 - [ ] Returns valid JSON
@@ -400,11 +398,8 @@ Output the complete dashboard JSON."
 Requires Axiom API access and completed setup.
 
 ```bash
-# Get your user ID
-USER_ID=$(./scripts/get-user-id prod)
-
 # Generate dashboard
-./scripts/dashboard-from-template service-overview "test-api" "$USER_ID" "synthetic_http" /tmp/deploy-test.json
+./scripts/dashboard-from-template service-overview "test-api" "synthetic_http" /tmp/deploy-test.json
 
 # Validate
 ./scripts/dashboard-validate /tmp/deploy-test.json

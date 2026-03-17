@@ -414,9 +414,7 @@ Recommendations:
 | Executive/weekly | 5m–15m |
 
 ### Sharing
-- **Just Me**: Private, only you can access
-- **Group**: Specific team/group in your org
-- **Everyone**: All users in your Axiom org
+All dashboards created via API tokens are shared with everyone in the org (`owner: "X-AXIOM-EVERYONE"`). Private dashboards are not supported with API tokens.
 
 Data visibility is still governed by dataset permissions—users only see data from datasets they can access.
 
@@ -446,7 +444,6 @@ org_id = "your-org-id"
 
 | Script | Usage |
 |--------|-------|
-| `scripts/get-user-id <deploy>` | Get your user ID for `owner` field |
 | `scripts/dashboard-list <deploy>` | List all dashboards |
 | `scripts/dashboard-get <deploy> <id>` | Fetch dashboard JSON |
 | `scripts/dashboard-validate <file>` | Validate JSON structure |
@@ -491,12 +488,11 @@ Pre-built templates in `reference/templates/`:
 | `api-health.json` | HTTP API with traffic/errors/latency |
 | `blank.json` | Minimal skeleton |
 
-**Placeholders:** `{{owner_id}}`, `{{service}}`, `{{dataset}}`
+**Placeholders:** `{{service}}`, `{{dataset}}`
 
 **Usage:**
 ```bash
-USER_ID=$(scripts/get-user-id prod)
-scripts/dashboard-from-template service-overview "my-service" "$USER_ID" "my-dataset" ./dashboard.json
+scripts/dashboard-from-template service-overview "my-service" "my-dataset" ./dashboard.json
 scripts/dashboard-validate ./dashboard.json
 scripts/dashboard-create prod ./dashboard.json
 ```
@@ -510,7 +506,7 @@ scripts/dashboard-create prod ./dashboard.json
 | Problem | Cause | Solution |
 |---------|-------|----------|
 | "unable to find dataset" errors | Dataset name doesn't exist in your org | Check available datasets in Axiom UI |
-| "creating dashboards for other users" 403 | Owner ID doesn't match your token | Use `scripts/get-user-id prod` to get your UUID |
+| "creating private dashboards" 403 | API tokens can only create shared dashboards | Use `owner: "X-AXIOM-EVERYONE"` (the default) |
 | All panels show errors | Field names don't match your schema | Discover schema first, use sed to fix field names |
 | Dashboard shows no data | Service filter too restrictive | Remove or adjust `where service == 'x'` filters |
 | Queries time out | Missing time filter or too broad | Dashboard inherits time from picker; ad-hoc queries need explicit time filter |

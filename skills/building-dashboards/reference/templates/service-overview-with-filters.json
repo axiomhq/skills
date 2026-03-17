@@ -1,7 +1,7 @@
 {
   "name": "{{service}} - Service Overview (Filtered)",
   "description": "Interactive dashboard for {{service}} with SmartFilter. Allows filtering by route and status code.",
-  "owner": "{{owner_id}}",
+  "owner": "X-AXIOM-EVERYONE",
   "datasets": ["{{dataset}}"],
   "refreshTime": 60,
   "schemaVersion": 2,

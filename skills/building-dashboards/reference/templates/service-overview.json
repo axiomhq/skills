@@ -1,7 +1,7 @@
 {
   "name": "{{service}} - Service Overview",
   "description": "Oncall dashboard for {{service}} service. Shows traffic, errors, latency, and recent error logs.",
-  "owner": "{{owner_id}}",
+  "owner": "X-AXIOM-EVERYONE",
   "datasets": ["{{dataset}}"],
   "refreshTime": 60,
   "schemaVersion": 2,
