@@ -1,7 +1,7 @@
 {
   "name": "{{service}} - API Health",
   "description": "HTTP API health dashboard showing golden signals: traffic, errors, latency, and status distribution.",
-  "owner": "{{owner_id}}",
+  "owner": "X-AXIOM-EVERYONE",
   "datasets": ["{{dataset}}"],
   "refreshTime": 60,
   "schemaVersion": 2,

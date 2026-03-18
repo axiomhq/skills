@@ -46,11 +46,8 @@ org_id = "your-org-id"
 # Setup and check requirements
 scripts/setup
 
-# Get your user ID for dashboard ownership
-scripts/get-user-id <deployment>
-
 # Create dashboard from template
-scripts/dashboard-from-template service-overview "my-service" "$USER_ID" "my-dataset" ./dashboard.json
+scripts/dashboard-from-template service-overview "my-service" "my-dataset" ./dashboard.json
 
 # Validate dashboard JSON
 scripts/dashboard-validate ./dashboard.json
@@ -76,7 +73,6 @@ scripts/dashboard-delete <deployment> <id>
 | `dashboard-copy` | Clone a dashboard |
 | `dashboard-delete` | Delete with confirmation |
 | `dashboard-from-template` | Generate from template |
-| `get-user-id` | Get your UUID for ownership |
 
 ## Templates
 
