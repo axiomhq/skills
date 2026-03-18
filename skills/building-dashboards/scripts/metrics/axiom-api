@@ -2,7 +2,7 @@
 # axiom-api: Make authenticated requests to the Axiom DATA/METRICS API
 #
 # ⚠️ This script uses raw URLs for the data API.
-# For dashboard/app API calls (/internal/dashboards, /v2/user), use scripts/axiom-api instead.
+# For dashboard/app API calls, use scripts/axiom-api instead.
 #
 # Usage: axiom-api <deployment> <method> <path> [json-body]
 #
@@ -24,15 +24,6 @@ if [[ -z "$DEPLOYMENT" || -z "$METHOD" || -z "$PATH_" ]]; then
     echo "Usage: axiom-api <deployment> <method> <path> [json-body]" >&2
     exit 1
 fi
-
-# Reject dashboard/app paths that should use scripts/axiom-api
-case "$PATH_" in
-    /internal/dashboards*|/v2/user*)
-        echo "Error: This script is for the data/metrics API." >&2
-        echo "For dashboard/app endpoints ($PATH_), use scripts/axiom-api instead." >&2
-        exit 2
-        ;;
-esac
 
 CONFIG_FILE="$HOME/.axiom.toml"
 if [[ ! -f "$CONFIG_FILE" ]]; then
