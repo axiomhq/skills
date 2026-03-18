@@ -54,6 +54,7 @@ fi
 
 CURL_ARGS=(
     -s
+    -w '\n%{http_code}'
     -X "$METHOD"
     -H "Authorization: Bearer $TOKEN"
     -H "X-Axiom-Org-Id: $ORG_ID"
@@ -65,4 +66,15 @@ if [[ -n "$BODY" ]]; then
     CURL_ARGS+=(-d "$BODY")
 fi
 
-curl "${CURL_ARGS[@]}" "${URL}${PATH_}"
+RESPONSE=$(curl "${CURL_ARGS[@]}" "${URL}${PATH_}")
+
+HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+BODY_CONTENT=$(echo "$RESPONSE" | sed '$d')
+
+if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
+    echo "$BODY_CONTENT"
+else
+    echo "Error: HTTP $HTTP_CODE from $METHOD ${URL}${PATH_}" >&2
+    echo "$BODY_CONTENT" >&2
+    exit 1
+fi
