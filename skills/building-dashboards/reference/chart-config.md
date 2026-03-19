@@ -12,6 +12,36 @@ Charts support JSON configuration options beyond the query. These are set at the
 }
 ```
 
+## Metrics/MPL Query (MetricsDB Charts)
+
+Metrics charts place the MPL pipeline string in `query.apl` and add `query.metricsDataset` to route the query to the metrics backend. Run `scripts/metrics/metrics-spec` to learn the full syntax before composing queries.
+
+### Minimal Metrics Query
+
+```json
+{
+  "type": "TimeSeries",
+  "query": {
+    "apl": "`otel-metrics`:`system.cpu.utilization`",
+    "metricsDataset": "otel-metrics"
+  }
+}
+```
+
+### Metrics Query with Filters and Transformations
+
+```json
+{
+  "type": "TimeSeries",
+  "query": {
+    "apl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| where `deployment.environment` == \"prod\"\n| align to 1m using avg\n| group by `service.name` using avg",
+    "metricsDataset": "otel-metrics"
+  }
+}
+```
+
+For full contract details, see `reference/metrics-mpl.md`.
+
 ## Statistic Options
 
 ```json

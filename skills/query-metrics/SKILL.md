@@ -58,78 +58,30 @@ If resolution fails or the edge deployment is unknown, requests fall back to the
 
 ## Learning the Metrics Query Syntax
 
-> **CRITICAL:** You MUST run `metrics-spec` before composing your first query in a session. NEVER guess MPL syntax.
-
-The query endpoint is self-describing. Before writing any query, fetch the full specification:
+> **CRITICAL:** You MUST run `metrics-spec` before composing your first query in a session. NEVER guess MPL syntax — it changes over time and the spec is the only source of truth.
 
 ```bash
 scripts/metrics-spec <deployment> <dataset>
 ```
 
-This returns the complete metrics query specification with syntax, operators, and examples. Read it to understand query structure before composing queries.
-
----
-
-## MPL Quick Reference
-
-This is a minimal reference to avoid common mistakes. Always run `metrics-spec` for the full specification.
-
-### Identifiers
-
-Identifiers that contain anything other than ASCII letters, digits, or `_` **must** be backtick-escaped:
-
-```mpl
-// CORRECT — dots require backticks
-`host.name`
-`service.name`
-`k8s.namespace.name`
-
-// WRONG — parser will fail on the dot
-host.name
-```
-
-### Filtering with `where`
-
-Use `| where` to filter series by tag values. Chain multiple `| where` clauses (equivalent to `and`):
-
-```mpl
-my-dataset:cpu_usage
-| where `service.name` == "query"
-| where namespace == "production"
-| align to 5m using avg
-```
-
-You can also combine conditions in a single `where` using `and`, `or`, `not`, and parentheses:
-
-```mpl
-my-dataset:http_requests
-| where method == "GET" and status_code >= 400
-| where `service.name` == "frontend" or `service.name` == "gateway"
-| align to 5m using sum
-```
-
-**Important:**
-- Use `where`, not `filter` (`filter` is deprecated and produces a warning)
-- Boolean operators are `and`, `or`, `not` — do NOT use `&&` or `||` (these are not valid MPL)
-- String values must be double-quoted: `"value"`
-- Regular expressions use slashes: `/.*pattern.*/`
+Re-consult the spec when using an unfamiliar operator, when a query returns a syntax error, or when constructing histogram/multi-metric queries.
 
 ---
 
 ## Workflow
 
 1. **List datasets**: Run `scripts/datasets <deployment>` to see available datasets and their edge deployments
-2. **Learn the language**: Run `scripts/metrics-spec <deployment> <dataset>` to read the metrics query spec — **this step is mandatory**
-3. **Discover metrics**: If possible use the find-metrics command, otherwise list available metrics via the info scripts
-4. **Explore tags**: List tags and tag values to understand filtering options
+2. **Fetch the spec**: Run `scripts/metrics-spec <deployment> <dataset>` — **this step is mandatory before writing any query**
+3. **Discover metrics**: List available metrics via `scripts/metrics-info <deployment> <dataset> metrics`
+4. **Explore tags**: List tags and tag values to understand filtering options. If metrics listing fails, use tags and tag values to identify relevant entities, then use those to list metrics for specific tags.
 5. **Write and execute query**: Compose a metrics query and run it via `scripts/metrics-query`
 6. **Iterate**: Refine filters, aggregations, and groupings based on results
 
-If you are unsure what to query, start by searching for metrics that match a relevant tag value:
+If the user provides a specific service, host, or entity name to search for, use `find-metrics` to locate matching metrics:
 ```bash
 scripts/metrics-info <deployment> <dataset> find-metrics "frontend"
 ```
-This finds metrics associated with a known value (e.g., a service name or host), giving you a starting point for building queries.
+Do NOT use `find-metrics` as a general discovery step — it requires a known search value.
 
 ---
 

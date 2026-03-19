@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# axiom-api: Make authenticated requests to Axiom API
+# axiom-api: Make authenticated requests to the Axiom DATA/METRICS API
+#
+# ⚠️ This script uses raw URLs for the data API.
+# For dashboard/app API calls, use scripts/axiom-api instead.
 #
 # Usage: axiom-api <deployment> <method> <path> [json-body]
 #

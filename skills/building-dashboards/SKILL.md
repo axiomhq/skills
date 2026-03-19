@@ -1,6 +1,6 @@
 ---
 name: building-dashboards
-description: Designs and builds Axiom dashboards via API. Covers chart types, APL patterns, SmartFilters, layout, and configuration options. Use when creating dashboards, migrating from Splunk, or configuring chart options.
+description: Designs and builds Axiom dashboards via API. Covers chart types, APL and metrics/MPL query patterns, SmartFilters, layout, and configuration options. Use when creating dashboards, migrating from Splunk, or configuring chart options.
 ---
 
 # Building Dashboards
@@ -23,7 +23,7 @@ Choose your starting point:
 
 | Starting from | Workflow |
 |---------------|----------|
-| **Vague description** | Intake → design blueprint → APL per panel → deploy |
+| **Vague description** | Intake → check dataset kind → design blueprint (APL or MPL) → queries per panel → deploy |
 | **Template** | Pick template → customize dataset/service/env → deploy |
 | **Splunk dashboard** | Extract SPL → translate via spl-to-apl → map to chart types → deploy |
 | **Exploration** | Use axiom-sre to discover schema/signals → productize into panels |
@@ -43,54 +43,98 @@ Before designing, clarify:
    - Service, environment, region, cluster, endpoint?
    - Single service or cross-service view?
 
-3. **Datasets**
-   - Which Axiom datasets contain the data?
-   - Run `getschema` to discover fields—never guess:
+3. **Dataset kind (mandatory first step)**
+   - Run `scripts/metrics/datasets <deploy>` to identify each dataset's `kind`
+   - **If `kind` is `otel:metrics:v1`** → this is a metrics dataset. Follow the **Metrics path** below.
+   - **Otherwise** → this is an events/logs dataset. Follow the **APL path** below.
+
+   > **⚠️ NEVER run `getschema` on a metrics dataset.** APL queries against `otel:metrics:v1` datasets return 0 rows without error — you will waste calls widening time ranges before realizing it's the wrong discovery method.
+
+   **APL path** (events/logs datasets):
+   - Discover fields with `getschema`:
    ```apl
    ['dataset'] | where _time between (ago(1h) .. now()) | getschema
    ```
+   - Continue to steps 4–5 below.
 
-4. **Golden signals**
+   **Metrics path** (`otel:metrics:v1` datasets):
+   - Run `scripts/metrics/metrics-spec <deploy> <dataset>` — **mandatory before composing any MPL query**
+   - Discover available metrics: `scripts/metrics/metrics-info <deploy> <dataset> metrics`
+   - Discover tags: `scripts/metrics/metrics-info <deploy> <dataset> tags`
+   - Explore tag values: `scripts/metrics/metrics-info <deploy> <dataset> tags <tag> values`
+   - If discovery returns empty results, retry with `--start` set to 7 days ago — sparse metrics (sensors, batch jobs, crons) may not have data in the default 24h window
+   - `find-metrics <value>` searches **tag values**, not metric names — use it only when you know a specific entity name (service, host, device) to find which metrics are associated with it
+   - Skip to the **Metrics/MPL Blueprint** below for panel design.
+
+4. **Golden signals** (APL path)
    - Traffic: requests/sec, events/min
    - Errors: error rate, 5xx count
    - Latency: p50, p95, p99 duration
    - Saturation: CPU, memory, queue depth, connections
 
-5. **Drilldown dimensions**
+5. **Drilldown dimensions** (APL path)
    - What do users filter/group by? (service, route, status, pod, customer_id)
 
 ---
 
 ## Dashboard Blueprint
 
-Use this 4-section structure as the default:
+Choose the blueprint that matches your dataset kind (identified in Intake step 3).
 
-### 1. At-a-Glance (Statistic panels)
+### APL Blueprint (events/logs datasets)
+
+#### 1. At-a-Glance (Statistic panels)
 Single numbers that answer "is it broken right now?"
 - Error rate (last 5m)
 - p95 latency (last 5m)
 - Request rate (last 5m)
 - Active alerts (if applicable)
 
-### 2. Trends (TimeSeries panels)
+#### 2. Trends (TimeSeries panels)
 Time-based patterns that answer "what changed?"
 - Traffic over time
 - Error rate over time
 - Latency percentiles over time
 - Stacked by status/service for comparison
 
-### 3. Breakdowns (Table/Pie panels)
+#### 3. Breakdowns (Table/Pie panels)
 Top-N analysis that answers "where should I look?"
 - Top 10 failing routes
 - Top 10 error messages
 - Worst pods by error rate
 - Request distribution by status
 
-### 4. Evidence (LogStream + SmartFilter)
+#### 4. Evidence (LogStream + SmartFilter)
 Raw events that answer "what exactly happened?"
 - LogStream filtered to errors
 - SmartFilter for service/env/route
 - Key fields projected for readability
+
+### Metrics/MPL Blueprint (metrics datasets)
+
+> **Prerequisite:** You MUST have run `scripts/metrics/metrics-spec` and `scripts/metrics/metrics-info` before designing panels. Never guess MPL syntax or metric/tag names.
+
+#### 1. At-a-Glance (Statistic panels)
+Current values for key metrics — answer "what's the state right now?"
+- Latest value of primary metrics (e.g., current temperature, power draw)
+- Use `group using avg` or `group using last` depending on metric type (gauge vs counter)
+
+#### 2. Trends (TimeSeries panels)
+Metric trends over time — answer "what changed?"
+- Primary metrics over time, grouped by key dimension
+- Use `align to <interval> using avg|sum|last` for proper time bucketing
+- Group by low-cardinality tags only (≤10 series per chart)
+
+#### 3. Breakdowns (TimeSeries or Table panels)
+Per-entity detail — answer "where should I look?"
+- Metrics broken down by entity (room, host, pod, service)
+- Filter by tag values to keep series count manageable
+- Use separate panels per dimension rather than one overloaded chart
+
+#### 4. Entity State (TimeSeries or Table panels)
+Boolean/state metrics — answer "what is on/off/active?"
+- Use `align to <interval> using last` for state metrics
+- Sparse metrics may need wider align intervals (1h+) to show data
 
 ---
 
@@ -121,6 +165,28 @@ The console uses `react-grid-layout` which requires `minH`, `minW`, `moved`, and
 ```
 
 Use descriptive kebab-case IDs (e.g. `error-rate`, `p95-latency`, `traffic-rps`). The `dashboard-validate` and deploy scripts enforce this automatically.
+
+---
+
+## Metrics/MPL Chart Contract
+
+Metrics-backed charts place the MPL pipeline string in `query.apl` and add `query.metricsDataset` to route the query to the metrics backend.
+
+> **CRITICAL:** Run `scripts/metrics/metrics-spec <deployment> <dataset>` before composing your first MPL query in a session. NEVER guess MPL syntax.
+
+```json
+{
+  "type": "TimeSeries",
+  "query": {
+    "apl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| align to 1m using avg\n| group by `service.name` using avg",
+    "metricsDataset": "otel-metrics"
+  }
+}
+```
+
+Validate queries with `scripts/metrics/metrics-query` before embedding in dashboard JSON.
+
+See `reference/metrics-mpl.md` for the full contract and discovery scripts.
 
 ---
 
@@ -452,12 +518,20 @@ org_id = "your-org-id"
 | `scripts/dashboard-copy <deploy> <id>` | Clone dashboard |
 | `scripts/dashboard-link <deploy> <id>` | Get shareable URL |
 | `scripts/dashboard-delete <deploy> <id>` | Delete (with confirm) |
-| `scripts/axiom-api <deploy> <method> <path>` | Low-level API calls |
+| `scripts/axiom-api <deploy> <method> <path>` | **Dashboard/app API only** (rewrites to `app.*`). For data/metrics endpoints use `scripts/metrics/axiom-api` |
+| `scripts/metrics/axiom-api <deploy> <method> <path>` | **Data/metrics API** (supports `AXIOM_URL_OVERRIDE` for edge routing) |
+| `scripts/metrics/datasets <deploy>` | List datasets with `kind` and edge deployment |
+| `scripts/metrics/metrics-spec <deploy> <dataset>` | Fetch MPL query specification |
+| `scripts/metrics/metrics-info <deploy> <dataset> ...` | Discover metrics, tags, and values |
+| `scripts/metrics/metrics-query <deploy> <mpl> <start> <end>` | Execute a metrics query |
+
+> **⚠️ Two `axiom-api` scripts exist with different behaviors.** `scripts/axiom-api` rewrites URLs for the dashboard app API (`app.*`). `scripts/metrics/axiom-api` uses raw URLs and supports edge deployment routing. Using the wrong one will produce 404 errors.
 
 ### Workflow
 
 **⚠️ CRITICAL: Always validate queries BEFORE deploying.**
 
+**APL workflow:**
 1. Design dashboard (sections + panels)
 2. Write APL for each panel
 3. Build JSON (from template or manually)
@@ -467,6 +541,18 @@ org_id = "your-org-id"
 7. **`dashboard-link` to get URL** — NEVER construct Axiom URLs manually (org IDs and base URLs vary per deployment)
 8. Share link with user
 
+**Metrics/MPL workflow:**
+1. Run `scripts/metrics/metrics-spec` to learn MPL syntax
+2. Run `scripts/metrics/metrics-info` to discover metrics and tags
+3. Design dashboard using the Metrics/MPL Blueprint
+4. Write MPL for each panel
+5. **Validate queries** with `scripts/metrics/metrics-query` using explicit time range
+6. Build JSON (set `query.metricsDataset` on every chart)
+7. `dashboard-validate` to check structure
+8. `dashboard-create` or `dashboard-update` to deploy
+9. **`dashboard-link` to get URL**
+10. Share link with user
+
 ---
 
 ## Sibling Skill Integration
@@ -474,6 +560,8 @@ org_id = "your-org-id"
 **spl-to-apl:** Translate Splunk SPL → APL. Map `timechart` → TimeSeries, `stats` → Statistic/Table. See `reference/splunk-migration.md`.
 
 **axiom-sre:** Discover schema with `getschema`, explore baselines, identify dimensions, then productize into panels.
+
+**query-metrics:** Discover metrics datasets, metric names, tags, and tag values. Metrics discovery scripts are also vendored locally in `scripts/metrics/`.
 
 ---
 
@@ -511,12 +599,17 @@ scripts/dashboard-create prod ./dashboard.json
 | Dashboard shows no data | Service filter too restrictive | Remove or adjust `where service == 'x'` filters |
 | Queries time out | Missing time filter or too broad | Dashboard inherits time from picker; ad-hoc queries need explicit time filter |
 | Wrong org in dashboard URL | Manually constructed URL | **Always use `dashboard-link <deploy> <id>`** — never guess org IDs or base URLs |
+| `getschema` returns 0 rows | Dataset is `otel:metrics:v1`, not events | Run `scripts/metrics/datasets <deploy>` to check kind; use `scripts/metrics/metrics-info` for metrics discovery |
+| Metrics discovery returns empty | Sparse metrics (sensors, batch, cron) outside default 24h window | Retry with `--start` set to 7 days ago; some metrics only report intermittently |
+| 404 from metrics API calls | Used `scripts/axiom-api` (dashboard) instead of `scripts/metrics/axiom-api` (data) | Use `scripts/metrics/axiom-api` for all `/v1/query/`, `/v1/datasets` paths |
+| `find-metrics` returns unexpected results | It searches tag values, not metric names | Use `metrics-info <deploy> <dataset> metrics` to list metric names; `find-metrics` finds metrics associated with a known tag value |
 
 ---
 
 ## Reference
 
 - `reference/chart-config.md` — All chart configuration options (JSON)
+- `reference/metrics-mpl.md` — Metrics/MPL chart contract and discovery scripts
 - `reference/smartfilter.md` — SmartFilter/FilterBar full configuration
 - `reference/chart-cookbook.md` — APL patterns per chart type
 - `reference/layout-recipes.md` — Grid layouts and section blueprints

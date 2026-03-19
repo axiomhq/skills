@@ -6,7 +6,7 @@ Designs and builds Axiom dashboards via API. Covers chart types, APL patterns, S
 
 - **Dashboard Design** - Blueprint structure: at-a-glance stats, trends, breakdowns, evidence
 - **Chart Types** - Statistic, TimeSeries, Table, Pie, LogStream, Heatmap, SmartFilter, Note
-- **APL Patterns** - Golden signals, percentiles, error rates, cardinality guardrails
+- **APL + Metrics/MPL Patterns** - Golden signals, percentiles, error rates, and metrics chart queries via `query.apl` + `query.metricsDataset`
 - **Layout Composition** - Grid-based layouts with section templates
 - **Deployment** - Scripts to validate, create, update, and manage dashboards
 
@@ -19,6 +19,7 @@ npx skills add axiomhq/skills
 ## Prerequisites
 
 - `axiom-sre` skill (for API access and schema discovery)
+- `query-metrics` skill (for metrics dataset/metric/tag discovery; also vendored locally in `scripts/metrics/`)
 - Tools: `jq`, `curl`
 
 The install command above includes all skill dependencies.
@@ -84,4 +85,5 @@ Pre-built templates in `reference/templates/`:
 ## Related Skills
 
 - `axiom-sre` - Schema discovery and query exploration
+- `query-metrics` - Discover metric names, tags, and tag values for MPL queries
 - `spl-to-apl` - Translate Splunk dashboards to Axiom
