@@ -43,14 +43,14 @@ fi
 
 JQ_ARGS=(
     --arg apl "$MPL"
-    --arg start "$START_TIME"
-    --arg end "$END_TIME"
+    --arg startT "$START_TIME"
+    --arg endT "$END_TIME"
 )
-JQ_EXPR='{apl: $apl, startTime: $start, endTime: $end}'
+JQ_EXPR='{"apl": $apl, "startTime": $startT, "endTime": $endT}'
 
 if [[ -n "$QUERY_EDGE_DEPLOYMENT" ]]; then
     JQ_ARGS+=(--arg edgeDeployment "$QUERY_EDGE_DEPLOYMENT")
-    JQ_EXPR='{apl: $apl, startTime: $start, endTime: $end, queryEdgeDeployment: $edgeDeployment}'
+    JQ_EXPR='{"apl": $apl, "startTime": $startT, "endTime": $endT, "queryEdgeDeployment": $edgeDeployment}'
 fi
 
 BODY=$(jq -n "${JQ_ARGS[@]}" "$JQ_EXPR")

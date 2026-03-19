@@ -9,6 +9,8 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 DEPLOYMENT="${1:-}"
 DASHBOARD_ID="${2:-}"
 
@@ -47,8 +49,16 @@ extract_value() {
 URL=$(extract_value "url")
 ORG_ID=$(extract_value "org_id")
 
+
 if [[ -z "$URL" || -z "$ORG_ID" ]]; then
     echo "Error: Could not find deployment '$DEPLOYMENT' in $CONFIG_FILE" >&2
+    exit 1
+fi
+
+# Resolve short ID for the UI URL
+LINK_ID=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET "/dashboards/uid/$DASHBOARD_ID" | jq -r '.id // empty')
+if [[ -z "$LINK_ID" ]]; then
+    echo "Error: Could not resolve dashboard ID '$DASHBOARD_ID'" >&2
     exit 1
 fi
 
@@ -57,4 +67,4 @@ fi
 # api.dev.axiomtestlabs.co -> app.dev.axiomtestlabs.co
 APP_URL="${URL/api./app.}"
 
-echo "${APP_URL}/${ORG_ID}/dashboards/${DASHBOARD_ID}"
+echo "${APP_URL}/${ORG_ID}/dashboards/${LINK_ID}"
