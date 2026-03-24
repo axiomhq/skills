@@ -12,6 +12,34 @@ Charts support JSON configuration options beyond the query. These are set at the
 }
 ```
 
+## Metrics/MPL Query (MetricsDB Charts)
+
+Metrics charts put the full MPL pipeline string in `query.apl` only. Do not send `query.metricsDataset` or `query.mpl` in create payloads — the create API rejects both even though GET responses for existing dashboards may include them. Run `scripts/metrics/metrics-spec` to learn the full syntax before composing queries.
+
+### Minimal Metrics Query
+
+```json
+{
+  "type": "TimeSeries",
+  "query": {
+    "apl": "`otel-metrics`:`system.cpu.utilization`"
+  }
+}
+```
+
+### Metrics Query with Filters and Transformations
+
+```json
+{
+  "type": "TimeSeries",
+  "query": {
+    "apl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| where `deployment.environment` == \"prod\"\n| align to 1m using avg\n| group by `service.name` using avg"
+  }
+}
+```
+
+For full contract details, see `reference/metrics-mpl.md`.
+
 ## Statistic Options
 
 ```json
@@ -20,7 +48,6 @@ Charts support JSON configuration options beyond the query. These are set at the
   "colorScheme": "Blue",
   "customUnits": "req/s",
   "unit": "Auto",
-  "decimals": 2,
   "showChart": true,
   "hideValue": false,
   "errorThreshold": "Above",
@@ -31,12 +58,14 @@ Charts support JSON configuration options beyond the query. These are set at the
 }
 ```
 
+> **API gotcha:** `decimals` is returned by GET and may appear in existing dashboards, but the create API rejects it. Omit `decimals` from create payloads.
+
 | Option | Values | Description |
 |--------|--------|-------------|
 | `colorScheme` | Blue, Orange, Red, Purple, Teal, Yellow, Green, Pink, Grey, Brown | Color theme |
 | `customUnits` | string | Unit suffix (e.g., "ms", "req/s") |
 | `unit` | Auto, Abbreviated, Byte, KB, MB, GB, TimeMS, TimeSec, Percent, etc. | Value formatting |
-| `decimals` | number | Decimal places |
+| `decimals` | number | Decimal places in readback/GET payloads; omit on create because the API rejects it |
 | `showChart` | boolean | Show sparkline |
 | `hideValue` | boolean | Hide the main value |
 | `errorThreshold` | Above, AboveOrEqual, Below, BelowOrEqual, AboveOrBelow | Error condition |
