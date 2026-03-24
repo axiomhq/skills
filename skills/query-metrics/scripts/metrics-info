@@ -9,12 +9,18 @@
 #   metrics-info <deployment> <dataset> metrics <metric> tags <tag> values [--start T --end T]
 #   metrics-info <deployment> <dataset> find-metrics <search-value> [--start T --end T]
 #
+# find-metrics searches TAG VALUES, not metric names. It returns metrics that have
+# a tag containing the given value. Use it when you know a specific entity name
+# (service, host, device) to find which metrics are associated with it.
+# To list metric names, use the "metrics" subcommand instead.
+#
 # --start and --end default to the last 24 hours if omitted.
+# For sparse metrics (sensors, batch jobs), try --start with a wider range (e.g. 7 days).
 #
 # Examples:
-#   metrics-info prod my-dataset metrics
-#   metrics-info prod my-dataset tags service.name values
-#   metrics-info prod my-dataset find-metrics "frontend"
+#   metrics-info prod my-dataset metrics                    # List all metric names
+#   metrics-info prod my-dataset tags service.name values   # List values for a tag
+#   metrics-info prod my-dataset find-metrics "frontend"    # Find metrics with tag value "frontend"
 #   metrics-info prod my-dataset metrics http.server.duration tags --start 2025-06-01T00:00:00Z --end 2025-06-02T00:00:00Z
 
 set -euo pipefail
@@ -28,7 +34,7 @@ show_usage() {
     echo "  metrics-info <deploy> <dataset> tags <tag> values" >&2
     echo "  metrics-info <deploy> <dataset> metrics <metric> tags" >&2
     echo "  metrics-info <deploy> <dataset> metrics <metric> tags <tag> values" >&2
-    echo "  metrics-info <deploy> <dataset> find-metrics <search-value>" >&2
+    echo "  metrics-info <deploy> <dataset> find-metrics <search-value>  (searches tag values, not metric names)" >&2
     echo "" >&2
     echo "Options:" >&2
     echo "  --start T   Start time (RFC3339). Default: 24h ago" >&2
