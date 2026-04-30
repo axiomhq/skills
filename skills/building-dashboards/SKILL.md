@@ -170,17 +170,18 @@ Use descriptive kebab-case IDs (e.g. `error-rate`, `p95-latency`, `traffic-rps`)
 
 ## Metrics/MPL Chart Contract
 
-Metrics-backed charts place the MPL pipeline string in `query.apl` only.
+Metrics-backed charts require both `query.apl` (the MPL pipeline string) and `query.metricsDataset` (the dataset name). The `metricsDataset` field is what tells the backend to interpret `apl` as MPL rather than APL — omitting it causes the chart to misbehave even if the pipeline string is well-formed.
 
 > **CRITICAL:** Run `scripts/metrics/metrics-spec <deployment> <dataset>` before composing your first MPL query in a session. NEVER guess MPL syntax.
 >
-> **API gotcha:** The create API rejects `query.metricsDataset` and `query.mpl` even though GET responses for existing metrics dashboards may include them. For create payloads, put the full MPL string in `query.apl` and omit both fields.
+> **API gotcha:** Set `query.metricsDataset` to the dataset name (e.g. `"otel-metrics"`). The create API rejects `query.mpl` even though GET responses for existing metrics dashboards may include it — put the MPL string in `query.apl` instead.
 
 ```json
 {
   "type": "TimeSeries",
   "query": {
-    "apl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| align to 1m using avg\n| group by `service.name` using avg"
+    "apl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| align to 1m using avg\n| group by `service.name` using avg",
+    "metricsDataset": "otel-metrics"
   }
 }
 ```
@@ -548,7 +549,7 @@ org_id = "your-org-id"
 3. Design dashboard using the Metrics/MPL Blueprint
 4. Write MPL for each panel
 5. **Validate queries** with `scripts/metrics/metrics-query` using explicit time range
-6. Build JSON (put the full MPL string in `query.apl` only — do not set `query.metricsDataset` or `query.mpl`)
+6. Build JSON: put the full MPL string in `query.apl` AND set `query.metricsDataset` to the dataset name (required — denotes the chart as MPL). Do not set `query.mpl` (rejected by create API).
 7. `dashboard-validate` to check structure
 8. `dashboard-create` or `dashboard-update` to deploy
 9. **`dashboard-link` to get URL**
@@ -604,7 +605,7 @@ scripts/dashboard-create prod ./dashboard.json
 | Metrics discovery returns empty | Sparse metrics (sensors, batch, cron) outside default 24h window | Retry with `--start` set to 7 days ago; some metrics only report intermittently |
 | 404 from metrics API calls | Used `scripts/axiom-api` (dashboard) instead of `scripts/metrics/axiom-api` (data) | Use `scripts/metrics/axiom-api` for all `/v1/query/`, `/v1/datasets` paths |
 | `find-metrics` returns unexpected results | It searches tag values, not metric names | Use `metrics-info <deploy> <dataset> metrics` to list metric names; `find-metrics` finds metrics associated with a known tag value |
-| `metricsDataset` rejected on create | Create API does not accept `query.metricsDataset` for metrics charts | Put the full MPL pipeline in `query.apl` only |
+| Metrics chart renders blank or wrong values | Missing `query.metricsDataset` — backend treats `apl` as APL, not MPL | Set `query.metricsDataset` to the dataset name alongside `query.apl` |
 | `query.mpl` rejected on create | GET may return `query.mpl` for existing metrics charts, but create expects `query.apl` | Move/copy the MPL string into `query.apl` before deploy |
 | `decimals` rejected on create | Create API does not accept chart-level `decimals` even though GET may return it | Omit `decimals` from create payloads |
 

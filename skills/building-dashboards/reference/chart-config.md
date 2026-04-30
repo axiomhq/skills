@@ -14,7 +14,7 @@ Charts support JSON configuration options beyond the query. These are set at the
 
 ## Metrics/MPL Query (MetricsDB Charts)
 
-Metrics charts put the full MPL pipeline string in `query.apl` only. Do not send `query.metricsDataset` or `query.mpl` in create payloads — the create API rejects both even though GET responses for existing dashboards may include them. Run `scripts/metrics/metrics-spec` to learn the full syntax before composing queries.
+Metrics charts require both `query.apl` (the MPL pipeline string) and `query.metricsDataset` (the dataset name, e.g. `"otel-metrics"`). The `metricsDataset` field is what flags the chart as MPL; without it the backend treats `apl` as APL and the chart misbehaves. Do not send `query.mpl` — the create API rejects it. Run `scripts/metrics/metrics-spec` to learn the full syntax before composing queries.
 
 ### Minimal Metrics Query
 
@@ -22,7 +22,8 @@ Metrics charts put the full MPL pipeline string in `query.apl` only. Do not send
 {
   "type": "TimeSeries",
   "query": {
-    "apl": "`otel-metrics`:`system.cpu.utilization`"
+    "apl": "`otel-metrics`:`system.cpu.utilization`",
+    "metricsDataset": "otel-metrics"
   }
 }
 ```
@@ -33,7 +34,8 @@ Metrics charts put the full MPL pipeline string in `query.apl` only. Do not send
 {
   "type": "TimeSeries",
   "query": {
-    "apl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| where `deployment.environment` == \"prod\"\n| align to 1m using avg\n| group by `service.name` using avg"
+    "apl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| where `deployment.environment` == \"prod\"\n| align to 1m using avg\n| group by `service.name` using avg",
+    "metricsDataset": "otel-metrics"
   }
 }
 ```

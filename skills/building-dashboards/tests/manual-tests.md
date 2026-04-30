@@ -200,7 +200,7 @@ Test each chart type APL pattern against `sample-http-logs` in Axiom Playground.
 
 ### 5.7 Metrics MPL Query Shape
 
-Verify metrics charts use `query.apl` only (no `metricsDataset` or `mpl`) with correct MPL pipeline syntax.
+Verify metrics charts set BOTH `query.apl` (MPL pipeline) and `query.metricsDataset` (dataset name), and do NOT set `query.mpl` (rejected by create API).
 
 **Prompt:**
 "Create a metrics TimeSeries chart for `otel-metrics:http.server.duration` filtered to `service.name=api` and `deployment.environment=prod`, with `align to 1m using avg`."
@@ -209,13 +209,16 @@ Verify metrics charts use `query.apl` only (no `metricsDataset` or `mpl`) with c
 ```json
 {
   "query": {
-    "apl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| where `deployment.environment` == \"prod\"\n| align to 1m using avg"
+    "apl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| where `deployment.environment` == \"prod\"\n| align to 1m using avg",
+    "metricsDataset": "otel-metrics"
   }
 }
 ```
 
 **Validation:**
-- [ ] Agent uses `query.apl` only (not `query.mpl` or `query.metricsDataset`)
+- [ ] Agent sets `query.apl` to the MPL pipeline string (NOT `query.mpl`. "mpl" is incorrect).
+- [ ] Agent sets `query.metricsDataset` to the dataset name
+- [ ] Agent does NOT set `query.mpl` (rejected on create)
 - [ ] Agent runs `scripts/metrics/metrics-spec` before composing MPL queries
 - [ ] Pipeline order matches intended execution order
 - [ ] Dotted identifiers are backtick-escaped in MPL
