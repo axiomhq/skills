@@ -100,15 +100,130 @@ Email:
   "name": "Oncall Email",
   "properties": {
     "email": {
-      "recipients": ["oncall@example.com"]
+      "emails": ["oncall@example.com"]
     }
   }
 }
 ```
+
+PagerDuty:
+
+```json
+{
+  "name": "Oncall PagerDuty",
+  "properties": {
+    "pagerduty": {
+      "routingKey": "1234567890abcdef1234567890abcdef",
+      "token": "u+1234567890abcdef1234567890abcdef"
+    }
+  }
+}
+```
+
+OpsGenie:
+
+```json
+{
+  "name": "Oncall OpsGenie",
+  "properties": {
+    "opsgenie": {
+      "apiKey": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "isEU": true
+    }
+  }
+}
+```
+
+Discord:
+
+```json
+{
+  "name": "Oncall Discord",
+  "properties": {
+    "discord": {
+      "discordChannel": "123456789012345678",
+      "discordToken": "Bot 123456789012345678"
+    }
+  }
+}
+```
+
+Discord Webhook:
+
+```json
+{
+  "name": "Oncall Discord Webhook",
+  "properties": {
+    "discordWebhook": {
+      "discordWebhookUrl": "https://discord.com/api/webhooks/123/abc"
+    }
+  }
+}
+```
+
+Microsoft Teams:
+
+```json
+{
+  "name": "Oncall Teams",
+  "properties": {
+    "microsoftTeams": {
+      "microsoftTeamsUrl": "https://outlook.office.com/webhook/..."
+    }
+  }
+}
+```
+
+Webhook:
+
+```json
+{
+  "name": "Oncall Webhook",
+  "properties": {
+    "webhook": {
+      "url": "https://api.example.com/webhooks/alerts"
+    }
+  }
+}
+```
+
+Custom Webhook:
+
+```json
+{
+  "name": "Oncall Custom Webhook",
+  "properties": {
+    "customWebhook": {
+      "url": "https://api.example.com/alerts",
+      "body": "{\"action\":\"{{.Action}}\",\"monitorID\":\"{{.MonitorID}}\",\"title\":\"{{.Title}}\",\"description\":\"{{.Description}}\",\"value\":{{.Value}},\"groupKeys\":{{jsonArray .GroupKeys}},\"groupValues\":{{jsonArray .GroupValues}}}",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "secretHeaders": {
+        "Authorization": "Bearer {{token}}"
+      }
+    }
+  }
+}
+```
+
+Custom webhook template variables commonly used:
+- `.Action`
+- `.MonitorID`
+- `.Body`
+- `.Description`
+- `.QueryStartTime`
+- `.QueryEndTime`
+- `.Timestamp`
+- `.Title`
+- `.Value`
+- `.MatchedEvent`
+- `.GroupKeys`
+- `.GroupValues`
 
 ## Best Practices
 
 - Create separate notifiers per destination/team rather than reusing one notifier for unrelated services.
 - Keep secrets in secure headers/fields only (for example `customWebhook.secretHeaders`), not in plain-text payloads.
 - Test notifier payload shape and endpoint acceptance before attaching notifier IDs to production monitors.
-- Use `disabledUntil` for temporary silencing instead of deleting notifiers needed by existing monitors.
+- Prefer temporary disable/enable in the Axiom UI instead of deleting notifiers that are still referenced by monitors.
