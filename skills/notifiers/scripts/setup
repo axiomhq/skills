@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+echo "=== notifiers Setup ==="
+MISSING=()
+for cmd in curl jq; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then MISSING+=("$cmd"); fi
+done
+if [[ ${#MISSING[@]} -gt 0 ]]; then
+  echo "Missing: ${MISSING[*]}" >&2
+  exit 1
+fi
+chmod +x "$SCRIPT_DIR"/*
+if [[ ! -f "$HOME/.axiom.toml" ]]; then
+  echo "Warning: ~/.axiom.toml not found"
+fi
+echo "Setup complete"
