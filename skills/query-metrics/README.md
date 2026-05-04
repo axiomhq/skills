@@ -2,6 +2,8 @@
 
 Runs metrics queries against Axiom MetricsDB and discovers available metrics, tags, and tag values.
 
+Core metrics discovery/query scripts are shared with `axiom-platform`.
+
 ## What It Does
 
 - **Dataset Discovery** - List datasets with edge deployment info, auto-resolve regional edge URLs

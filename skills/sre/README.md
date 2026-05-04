@@ -7,7 +7,7 @@ Expert SRE investigator for incidents and debugging. Uses hypothesis-driven meth
 - **Hypothesis-Driven Investigation** - State, test, disprove hypotheses with data queries
 - **Systematic Triage** - Golden signals (traffic, errors, latency, saturation), USE/RED methods
 - **Memory System** - Persistent knowledge base for patterns, queries, facts, and incidents
-- **Axiom Integration** - Query logs, generate shareable links, discover schemas
+- **Axiom Platform Integration** - Composes `axiom-platform` scripts for APL and metrics operations
 
 ## Installation
 

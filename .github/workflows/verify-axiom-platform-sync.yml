@@ -1,0 +1,48 @@
+name: Verify Axiom Platform Sync
+
+on:
+  pull_request:
+    paths:
+      - 'skills/axiom-platform/scripts/**'
+      - 'skills/sre/scripts/axiom-api'
+      - 'skills/sre/scripts/axiom-deployments'
+      - 'skills/sre/scripts/axiom-link'
+      - 'skills/sre/scripts/axiom-query'
+      - 'skills/sre/scripts/axiom-query-fmt'
+      - 'skills/sre/scripts/config'
+      - 'skills/sre/scripts/curl-auth'
+      - 'skills/sre/scripts/discover-axiom'
+      - 'skills/query-metrics/scripts/axiom-api'
+      - 'skills/query-metrics/scripts/datasets'
+      - 'skills/query-metrics/scripts/metrics-info'
+      - 'skills/query-metrics/scripts/metrics-query'
+      - 'skills/query-metrics/scripts/metrics-spec'
+      - 'skills/query-metrics/scripts/resolve-url'
+      - 'scripts/sync-axiom-platform-scripts.sh'
+  push:
+    branches: [main]
+    paths:
+      - 'skills/axiom-platform/scripts/**'
+      - 'skills/sre/scripts/axiom-api'
+      - 'skills/sre/scripts/axiom-deployments'
+      - 'skills/sre/scripts/axiom-link'
+      - 'skills/sre/scripts/axiom-query'
+      - 'skills/sre/scripts/axiom-query-fmt'
+      - 'skills/sre/scripts/config'
+      - 'skills/sre/scripts/curl-auth'
+      - 'skills/sre/scripts/discover-axiom'
+      - 'skills/query-metrics/scripts/axiom-api'
+      - 'skills/query-metrics/scripts/datasets'
+      - 'skills/query-metrics/scripts/metrics-info'
+      - 'skills/query-metrics/scripts/metrics-query'
+      - 'skills/query-metrics/scripts/metrics-spec'
+      - 'skills/query-metrics/scripts/resolve-url'
+      - 'scripts/sync-axiom-platform-scripts.sh'
+
+jobs:
+  verify-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify mirrored scripts are in sync
+        run: scripts/sync-axiom-platform-scripts.sh --check

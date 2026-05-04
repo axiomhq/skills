@@ -5,6 +5,8 @@ description: Runs metrics queries against Axiom MetricsDB via scripts. Discovers
 
 > **CRITICAL:** ALL script paths are relative to this skill's folder. Run them with full path (e.g., `scripts/metrics-query`).
 
+> **Note:** Core metrics scripts are shared with `axiom-platform` and reused here.
+
 # Querying Axiom Metrics
 
 Query OpenTelemetry metrics stored in Axiom's MetricsDB.
