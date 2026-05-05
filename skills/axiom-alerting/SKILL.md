@@ -103,6 +103,36 @@ Operators:
 - `BelowOrEqual`
 - `AboveOrBelow`
 
+## Monitor Field Reference
+
+Core fields:
+- `name`: Human-readable monitor name.
+- `type`: `Threshold`, `MatchEvent`, or `AnomalyDetection`.
+- `aplQuery` / `mplQuery`: Query evaluated by the monitor.
+- `notifierIds`: Array of notifier IDs to notify.
+- `disabled`: Whether monitor is disabled.
+- `disabledUntil`: Optional timestamp for temporary disable/snooze.
+- `description`: Optional monitor description.
+
+Threshold and evaluation fields:
+- `operator`: Threshold comparison operator.
+- `threshold`: Numeric threshold value.
+- `rangeMinutes`: Query evaluation window in minutes.
+- `intervalMinutes`: Evaluation cadence in minutes.
+- `alertOnNoData`: Whether no-data should trigger alerting.
+- `triggerAfterNPositiveResults`: Positive evaluations required before firing.
+- `triggerFromNRuns`: Total evaluation runs considered for N-of-M logic.
+
+Advanced behavior fields:
+- `resolvable`: Whether alerts can resolve automatically.
+- `notifyByGroup`: Notify per group key/value result.
+- `notifyEveryRun`: Notify on every positive evaluation.
+- `skipResolved`: Skip sending resolved notifications.
+- `secondDelay`: Delay (seconds) to tolerate late-arriving data.
+
+Type-specific fields:
+- `columnName`: Field used by some anomaly/value-anomaly monitors.
+
 ## Minimal Valid Monitor Examples
 
 Threshold:
