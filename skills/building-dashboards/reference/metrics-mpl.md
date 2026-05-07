@@ -17,7 +17,7 @@ Do not send `query.mpl` in create payloads — the create API rejects it even th
 {
   "type": "TimeSeries",
   "query": {
-    "apl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| align to 1m using avg\n| group by `service.name` using avg",
+    "apl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| align to $__interval using avg\n| group by `service.name` using avg",
     "metricsDataset": "otel-metrics"
   }
 }
@@ -44,7 +44,8 @@ When generating metrics chart JSON:
 2. Run `scripts/metrics/metrics-spec` to learn the full MPL syntax — **mandatory, never guess**.
 3. Discover available metrics and tags with `scripts/metrics/metrics-info`. If results are empty, retry with `--start` set to 7 days ago (sparse metrics may not have data in the default 24h window).
 4. Put the full MPL pipeline in `query.apl` AND set `query.metricsDataset` to the dataset name. Do not set `query.mpl` — the create API rejects it.
-5. Validate your query with `scripts/metrics/metrics-query` before embedding in the dashboard.
+5. **Use `align to $__interval`, not a fixed window.** The dashboard runtime injects `$__interval` based on the time picker and panel width; a fixed `align to 1m` produces broken granularity outside its design range. Do not add `param $__interval: Duration;` to the chart string — the runtime injects it. Pre-validation via `scripts/metrics/metrics-query` requires substituting a concrete duration for that call only.
+6. Validate your query with `scripts/metrics/metrics-query` before embedding in the dashboard.
 
 > **Note:** `find-metrics <value>` searches tag values, not metric names. Use `metrics-info <deploy> <dataset> metrics` to list metric names.
 

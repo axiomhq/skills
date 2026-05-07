@@ -34,7 +34,7 @@ Metrics charts require both `query.apl` (the MPL pipeline string) and `query.met
 {
   "type": "TimeSeries",
   "query": {
-    "apl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| where `deployment.environment` == \"prod\"\n| align to 1m using avg\n| group by `service.name` using avg",
+    "apl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| where `deployment.environment` == \"prod\"\n| align to $__interval using avg\n| group by `service.name` using avg",
     "metricsDataset": "otel-metrics"
   }
 }

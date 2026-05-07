@@ -114,6 +114,17 @@ Raw events that answer "what exactly happened?"
 
 > **Prerequisite:** You MUST have run `scripts/metrics/metrics-spec` and `scripts/metrics/metrics-info` before designing panels. Never guess MPL syntax or metric/tag names.
 
+> **🚨 ALIGNMENT RULE — non-negotiable for dashboard panels:** Always align to the dashboard-supplied variable `$__interval`, not a fixed window. The dashboard runtime substitutes `$__interval` based on the active time range and panel width, so the same chart stays usable from a 5-minute to a 30-day view. Hard-coding `align to 1m` (or any constant) over-resolves long ranges and under-resolves short ones.
+>
+> ```mpl
+> | align to $__interval using avg   ✅ dashboard panels
+> | align to 1m using avg            ❌ fixed window — wrong granularity at most time ranges
+> ```
+>
+> **No `param` declaration needed in the chart `query.apl`** — the dashboard runtime injects `param $__interval: Duration;` automatically. (The Grafana datasource does the same via a preamble; the Axiom-native dashboard runtime behaves identically — verified against working production dashboards.)
+>
+> **Exceptions:** If you are pre-validating a query through `scripts/metrics/metrics-query` (which has no dashboard runtime), substitute a concrete duration for the test call only — do NOT commit that to the chart JSON. For genuinely sparse metrics where `$__interval` would round to an empty bucket (sensors, batch jobs, crons), a fixed wider window (e.g. `1h`) is acceptable; document why in the chart description.
+
 #### 1. At-a-Glance (Statistic panels)
 Current values for key metrics — answer "what's the state right now?"
 - Latest value of primary metrics (e.g., current temperature, power draw)
@@ -122,7 +133,7 @@ Current values for key metrics — answer "what's the state right now?"
 #### 2. Trends (TimeSeries panels)
 Metric trends over time — answer "what changed?"
 - Primary metrics over time, grouped by key dimension
-- Use `align to <interval> using avg|sum|last` for proper time bucketing
+- Use `align to $__interval using avg|sum|last` for proper time bucketing — `$__interval` is supplied by the dashboard runtime
 - Group by low-cardinality tags only (≤10 series per chart)
 
 #### 3. Breakdowns (TimeSeries or Table panels)
@@ -133,8 +144,8 @@ Per-entity detail — answer "where should I look?"
 
 #### 4. Entity State (TimeSeries or Table panels)
 Boolean/state metrics — answer "what is on/off/active?"
-- Use `align to <interval> using last` for state metrics
-- Sparse metrics may need wider align intervals (1h+) to show data
+- Use `align to $__interval using last` for state metrics
+- Sparse metrics may need wider **fixed** align intervals (1h+) to show data — this is the documented exception to the `$__interval` rule
 
 ---
 
@@ -180,7 +191,7 @@ Metrics-backed charts require both `query.apl` (the MPL pipeline string) and `qu
 {
   "type": "TimeSeries",
   "query": {
-    "apl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| align to 1m using avg\n| group by `service.name` using avg",
+    "apl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| align to $__interval using avg\n| group by `service.name` using avg",
     "metricsDataset": "otel-metrics"
   }
 }
