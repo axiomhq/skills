@@ -49,6 +49,8 @@ When generating metrics chart JSON:
 
 > **Note:** `find-metrics <value>` searches tag values, not metric names. Use `metrics-info <deploy> <dataset> metrics` to list metric names.
 
+> **Parameter values:** for manual API calls or pre-validation of a parameterized query, supply values via `scripts/metrics/metrics-query`'s `-p name=value` flag. See the **Passing parameter values** subsection in the `query-metrics` skill for the API contract and request-body shape.
+
 ## Metrics Discovery & Query Scripts
 
 | Script | Usage |

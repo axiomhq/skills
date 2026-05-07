@@ -115,6 +115,43 @@ scripts/metrics-query prod \
 | `startTime` | Yes | RFC3339 (e.g., `2025-01-01T00:00:00Z`) or relative expression (e.g., `now-1h`, `now-1d`) |
 | `endTime` | Yes | RFC3339 (e.g., `2025-01-02T00:00:00Z`) or relative expression (e.g., `now`) |
 
+### Passing parameter values
+
+MPL queries can declare parameters (e.g. `param $svc: string;`). To run such a query, supply a value for each declared parameter alongside the query.
+
+**API contract.** `POST /v1/query/_mpl` accepts a `params` object on the JSON body, sibling to `apl` / `startTime` / `endTime`. Each entry's key is the parameter's variable name with the leading `$` stripped and a `param__` prefix added (`$foo` → `param__foo`); each entry's value is the MPL literal for that parameter. The server parses the literal according to the variable's declared type, so callers are responsible for formatting it as a valid MPL literal (per `metrics-spec`) and for any JSON-string escaping the literal requires.
+
+MPL parameters can be declared optional (see `metrics-spec` for the declaration syntax). Optional parameters may be omitted from `params`; required parameters must be supplied or the server returns HTTP 400 with a message like `The following params were declared but not provided: <name>`. Omit the `params` object entirely when the query declares no parameters or when every declared parameter is optional and you are not supplying any.
+
+Resulting request body shape:
+
+```json
+{
+  "apl": "param $svc: string; param $window: Duration; `otel-metrics`:`http.server.duration` | where `service.name` == $svc | align to $window using avg",
+  "startTime": "now-1h",
+  "endTime": "now",
+  "params": {
+    "param__svc": "\"frontend\"",
+    "param__window": "5m"
+  }
+}
+```
+
+Note that `param__svc` carries the MPL string literal `"frontend"` (the quotes are part of the literal), JSON-escaped as `"\"frontend\""`. `param__window` carries the duration literal `5m` verbatim.
+
+**Script invocation.** Pass each parameter with `-p name=value` (repeatable). The name is the bare variable name without the leading `$`; the script applies the `param__` prefix and forwards the value verbatim:
+
+```bash
+scripts/metrics-query \
+  -p svc='"frontend"' \
+  -p window='5m' \
+  prod \
+  'param $svc: string; param $window: Duration; `otel-metrics`:`http.server.duration` | where `service.name` == $svc | align to $window using avg' \
+  now-1h now
+```
+
+For literal syntax per type (strings, durations, numbers, etc.), consult `metrics-spec`.
+
 ---
 
 ## Discovery (Info Endpoints)
