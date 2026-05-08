@@ -58,6 +58,7 @@ scripts/dashboard-create <deployment> ./dashboard.json
 # List, update, delete
 scripts/dashboard-list <deployment>
 scripts/dashboard-update <deployment> <id> <file>
+scripts/dashboard-chart-patch <deployment> <id> <chart-id> <patch-file> --version <version>
 scripts/dashboard-delete <deployment> <id>
 ```
 
@@ -70,6 +71,7 @@ scripts/dashboard-delete <deployment> <id>
 | `dashboard-list` | List all dashboards |
 | `dashboard-get` | Fetch dashboard JSON |
 | `dashboard-update` | Update existing dashboard |
+| `dashboard-chart-patch` | Patch one chart in an existing dashboard |
 | `dashboard-copy` | Clone a dashboard |
 | `dashboard-delete` | Delete with confirmation |
 | `dashboard-from-template` | Generate from template |
