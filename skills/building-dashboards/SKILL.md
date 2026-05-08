@@ -123,7 +123,27 @@ Raw events that answer "what exactly happened?"
 >
 > **No `param` declaration needed in the chart `query.apl`** — the dashboard runtime injects `param $__interval: Duration;` automatically. (The Grafana datasource does the same via a preamble; the Axiom-native dashboard runtime behaves identically.)
 >
-> **Exceptions:** If you are pre-validating a query through `scripts/metrics/metrics-query` (which has no dashboard runtime), substitute a concrete duration for the test call only — do NOT commit that to the chart JSON. For genuinely sparse metrics where `$__interval` would round to an empty bucket (sensors, batch jobs, crons), a fixed wider window (e.g. `1h`) is acceptable; document why in the chart description.
+> **🚫 NEVER use inline time ranges in dashboard chart queries.** The dashboard runtime always supplies `start`/`end` over the API on every query. An inline `[1h..]`, `[30d..]`, etc. in the MPL collides with the API range and the backend rejects the query with `AST Error (Time is provided both in the query and as a parameter)`. The dashboard time picker is the user's UI for time control — let it do its job. `overrideDashboardTimeRange: true` does NOT exempt a metrics chart from this rule; the runtime still passes a range.
+>
+> ```mpl
+> `dataset`:metric | align to $__interval using avg          ✅ dashboard panels
+> `dataset`:metric[30d..] | align to 30d using avg          ❌ inline range — AST time conflict
+> ```
+>
+> **Pre-validating chart queries with `scripts/metrics/metrics-query`:** the dashboard runtime auto-declares `param $__interval: Duration;` AND supplies its value via the request body. `metrics-query` does NOT auto-inject either. To simulate the runtime exactly, prepend `param $__interval: Duration;` to the test query and pass `-p __interval=5m` (or any concrete duration the dashboard would pick) on the command line. Do NOT rewrite the chart's `apl` to a fixed duration just to make the test pass — that hides whether the deployed chart will work.
+>
+> ```bash
+> # ✅ correct — keep $__interval, simulate the runtime injection
+> scripts/metrics/metrics-query -p __interval=5m <deploy> \
+>   'param $__interval: Duration;
+> `dataset`:metric | align to $__interval using avg' now-1h now
+>
+> # ❌ wrong — silently rewriting to `5m` only proves the fixed-duration form works
+> scripts/metrics/metrics-query <deploy> \
+>   '`dataset`:metric | align to 5m using avg' now-1h now
+> ```
+>
+> **Exceptions:** for genuinely sparse metrics where `$__interval` would round to an empty bucket (sensors, batch jobs, crons), a fixed wider window (e.g. `1h`) is acceptable in the committed chart JSON; document why in the chart description.
 
 #### 1. At-a-Glance (Statistic panels)
 Current values for key metrics — answer "what's the state right now?"
@@ -642,6 +662,8 @@ scripts/dashboard-create prod ./dashboard.json
 | `decimals` rejected on create | Create API does not accept chart-level `decimals` even though GET may return it | Omit `decimals` from create payloads |
 | Statistic for an availability/error rate shows `1` instead of `100%` | OTel ratios are 0–1 fractions; `Percent` enum does NOT auto-multiply | `\| map * 100` in MPL, then set `unit: "Percent100"` + `customUnits: "%"`. See [metrics-mpl.md § Percentages and ratios](./reference/metrics-mpl.md#percentages-and-ratios-otel-01-fractions). |
 | Statistic Percent100 renders bare `99.5` instead of `99.5%` | `Percent100` scales the value but does not paint the suffix | Add `customUnits: "%"` alongside `unit: "Percent100"`. |
+| `AST Error (Time is provided both in the query and as a parameter)` on a chart | Inline `[…]` time range in the MPL conflicts with the dashboard runtime's API-supplied `start`/`end`. `overrideDashboardTimeRange: true` does NOT suppress the API range for metrics charts. | Remove the inline range. Dashboards always inherit time from the picker; use `$__interval` for bucketing and let `timeWindowStart`/`timeWindowEnd` (or the user's picker) control the window. |
+| `The param $__interval is not defined` from `metrics-query` | The chart query uses `$__interval` but `metrics-query` does not auto-inject the `param` declaration or value the way the dashboard runtime does. | Prepend `param $__interval: Duration;` to the query passed to `metrics-query` and add `-p __interval=5m`. Do NOT rewrite the chart `apl` itself to a fixed duration. |
 
 ---
 
