@@ -76,24 +76,6 @@ scripts/dashboard-delete <deployment> <id>
 | `dashboard-delete` | Delete with confirmation |
 | `dashboard-from-template` | Generate from template |
 
-## Chart Patches
-
-Use `dashboard-chart-patch` when only one existing chart needs to change. The patch file is a JSON Merge Patch applied to that chart: include only fields to change, and set a field to `null` to remove it.
-
-```bash
-cat > chart.patch.json <<'JSON'
-{
-  "name": "Error Rate (5m)",
-  "query": { "apl": "['logs'] | summarize errors=countif(status >= 500)" },
-  "config": { "stale": null }
-}
-JSON
-
-scripts/dashboard-chart-patch prod dashboard-uid error-rate chart.patch.json --version 12
-```
-
-Use `--version` for optimistic concurrency. Use `--overwrite` only when last-write-wins is intended. If the patch includes `id`, it must match the chart ID in the command.
-
 ## Templates
 
 Pre-built templates in `reference/templates/`:
