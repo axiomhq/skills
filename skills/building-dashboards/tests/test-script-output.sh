@@ -26,10 +26,11 @@ trap 'rm -rf "$TMPDIR"' EXIT
 
 cp "$SCRIPTS_DIR/dashboard-create" "$TMPDIR/"
 cp "$SCRIPTS_DIR/dashboard-update" "$TMPDIR/"
+cp "$SCRIPTS_DIR/dashboard-chart-patch" "$TMPDIR/"
 cp "$SCRIPTS_DIR/dashboard-validate" "$TMPDIR/"
 cp "$SCRIPTS_DIR/dashboard-normalize.jq" "$TMPDIR/"
 
-chmod +x "$TMPDIR/dashboard-create" "$TMPDIR/dashboard-update" "$TMPDIR/dashboard-validate"
+chmod +x "$TMPDIR/dashboard-create" "$TMPDIR/dashboard-update" "$TMPDIR/dashboard-chart-patch" "$TMPDIR/dashboard-validate"
 
 cat > "$TMPDIR/input.json" <<'JSON'
 {
@@ -57,11 +58,20 @@ cat > "$TMPDIR/input.json" <<'JSON'
 }
 JSON
 
+cat > "$TMPDIR/chart.patch.json" <<'JSON'
+{
+  "name": "Error Rate (5m)",
+  "query": { "apl": "['logs'] | summarize errors=countif(status >= 500)" },
+  "config": { "stale": null }
+}
+JSON
+
 cat > "$TMPDIR/axiom-api" <<'BASH'
 #!/usr/bin/env bash
 set -euo pipefail
 METHOD="${2:-}"
 PATH_="${3:-}"
+BODY="${4:-}"
 
 case "$METHOD:$PATH_" in
   "POST:/dashboards")
@@ -69,6 +79,18 @@ case "$METHOD:$PATH_" in
     ;;
   "PUT:/dashboards/uid/dashboard-root-id")
     echo '{"status":"updated","dashboard":{"uid":"dashboard-root-id","id":"dashboard-root-id","version":2,"dashboard":{"name":"Test Dashboard","updated":true},"createdAt":"2026-02-01T10:00:00Z","updatedAt":"2026-02-02T11:00:00Z","createdBy":"alice@example.com","updatedBy":"bob@example.com"}}'
+    ;;
+  "PATCH:/dashboards/uid/dashboard-root-id/charts/error-rate")
+    echo "$BODY" | jq -e '
+      .chart.name == "Error Rate (5m)" and
+      .chart.query.apl == "['\''logs'\''] | summarize errors=countif(status >= 500)" and
+      (.chart.config | has("stale")) and
+      .chart.config.stale == null and
+      .version == 7 and
+      .message == "Tune error chart" and
+      (.overwrite | not)
+    ' > /dev/null
+    echo '{"status":"updated","dashboard":{"uid":"dashboard-root-id","id":"dashboard-root-id","version":8,"dashboard":{"name":"Test Dashboard","chartPatched":true},"createdAt":"2026-02-01T10:00:00Z","updatedAt":"2026-02-02T12:00:00Z","createdBy":"alice@example.com","updatedBy":"bob@example.com"}}'
     ;;
   *)
     echo "Unexpected call: $METHOD $PATH_" >&2
@@ -94,6 +116,13 @@ if echo "$update_out" | jq -e '.dashboard.uid == "dashboard-root-id" and .dashbo
     ok "dashboard-update outputs valid JSON only"
 else
     fail "dashboard-update outputs valid JSON only" "got: $update_out"
+fi
+
+patch_out=$("$TMPDIR/dashboard-chart-patch" prod dashboard-root-id error-rate "$TMPDIR/chart.patch.json" --version 7 --message "Tune error chart")
+if echo "$patch_out" | jq -e '.dashboard.uid == "dashboard-root-id" and .dashboard.dashboard.chartPatched == true' > /dev/null 2>&1; then
+    ok "dashboard-chart-patch outputs valid JSON only"
+else
+    fail "dashboard-chart-patch outputs valid JSON only" "got: $patch_out"
 fi
 
 echo ""

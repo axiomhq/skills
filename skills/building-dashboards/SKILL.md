@@ -528,6 +528,7 @@ org_id = "your-org-id"
 | `scripts/dashboard-validate <file>` | Validate JSON structure |
 | `scripts/dashboard-create <deploy> <file>` | Create dashboard |
 | `scripts/dashboard-update <deploy> <id> <file>` | Update (needs version) |
+| `scripts/dashboard-chart-patch <deploy> <id> <chart-id> <patch-file> (--version <version> \| --overwrite)` | Patch one chart |
 | `scripts/dashboard-copy <deploy> <id>` | Clone dashboard |
 | `scripts/dashboard-link <deploy> <id>` | Get shareable URL |
 | `scripts/dashboard-delete <deploy> <id>` | Delete (with confirm) |
@@ -539,6 +540,24 @@ org_id = "your-org-id"
 | `scripts/metrics/metrics-query <deploy> <mpl> <start> <end>` | Execute a metrics query |
 
 > **⚠️ Two `axiom-api` scripts exist with different behaviors.** `scripts/axiom-api` rewrites URLs for the dashboard app API (`app.*`). `scripts/metrics/axiom-api` uses raw URLs and supports edge deployment routing. Using the wrong one will produce 404 errors.
+
+### Targeted Chart Updates
+
+Use `scripts/dashboard-chart-patch` when changing one existing chart and the dashboard layout, metadata, and other charts should remain untouched. It calls `PATCH /v2/dashboards/uid/{uid}/charts/{chartId}` with a JSON Merge Patch under the `chart` request field.
+
+Patch files contain only the chart fields to change:
+
+```json
+{
+  "name": "Error Rate (5m)",
+  "query": { "apl": "['logs'] | summarize errors=countif(status >= 500)" },
+  "config": { "stale": null }
+}
+```
+
+`null` removes an existing field. Nested objects merge recursively. If `id` is present in the patch, it must match the `<chart-id>` path argument. The server validates the resulting full dashboard before saving.
+
+Use `--version <version>` for optimistic concurrency after fetching the dashboard with `dashboard-get`. Use `--overwrite` only when last-write-wins behavior is intended. Continue using `dashboard-update` for layout changes, multi-chart edits, dashboard metadata, owner, refresh interval, or time window updates.
 
 ### Workflow
 
