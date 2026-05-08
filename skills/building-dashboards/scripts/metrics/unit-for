@@ -28,8 +28,8 @@
 #
 # This script is intended for Statistic charts. TimeSeries / Heatmap / Pie /
 # Table / LogStream reject the `unit` enum on create; they accept
-# `customUnits` at the API level but visual rendering is unverified. Always
-# also encode the unit in the chart name (e.g. "Latency (ms)").
+# `customUnits` at the API level. Always also encode the unit in the chart
+# name (e.g. "Latency (ms)") so the header is self-describing.
 # See reference/chart-config.md § Unit Configuration.
 #
 # Examples:
@@ -43,11 +43,11 @@
 #   unit-for ""        # -> {"unit":"Auto"}
 #   unit-for "1"       # -> {"unit":"Auto"}
 #
-# Note: "%" emits BOTH `unit: "Percent100"` and `customUnits: "%"`. Verified
-# May 2026: `Percent100` alone scales the value to 0-100 but does not paint
-# the percent sign; `customUnits: "%"` is what produces the "%" suffix.
-# The same pairing applies if you've written your MPL to multiply a 0-1
-# ratio by 100 and want a percent display.
+# Note: "%" emits BOTH `unit: "Percent100"` and `customUnits: "%"`.
+# `Percent100` alone scales the value to 0-100 but does not paint the percent
+# sign; `customUnits: "%"` is what produces the "%" suffix. The same pairing
+# applies if you've written your MPL to multiply a 0-1 ratio by 100 and want
+# a percent display.
 
 set -euo pipefail
 

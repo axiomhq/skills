@@ -131,29 +131,11 @@ These chart types reject the `unit` enum on the create/update API (`Unrecognized
 - **Data**: `Byte`, `Kilobyte`, `Megabyte`, `Gigabyte`
 - **Data rates**: `BitsSec`, `BytesSec`, `KilobitsSec`, `KilobytesSec`, `MegabitsSec`, `MegabytesSec`, `GigabitsSec`, `GigabytesSec`
 - **Time**: `TimeNS`, `TimeUS`, `TimeMS`, `TimeSec`, `TimeMin`, `TimeHour`, `TimeDay`
-- **Percent**: `Percent100` (input is a percentage, 0–100). **Use this for percentage stats and pair with `customUnits: "%"` to actually display the percent sign — see the warning below.**
-
-> **⚠️ Percent vs Percent100, and the `customUnits` pairing requirement.**
->
-> 1. OTel and Prometheus emit ratios as fractions in `0.0–1.0` (e.g. availability of `1.0` = 100%). The Axiom `Percent` enum does **not** auto-multiply by 100 — `1.0` renders as bare `1`, not `100%`. Always convert to 0–100 in MPL and use `Percent100`:
->
->    ```mpl
->    ( … success_rate, … total_rate ) | compute availability using /
->    | map * 100
->    | align to $__interval using avg
->    ```
->
-> 2. **`Percent100` alone does not render the `%` suffix.** A Statistic with `unit: "Percent100"` and no `customUnits` shows `99.5`, not `99.5%`. To get the percent sign you must also set `customUnits: "%"`:
->
->    ```json
->    { "type": "Statistic", "unit": "Percent100", "customUnits": "%", "query": {"…":"…"} }
->    ```
->
->    The same pairing logic applies to other `unit` enums when you want a custom suffix appended to the formatted value (e.g. `unit: "Byte", customUnits: "/ pod"` → `1.2 MB / pod`).
+- **Percent**: `Percent100` (input is a percentage, 0–100). Pair with `customUnits: "%"` to display the percent sign — see [Unit Configuration](#unit-configuration-cross-chart). The `Percent` enum does NOT auto-multiply 0–1 fractions; convert OTel ratios to 0–100 in MPL.
 - **Currency**: `CurrencyUSD`, `CurrencyEUR`, `CurrencyGBP`, `CurrencyCAD`, `CurrencyAUD`, `CurrencyJPY`, `CurrencyINR`, `CurrencyCZK`, `CurrencyPLN`
 - **Date**: `DateDateTime`, `DateFromNow`, `DateYYYYMMDDHHmmss`
 
-> **For metrics-backed Statistic charts:** prefer running `scripts/metrics/unit-for <unit>` to map the metric's UCUM/OTel unit (from `metrics-info … metrics <m> info`) to the right enum, falling back to `customUnits` automatically when the unit isn't representable as an enum. See [metrics-mpl.md § Unit Handling](./metrics-mpl.md#unit-handling).
+> **For metrics-backed Statistic charts:** run `scripts/metrics/unit-for <unit>` to map the metric's UCUM/OTel unit (from `metrics-info … metrics <m> info`) to the right enum, falling back to `customUnits` automatically when the unit isn't representable as an enum. See [metrics-mpl.md § Unit Handling](./metrics-mpl.md#unit-handling).
 
 ## TimeSeries Options
 

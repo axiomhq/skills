@@ -43,7 +43,7 @@ When generating metrics chart JSON:
 1. Confirm dataset kind is `otel:metrics:v1` via `scripts/metrics/datasets <deploy>`.
 2. Run `scripts/metrics/metrics-spec` to learn the full MPL syntax — **mandatory, never guess**.
 3. Discover available metrics and tags with `scripts/metrics/metrics-info`. If results are empty, retry with `--start` set to 7 days ago (sparse metrics may not have data in the default 24h window).
-4. **Read the metric's metadata** with `scripts/metrics/metrics-info <deploy> <dataset> metrics <metric> info`. The returned `{type, temporality, unit}` block drives both the query shape (see the `query-metrics` skill's "Choosing a query shape from metric metadata" section) and the chart unit configuration (see [Unit Handling](#unit-handling) below).
+4. **Read the metric's metadata** with `scripts/metrics/metrics-info <deploy> <dataset> metrics <metric> info`. The returned `{type, temporality, unit}` block drives both the query shape (see [Choosing a Query Shape](#choosing-a-query-shape) below) and the chart unit configuration (see [Unit Handling](#unit-handling) below).
 5. Put the full MPL pipeline in `query.apl` AND set `query.metricsDataset` to the dataset name. Do not set `query.mpl` — the create API rejects it.
 6. **Use `align to $__interval`, not a fixed window.** The dashboard runtime injects `$__interval` based on the time picker and panel width; a fixed `align to 1m` produces broken granularity outside its design range. Do not add `param $__interval: Duration;` to the chart string — the runtime injects it. Pre-validation via `scripts/metrics/metrics-query` requires substituting a concrete duration for that call only.
 7. Validate your query with `scripts/metrics/metrics-query` before embedding in the dashboard.
@@ -66,22 +66,32 @@ When generating metrics chart JSON:
 
 ---
 
+## Choosing a Query Shape
+
+The `metrics-info ... metrics <metric> info` payload returns three fields that should drive how you write the MPL pipeline. **Always read this metadata before composing a query — never assume a metric is a simple scalar.**
+
+| Field | Values | What it tells you |
+|-------|--------|-------------------|
+| `type` | `Gauge`, `CounterMonotonic`, `CounterNonMonotonic`, `Histogram` | The kind of instrument; determines required pre-aggregation operators |
+| `temporality` | `Cumulative`, `Delta`, or `null` | Whether counter values are running totals or per-interval deltas. `null` is normal for Gauges. |
+| `unit` | UCUM-style string (`Cel`, `kW.h`, `s`, `%`, `[ppm]`, …) or `null` | Display unit; preserve when reporting results to the user |
+
+Rules of thumb (consult `metrics-spec` for the exact operator names — they may evolve):
+
+- **Gauge** — instantaneous value. Align directly with `avg`/`min`/`max`/`sum`. Do **not** apply a rate operator; you'd be averaging meaningless deltas of an instantaneous value.
+- **CounterMonotonic + Cumulative** — running total that only goes up (resets aside). The raw values are almost never what the user wants. Convert to a per-second rate first, **then** align/aggregate.
+- **CounterMonotonic + Delta** — already per-interval; can be summed/aligned without a rate step.
+- **CounterNonMonotonic** — can go up or down (e.g. queue depth, balance). Intent is ambiguous: rate, delta, or current value all make sense for different questions. **Ask the user what they want to see** before picking one.
+- **Histogram** — not a scalar. Direct `align using avg` will not give you what you expect. Consult the histogram section of `metrics-spec` for quantile/bucket operators.
+- **`temporality: null`** means "not applicable for this instrument type" (the norm for Gauges), not "missing data".
+
+If a chart combines metrics with mismatched units in a single arithmetic expression, surface a warning in the chart description rather than silently producing a meaningless number.
+
+---
+
 ## Unit Handling
 
-When a metrics chart represents a single metric (typical for **Statistic** panels), surface the metric's unit in the chart configuration so the dashboard formats values correctly. Statistic charts have two slots for this:
-
-- `unit` — an Axiom enum (`TimeSec`, `TimeMS`, `Byte`, `Percent100`, `CurrencyEUR`, …; full list in [chart-config.md](./chart-config.md#available-units)).
-- `customUnits` — a free-form string suffix used when the metric's unit doesn't map to the enum.
-
-**API-level support:** TimeSeries (and Heatmap, Pie, Table, LogStream) accept `customUnits` (free-form suffix string) at the chart top level and round-trip it through GET, but reject the `unit` enum (`Unrecognized key: "unit"` from the create API).
-
-**Statistic charts require both fields to render a suffix.** A Statistic with `unit: "Percent100"` alone renders bare `99.5`; adding `customUnits: "%"` produces `99.5%`. The two fields play different roles — `unit` scales/formats the value, `customUnits` paints the suffix.
-
-Guidance:
-
-- **Statistic with a percentage:** set BOTH `unit: "Percent100"` AND `customUnits: "%"`. The `unit` controls scaling/formatting; `customUnits` is what paints the suffix.
-- **Statistic with bytes/seconds/etc.:** the `unit` enum (e.g. `Byte`, `TimeMS`) abbreviates *and* labels (`1.2 MB`, `350 ms`) on its own. Add `customUnits` only if you want extra trailing text.
-- **TimeSeries / Heatmap / Pie / Table / LogStream:** set `customUnits` if you want — it persists through the API — but **always also encode the unit in the chart `name`** (e.g. `"P95 Latency (ms)"`, `"Memory (MB)"`). The header label is the most reliable unit-labeling mechanism for these chart types. For magnitude conversion, scale in MPL (`| map / 1048576` for bytes → MB, `| map * 100` for ratio → percent).
+Metrics-backed charts should surface the metric's unit in the chart configuration so the dashboard formats values correctly. The chart-level rendering rules (which fields are accepted by which chart type, the Statistic `unit`+`customUnits` pairing, the `Percent` vs `Percent100` trap) are documented once in [chart-config.md § Unit Configuration](./chart-config.md#unit-configuration-cross-chart). This section covers the metrics-specific workflow that translates a metric's UCUM/OTel `unit` metadata into that chart-level configuration.
 
 ### Workflow
 
@@ -99,12 +109,9 @@ Guidance:
    # -> {"unit":"TimeMS"}
 
    scripts/metrics/unit-for "%"
-   # -> {"unit":"Percent100"}
+   # -> {"unit":"Percent100","customUnits":"%"}
    ```
-3. Splice the result into the chart object alongside `name`, `type`, and `query`.
-   - For **Statistic** showing a percentage: set both `unit: "Percent100"` AND `customUnits: "%"` — the enum scales the value, the suffix paints the `%` sign. Without `customUnits` the chart shows bare `99.5`.
-   - For **Statistic** showing bytes/seconds/etc.: set just `unit` (e.g. `Byte`, `TimeMS`); the formatter abbreviates and labels in one step (`1.2 MB`, `350 ms`).
-   - For **TimeSeries / Heatmap / Pie / Table / LogStream**: only `customUnits` is API-accepted (the `unit` enum is rejected). **Always also encode the unit in the chart `name`** (`"P95 Latency (ms)"`, `"Memory (MB)"`) so the header is self-describing. For magnitude conversion, scale in MPL.
+3. Splice the result into the chart object alongside `name`, `type`, and `query`. For **Statistic** the spliced fields render directly. For **TimeSeries / Heatmap / Pie / Table / LogStream** only `customUnits` is API-accepted, so also encode the unit in the chart `name` (e.g. `"P95 Latency (ms)"`) per [chart-config.md § Unit Configuration](./chart-config.md#unit-configuration-cross-chart).
 
 ### Mapping Reference
 
@@ -141,9 +148,7 @@ The following inputs fall through to `customUnits` rather than guessing an enum,
 
 ### Percentages and ratios (OTel 0–1 fractions)
 
-> **⚠️** The Axiom `Percent` enum does **not** auto-multiply 0–1 fractions by 100. A Statistic chart with `"unit": "Percent"` and a metric value of `1.0` (= 100%) renders as the bare string `1`, not `100%`.
-
-OTel and Prometheus emit ratios in `0.0–1.0` (availability, error rate, saturation, cache hit ratio, …). For Axiom Statistic panels you must convert to the 0–100 range that `Percent100` expects, in the **MPL pipeline**:
+OTel and Prometheus emit ratios in `0.0–1.0` (availability, error rate, saturation, cache hit ratio, …). For Axiom charts you must convert to the 0–100 range that `Percent100` expects, in the **MPL pipeline**:
 
 ```mpl
 (
@@ -155,27 +160,7 @@ OTel and Prometheus emit ratios in `0.0–1.0` (availability, error rate, satura
 | align to $__interval using avg
 ```
 
-Then on the chart:
-
-```json
-{ "type": "Statistic", "unit": "Percent100", "customUnits": "%", … }
-```
-
-**Both fields are required to render `99.5%`.** `unit: "Percent100"` alone renders bare `99.5` — the percent enum scales the value but does not paint the `%` suffix. Adding `customUnits: "%"` paints the suffix.
-
-This applies whether the ratio comes from `compute … using /`, from a single metric whose unit metadata is `1`, or from any other 0–1 source. **Never** rely on the `Percent` enum to do the conversion for you, and never rely on `Percent100` alone for the suffix.
-
-For TimeSeries panels, apply the same `| map * 100` to get to the 0–100 scale, and put `"(%)"` in the chart name as the primary unit label. You may also set `customUnits: "%"` for completeness, but treat the chart name as the source of truth for unit labeling on non-Statistic charts.
-
-### When to Use What
-
-| Chart type | What to set | How |
-|---|---|---|
-| Statistic, single metric (bytes/time/currency) | `unit` (enum) | Run `unit-for` on the metric's `unit`; splice into the chart object. The enum abbreviates and labels in one step. |
-| Statistic, computed percentage | `unit: "Percent100"` AND `customUnits: "%"` | Multiply the ratio by 100 in MPL (`| map * 100`), set both fields together. `Percent100` alone does NOT paint the `%` suffix. |
-| Statistic, derived unit not in the enum | `customUnits` only | Set manually — `unit-for` cannot reason about derived units. |
-| TimeSeries | `name` + optional `customUnits` | Encode the unit in the chart name (`"Memory (MB)"`); the `unit` enum is rejected on create. |
-| Heatmap / Pie / Table / LogStream | Same as TimeSeries | Same caveats. |
+This applies whether the ratio comes from `compute … using /`, from a single metric whose unit metadata is `1`, or from any other 0–1 source. The chart-level rendering (which fields to set, why `Percent100` alone is insufficient, why the `Percent` enum is wrong here) is documented in [chart-config.md § Unit Configuration](./chart-config.md#unit-configuration-cross-chart).
 
 ### Mismatched Units Across Metrics
 

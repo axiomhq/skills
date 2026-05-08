@@ -129,15 +129,14 @@ Raw events that answer "what exactly happened?"
 Current values for key metrics — answer "what's the state right now?"
 - Latest value of primary metrics (e.g., current temperature, power draw)
 - Use `group using avg` or `group using last` depending on metric type (gauge vs counter)
-- **Set the chart unit from metric metadata.** Run `scripts/metrics/metrics-info <deploy> <dataset> metrics <metric> info` to read the metric's `unit`, then pipe it through `scripts/metrics/unit-for` to get the right `unit`/`customUnits` block to splice into the chart. See [reference/metrics-mpl.md § Unit Handling](./reference/metrics-mpl.md#unit-handling).
-- **Percentages from OTel/Prometheus ratios (0–1 fractions): multiply by 100 in MPL AND set both `unit: "Percent100"` and `customUnits: "%"`.** A `compute … using /` ratio or any 0–1 fraction must end with `| map * 100` before `| align`. On the Statistic chart, set BOTH `"unit": "Percent100"` (scales the value) AND `"customUnits": "%"` (paints the `%` suffix); `Percent100` alone renders bare `99.5`. The `Percent` enum does NOT auto-scale 0–1 → 0–100 (`1.0` renders as bare `1`), so don't use it for OTel ratios. See [reference/metrics-mpl.md § Percentages and ratios](./reference/metrics-mpl.md#percentages-and-ratios-otel-01-fractions).
+- **Set the chart unit from metric metadata.** Run `scripts/metrics/metrics-info <deploy> <dataset> metrics <metric> info`, pipe the resulting `unit` through `scripts/metrics/unit-for`, and splice the JSON block into the chart. For OTel ratio metrics (0–1 fractions), multiply by 100 in MPL before aligning. See [reference/metrics-mpl.md § Unit Handling](./reference/metrics-mpl.md#unit-handling).
 
 #### 2. Trends (TimeSeries panels)
 Metric trends over time — answer "what changed?"
 - Primary metrics over time, grouped by key dimension
 - Use `align to $__interval using avg|sum|last` for proper time bucketing — `$__interval` is supplied by the dashboard runtime
 - Group by low-cardinality tags only (≤10 series per chart)
-- **TimeSeries (and Heatmap/Pie/Table/LogStream) accept `customUnits` at the API level but the `unit` enum is rejected.** Always also encode the unit in the chart `name` (e.g. `"P95 Latency (ms)"`, `"Memory (MB)"`) so the header is self-describing. For magnitude conversion, scale in MPL (`| map / 1048576` for bytes → MB). See [reference/chart-config.md § Unit Configuration](./reference/chart-config.md#unit-configuration-cross-chart).
+- **Encode the unit in the chart `name`** (e.g. `"P95 Latency (ms)"`, `"Memory (MB)"`) — non-Statistic charts reject the `unit` enum, so the header label is the primary unit signal. Scale magnitudes in MPL (`| map / 1048576` for bytes → MB). See [reference/chart-config.md § Unit Configuration](./reference/chart-config.md#unit-configuration-cross-chart).
 
 #### 3. Breakdowns (TimeSeries or Table panels)
 Per-entity detail — answer "where should I look?"
@@ -641,8 +640,8 @@ scripts/dashboard-create prod ./dashboard.json
 | Metrics chart renders blank or wrong values | Missing `query.metricsDataset` — backend treats `apl` as APL, not MPL | Set `query.metricsDataset` to the dataset name alongside `query.apl` |
 | `query.mpl` rejected on create | GET may return `query.mpl` for existing metrics charts, but create expects `query.apl` | Move/copy the MPL string into `query.apl` before deploy |
 | `decimals` rejected on create | Create API does not accept chart-level `decimals` even though GET may return it | Omit `decimals` from create payloads |
-| Statistic panel for an availability/error rate shows `1` instead of `100%` (or `0.05` instead of `5%`) | OTel ratios are 0–1 fractions; the Axiom `Percent` enum does NOT auto-multiply by 100 | Multiply in MPL with `\| map * 100` before `\| align`, and set BOTH `"unit": "Percent100"` and `"customUnits": "%"` on the chart. See [reference/metrics-mpl.md § Percentages and ratios](./reference/metrics-mpl.md#percentages-and-ratios-otel-01-fractions). |
-| Statistic Percent100 panel renders bare `99.5` instead of `99.5%` | `unit: "Percent100"` scales the value to 0–100 but does NOT paint the `%` suffix | Add `"customUnits": "%"` alongside the existing `"unit": "Percent100"`. |
+| Statistic for an availability/error rate shows `1` instead of `100%` | OTel ratios are 0–1 fractions; `Percent` enum does NOT auto-multiply | `\| map * 100` in MPL, then set `unit: "Percent100"` + `customUnits: "%"`. See [metrics-mpl.md § Percentages and ratios](./reference/metrics-mpl.md#percentages-and-ratios-otel-01-fractions). |
+| Statistic Percent100 renders bare `99.5` instead of `99.5%` | `Percent100` scales the value but does not paint the suffix | Add `customUnits: "%"` alongside `unit: "Percent100"`. |
 
 ---
 

@@ -65,7 +65,10 @@ check "rate:By/s"         "By/s"          '{"unit":"BytesSec"}'
 check "rate:bit/s"        "bit/s"         '{"unit":"BitsSec"}'
 
 # Percent
-check "percent"           "%"             '{"unit":"Percent100"}'
+# Special case: "%" emits BOTH `unit` and `customUnits` because Percent100
+# alone scales the value but does not paint the suffix. See unit-for header
+# and reference/chart-config.md § Unit Configuration.
+check "percent"           "%"             '{"unit":"Percent100","customUnits":"%"}'
 
 # Currency (a representative subset)
 check "currency:EUR"      "EUR"           '{"unit":"CurrencyEUR"}'
