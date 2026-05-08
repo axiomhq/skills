@@ -121,7 +121,7 @@ Raw events that answer "what exactly happened?"
 > | align to 1m using avg            ❌ fixed window — wrong granularity at most time ranges
 > ```
 >
-> **No `param` declaration needed in the chart `query.apl`** — the dashboard runtime injects `param $__interval: Duration;` automatically. (The Grafana datasource does the same via a preamble; the Axiom-native dashboard runtime behaves identically — verified against working production dashboards.)
+> **No `param` declaration needed in the chart `query.apl`** — the dashboard runtime injects `param $__interval: Duration;` automatically. (The Grafana datasource does the same via a preamble; the Axiom-native dashboard runtime behaves identically.)
 >
 > **Exceptions:** If you are pre-validating a query through `scripts/metrics/metrics-query` (which has no dashboard runtime), substitute a concrete duration for the test call only — do NOT commit that to the chart JSON. For genuinely sparse metrics where `$__interval` would round to an empty bucket (sensors, batch jobs, crons), a fixed wider window (e.g. `1h`) is acceptable; document why in the chart description.
 
@@ -129,12 +129,15 @@ Raw events that answer "what exactly happened?"
 Current values for key metrics — answer "what's the state right now?"
 - Latest value of primary metrics (e.g., current temperature, power draw)
 - Use `group using avg` or `group using last` depending on metric type (gauge vs counter)
+- **Set the chart unit from metric metadata.** Run `scripts/metrics/metrics-info <deploy> <dataset> metrics <metric> info` to read the metric's `unit`, then pipe it through `scripts/metrics/unit-for` to get the right `unit`/`customUnits` block to splice into the chart. See [reference/metrics-mpl.md § Unit Handling](./reference/metrics-mpl.md#unit-handling).
+- **Percentages from OTel/Prometheus ratios (0–1 fractions): multiply by 100 in MPL AND set both `unit: "Percent100"` and `customUnits: "%"`.** A `compute … using /` ratio or any 0–1 fraction must end with `| map * 100` before `| align`. On the Statistic chart, set BOTH `"unit": "Percent100"` (scales the value) AND `"customUnits": "%"` (paints the `%` suffix); `Percent100` alone renders bare `99.5`. The `Percent` enum does NOT auto-scale 0–1 → 0–100 (`1.0` renders as bare `1`), so don't use it for OTel ratios. See [reference/metrics-mpl.md § Percentages and ratios](./reference/metrics-mpl.md#percentages-and-ratios-otel-01-fractions).
 
 #### 2. Trends (TimeSeries panels)
 Metric trends over time — answer "what changed?"
 - Primary metrics over time, grouped by key dimension
 - Use `align to $__interval using avg|sum|last` for proper time bucketing — `$__interval` is supplied by the dashboard runtime
 - Group by low-cardinality tags only (≤10 series per chart)
+- **TimeSeries (and Heatmap/Pie/Table/LogStream) accept `customUnits` at the API level but the `unit` enum is rejected.** Always also encode the unit in the chart `name` (e.g. `"P95 Latency (ms)"`, `"Memory (MB)"`) so the header is self-describing. For magnitude conversion, scale in MPL (`| map / 1048576` for bytes → MB). See [reference/chart-config.md § Unit Configuration](./reference/chart-config.md#unit-configuration-cross-chart).
 
 #### 3. Breakdowns (TimeSeries or Table panels)
 Per-entity detail — answer "where should I look?"
@@ -638,6 +641,8 @@ scripts/dashboard-create prod ./dashboard.json
 | Metrics chart renders blank or wrong values | Missing `query.metricsDataset` — backend treats `apl` as APL, not MPL | Set `query.metricsDataset` to the dataset name alongside `query.apl` |
 | `query.mpl` rejected on create | GET may return `query.mpl` for existing metrics charts, but create expects `query.apl` | Move/copy the MPL string into `query.apl` before deploy |
 | `decimals` rejected on create | Create API does not accept chart-level `decimals` even though GET may return it | Omit `decimals` from create payloads |
+| Statistic panel for an availability/error rate shows `1` instead of `100%` (or `0.05` instead of `5%`) | OTel ratios are 0–1 fractions; the Axiom `Percent` enum does NOT auto-multiply by 100 | Multiply in MPL with `\| map * 100` before `\| align`, and set BOTH `"unit": "Percent100"` and `"customUnits": "%"` on the chart. See [reference/metrics-mpl.md § Percentages and ratios](./reference/metrics-mpl.md#percentages-and-ratios-otel-01-fractions). |
+| Statistic Percent100 panel renders bare `99.5` instead of `99.5%` | `unit: "Percent100"` scales the value to 0–100 but does NOT paint the `%` suffix | Add `"customUnits": "%"` alongside the existing `"unit": "Percent100"`. |
 
 ---
 

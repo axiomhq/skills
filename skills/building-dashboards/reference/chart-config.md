@@ -42,6 +42,55 @@ Metrics charts require both `query.apl` (the MPL pipeline string) and `query.met
 
 For full contract details, see `reference/metrics-mpl.md`.
 
+## Unit Configuration (Cross-Chart)
+
+Unit-related fields by chart type:
+
+| Chart type | `unit` (enum) | `customUnits` (suffix) | Notes |
+|---|:---:|:---:|---|
+| `Statistic` | ✅ accepted | ✅ accepted | **Both fields are required to render a suffix.** `unit` controls value scaling/formatting (e.g. `Percent100` scales 0–100, `Byte` abbreviates to GB/MB). `customUnits` is what actually paints the suffix string (`%`, `ms`, `req/s`, …). Setting `unit` alone does not append the suffix. |
+| `TimeSeries` | ❌ rejected on create (`Unrecognized key: "unit"`) | ✅ accepted by API, round-trips | **Always also encode the unit in the chart `name`** (e.g. `"P95 Latency (ms)"`) so the header is self-describing. |
+| `Heatmap` | ❌ rejected | ✅ accepted | Same guidance as TimeSeries — encode the unit in `name`. |
+| `Pie` | ❌ rejected | ✅ accepted | Same guidance — encode the unit in `name`. |
+| `Table` | ❌ rejected | ✅ accepted | Same guidance — encode the unit in `name`. |
+| `LogStream` | ❌ rejected | ✅ accepted | Same guidance — encode the unit in `name`. |
+| `Note` | n/a | n/a | n/a (Markdown panel, no values). |
+
+### Statistic: the `unit` + `customUnits` pairing
+
+> **⚠️** A Statistic chart with `unit: "Percent100"` and **no `customUnits`** renders the value as bare `99.5` — the `%` sign is missing. To get `99.5%` you must set **both** `unit: "Percent100"` and `customUnits: "%"`.
+
+The two fields play different roles and you generally want both:
+
+- **`unit` (enum)** — picks a value formatter. `Percent100` interprets the input as already-scaled 0–100. `Byte` abbreviates `1234567` to `1.2 MB`. `TimeMS` abbreviates `90123` to `1.5 min`. With no `unit` set, values render as raw numbers.
+- **`customUnits` (string)** — the literal suffix appended to the formatted value. With `unit: "Byte"` the formatter already says `1.2 MB`, so leave `customUnits` empty unless you want a trailing label like `1.2 MB / pod`. With `unit: "Percent100"`, set `customUnits: "%"` to get the percent sign.
+
+Canonical pattern for an availability/error-rate Statistic backed by an OTel ratio metric:
+
+```mpl
+( … success_rate, … total_rate )
+| compute availability using /
+| map * 100                          // 0–1 fraction → 0–100
+| align to $__interval using avg
+```
+
+```json
+{
+  "type": "Statistic",
+  "unit": "Percent100",
+  "customUnits": "%",
+  "query": { "…": "…" }
+}
+```
+
+### TimeSeries / Heatmap / Pie / Table / LogStream: only `customUnits`
+
+These chart types reject the `unit` enum on the create/update API (`Unrecognized key: "unit"`). They accept `customUnits` and the field round-trips through GET. Recommended approach:
+
+- Set `customUnits` if you want a suffix — it does no harm and persists through the API.
+- **Always also include the unit in the chart `name`**, e.g. `"Memory (MB)"`, `"P95 Latency (s)"`. The header label is the most reliable mechanism for non-Statistic charts.
+- For magnitude conversion, scale in the MPL pipeline (`| map / 1048576` for bytes → MB, `| map * 100` for 0–1 ratio → percent) since `customUnits` is purely a label, not a formatter.
+
 ## Statistic Options
 
 ```json
@@ -65,8 +114,8 @@ For full contract details, see `reference/metrics-mpl.md`.
 | Option | Values | Description |
 |--------|--------|-------------|
 | `colorScheme` | Blue, Orange, Red, Purple, Teal, Yellow, Green, Pink, Grey, Brown | Color theme |
-| `customUnits` | string | Unit suffix (e.g., "ms", "req/s") |
-| `unit` | Auto, Abbreviated, Byte, KB, MB, GB, TimeMS, TimeSec, Percent, etc. | Value formatting |
+| `customUnits` | string | Free-form unit suffix (e.g., "ms", "req/s"). Used verbatim — no smart abbreviation. |
+| `unit` | Auto, Abbreviated, Byte, KB, MB, GB, TimeMS, TimeSec, Percent, etc. | Value formatting (Statistic only — rejected on other chart types) |
 | `decimals` | number | Decimal places in readback/GET payloads; omit on create because the API rejects it |
 | `showChart` | boolean | Show sparkline |
 | `hideValue` | boolean | Hide the main value |
@@ -82,13 +131,43 @@ For full contract details, see `reference/metrics-mpl.md`.
 - **Data**: `Byte`, `Kilobyte`, `Megabyte`, `Gigabyte`
 - **Data rates**: `BitsSec`, `BytesSec`, `KilobitsSec`, `KilobytesSec`, `MegabitsSec`, `MegabytesSec`, `GigabitsSec`, `GigabytesSec`
 - **Time**: `TimeNS`, `TimeUS`, `TimeMS`, `TimeSec`, `TimeMin`, `TimeHour`, `TimeDay`
-- **Percent**: `Percent` (0-1), `Percent100` (0-100)
+- **Percent**: `Percent100` (input is a percentage, 0–100). **Use this for percentage stats and pair with `customUnits: "%"` to actually display the percent sign — see the warning below.**
+
+> **⚠️ Percent vs Percent100, and the `customUnits` pairing requirement.**
+>
+> 1. OTel and Prometheus emit ratios as fractions in `0.0–1.0` (e.g. availability of `1.0` = 100%). The Axiom `Percent` enum does **not** auto-multiply by 100 — `1.0` renders as bare `1`, not `100%`. Always convert to 0–100 in MPL and use `Percent100`:
+>
+>    ```mpl
+>    ( … success_rate, … total_rate ) | compute availability using /
+>    | map * 100
+>    | align to $__interval using avg
+>    ```
+>
+> 2. **`Percent100` alone does not render the `%` suffix.** A Statistic with `unit: "Percent100"` and no `customUnits` shows `99.5`, not `99.5%`. To get the percent sign you must also set `customUnits: "%"`:
+>
+>    ```json
+>    { "type": "Statistic", "unit": "Percent100", "customUnits": "%", "query": {"…":"…"} }
+>    ```
+>
+>    The same pairing logic applies to other `unit` enums when you want a custom suffix appended to the formatted value (e.g. `unit: "Byte", customUnits: "/ pod"` → `1.2 MB / pod`).
 - **Currency**: `CurrencyUSD`, `CurrencyEUR`, `CurrencyGBP`, `CurrencyCAD`, `CurrencyAUD`, `CurrencyJPY`, `CurrencyINR`, `CurrencyCZK`, `CurrencyPLN`
 - **Date**: `DateDateTime`, `DateFromNow`, `DateYYYYMMDDHHmmss`
 
+> **For metrics-backed Statistic charts:** prefer running `scripts/metrics/unit-for <unit>` to map the metric's UCUM/OTel unit (from `metrics-info … metrics <m> info`) to the right enum, falling back to `customUnits` automatically when the unit isn't representable as an enum. See [metrics-mpl.md § Unit Handling](./metrics-mpl.md#unit-handling).
+
 ## TimeSeries Options
 
-TimeSeries chart options are stored in `query.queryOptions.aggChartOpts` as a JSON string.
+TimeSeries supports `customUnits` (free-form suffix) at the chart top level — see the [Unit Configuration](#unit-configuration-cross-chart) table above. The `unit` enum is **not** accepted (`Unrecognized key: "unit"`).
+
+```json
+{
+  "type": "TimeSeries",
+  "customUnits": "req/s",
+  "query": { "apl": "…" }
+}
+```
+
+Other TimeSeries chart options are stored in `query.queryOptions.aggChartOpts` as a JSON string.
 
 ### Key Formats
 
@@ -209,9 +288,12 @@ Controls what the TimeSeries panel displays. Set in `query.queryOptions.timeSeri
 ```json
 {
   "type": "Pie",
+  "customUnits": "evt",
   "hideHeader": false
 }
 ```
+
+Pie accepts `customUnits` (suffix, no abbreviation). The `unit` enum is rejected — see the [Unit Configuration](#unit-configuration-cross-chart) table.
 
 ## Note Options
 
@@ -227,11 +309,12 @@ Note content supports GitHub Flavored Markdown.
 
 ## Heatmap Options
 
-Heatmap charts use the default options. Color scheme is fixed to blue gradient.
+Heatmap charts use the default options. Color scheme is fixed to blue gradient. Heatmap accepts `customUnits` (the `unit` enum is rejected — see the [Unit Configuration](#unit-configuration-cross-chart) table).
 
 ```json
 {
   "type": "Heatmap",
+  "customUnits": "ms",
   "query": {
     "apl": "['logs'] | summarize histogram(duration_ms, 15) by bin_auto(_time)"
   }
