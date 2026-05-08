@@ -2,12 +2,30 @@
 # metrics-info: Discover metrics, tags, and tag values in a dataset
 #
 # Usage:
-#   metrics-info <deployment> <dataset> metrics [--start T --end T]
+#   metrics-info <deployment> <dataset> metrics [--by-type] [--type T]... [--start T --end T]
+#   metrics-info <deployment> <dataset> metrics <metric> info [--start T --end T]
 #   metrics-info <deployment> <dataset> tags    [--start T --end T]
 #   metrics-info <deployment> <dataset> tags <tag> values [--start T --end T]
 #   metrics-info <deployment> <dataset> metrics <metric> tags [--start T --end T]
 #   metrics-info <deployment> <dataset> metrics <metric> tags <tag> values [--start T --end T]
 #   metrics-info <deployment> <dataset> find-metrics <search-value> [--start T --end T]
+#
+# Metric metadata. The `metrics` listing returns a v2 payload where each entry
+# carries `type` (Gauge | CounterMonotonic | CounterNonMonotonic | Histogram),
+# `temporality` (Cumulative | Delta | null), and `unit` (UCUM string or null).
+# Use this metadata to choose the right MPL query shape (consult metrics-spec
+# for the exact operator names per type).
+#
+#   --by-type           Group the listing by `type` instead of returning a flat
+#                       name->meta object. Pure client-side reshape; no extra
+#                       server call.
+#   --type T            Filter the listing to entries whose `type` equals T.
+#                       Repeatable; multiple --type flags act as OR.
+#                       Composes with --by-type.
+#
+# The `metrics <metric> info` subcommand extracts a single metric's metadata
+# block ({type, temporality, unit}) from the bulk listing. Exits non-zero if
+# the metric is not present in the listing for the given time range.
 #
 # find-metrics searches TAG VALUES, not metric names. It returns metrics that have
 # a tag containing the given value. Use it when you know a specific entity name
@@ -18,9 +36,13 @@
 # For sparse metrics (sensors, batch jobs), try --start with a wider range (e.g. 7 days).
 #
 # Examples:
-#   metrics-info prod my-dataset metrics                    # List all metric names
-#   metrics-info prod my-dataset tags service.name values   # List values for a tag
-#   metrics-info prod my-dataset find-metrics "frontend"    # Find metrics with tag value "frontend"
+#   metrics-info prod my-dataset metrics                                # Raw listing
+#   metrics-info prod my-dataset metrics --by-type                      # Grouped by type
+#   metrics-info prod my-dataset metrics --type Histogram               # Only histograms
+#   metrics-info prod my-dataset metrics --type Gauge --type Histogram --by-type
+#   metrics-info prod my-dataset metrics http.server.duration info      # Single metric meta
+#   metrics-info prod my-dataset tags service.name values               # List values for a tag
+#   metrics-info prod my-dataset find-metrics "frontend"                # Find metrics with tag value "frontend"
 #   metrics-info prod my-dataset metrics http.server.duration tags --start 2025-06-01T00:00:00Z --end 2025-06-02T00:00:00Z
 
 set -euo pipefail
@@ -29,16 +51,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 show_usage() {
     echo "Usage:" >&2
-    echo "  metrics-info <deploy> <dataset> metrics" >&2
-    echo "  metrics-info <deploy> <dataset> tags" >&2
-    echo "  metrics-info <deploy> <dataset> tags <tag> values" >&2
+    echo "  metrics-info <deploy> <dataset> metrics [--by-type] [--type T]..." >&2
+    echo "  metrics-info <deploy> <dataset> metrics <metric> info" >&2
     echo "  metrics-info <deploy> <dataset> metrics <metric> tags" >&2
     echo "  metrics-info <deploy> <dataset> metrics <metric> tags <tag> values" >&2
+    echo "  metrics-info <deploy> <dataset> tags" >&2
+    echo "  metrics-info <deploy> <dataset> tags <tag> values" >&2
     echo "  metrics-info <deploy> <dataset> find-metrics <search-value>  (searches tag values, not metric names)" >&2
     echo "" >&2
     echo "Options:" >&2
-    echo "  --start T   Start time (RFC3339). Default: 24h ago" >&2
-    echo "  --end T     End time (RFC3339). Default: now" >&2
+    echo "  --start T    Start time (RFC3339). Default: 24h ago" >&2
+    echo "  --end T      End time (RFC3339). Default: now" >&2
+    echo "  --by-type    (metrics listing) Group entries by metric type" >&2
+    echo "  --type T     (metrics listing) Filter to type T (Gauge|CounterMonotonic|CounterNonMonotonic|Histogram). Repeatable." >&2
     exit 1
 }
 
@@ -51,15 +76,19 @@ fi
 
 shift 2
 
-# Collect positional args and parse --start/--end
+# Collect positional args and parse --start/--end and listing-view flags
 POSITIONAL=()
 START=""
 END=""
+BY_TYPE=0
+TYPE_FILTERS=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --start) START="$2"; shift 2 ;;
-        --end)   END="$2"; shift 2 ;;
-        *)       POSITIONAL+=("$1"); shift ;;
+        --start)    START="$2"; shift 2 ;;
+        --end)      END="$2"; shift 2 ;;
+        --by-type)  BY_TYPE=1; shift ;;
+        --type)     TYPE_FILTERS+=("$2"); shift 2 ;;
+        *)          POSITIONAL+=("$1"); shift ;;
     esac
 done
 
@@ -88,11 +117,43 @@ if [[ ${#POSITIONAL[@]} -eq 0 ]]; then
     show_usage
 fi
 
+# Fetch the bulk metrics listing (v2 payload with type/temporality/unit per metric).
+# Used directly by `metrics` and indirectly by `metrics <metric> info`.
+fetch_metrics_listing() {
+    AXIOM_ACCEPT="application/vnd.metrics-info.v2+json" "$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET "${BASE}/metrics?${TIME_PARAMS}"
+}
+
 case "${POSITIONAL[0]}" in
     metrics)
         if [[ ${#POSITIONAL[@]} -eq 1 ]]; then
-            # List metrics
-            AXIOM_ACCEPT="application/vnd.metrics-info.v2+json" "$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET "${BASE}/metrics?${TIME_PARAMS}"
+            # List metrics. Default behaviour returns the raw v2 payload byte-for-byte;
+            # --type / --by-type apply pure client-side reshapes via jq.
+            if [[ $BY_TYPE -eq 0 && ${#TYPE_FILTERS[@]} -eq 0 ]]; then
+                fetch_metrics_listing
+            else
+                RAW=$(fetch_metrics_listing)
+                JQ_FILTER='.'
+                if [[ ${#TYPE_FILTERS[@]} -gt 0 ]]; then
+                    # Build a JSON array of allowed types and filter entries.
+                    TYPES_JSON=$(printf '%s\n' "${TYPE_FILTERS[@]}" | jq -R . | jq -s .)
+                    JQ_FILTER='to_entries | map(select(.value.type as $vt | ($types | index($vt)))) | from_entries'
+                    if [[ $BY_TYPE -eq 1 ]]; then
+                        JQ_FILTER="$JQ_FILTER"' | to_entries | group_by(.value.type) | map({(.[0].value.type): (map({(.key): {temporality: .value.temporality, unit: .value.unit}}) | add)}) | add // {}'
+                    fi
+                    printf '%s' "$RAW" | jq --argjson types "$TYPES_JSON" "$JQ_FILTER"
+                else
+                    # --by-type only
+                    JQ_FILTER='to_entries | group_by(.value.type) | map({(.[0].value.type): (map({(.key): {temporality: .value.temporality, unit: .value.unit}}) | add)}) | add // {}'
+                    printf '%s' "$RAW" | jq "$JQ_FILTER"
+                fi
+            fi
+        elif [[ ${#POSITIONAL[@]} -eq 3 && "${POSITIONAL[2]}" == "info" ]]; then
+            # Single-metric metadata: {type, temporality, unit}. Derived client-side
+            # from the bulk listing because there is no per-metric metadata endpoint.
+            METRIC="${POSITIONAL[1]}"
+            RAW=$(fetch_metrics_listing)
+            # -e exits non-zero when the value is null/false; we want non-zero on missing.
+            printf '%s' "$RAW" | jq -e --arg m "$METRIC" '.[$m] // error("metric not found in listing for the given time range: " + $m)'
         elif [[ ${#POSITIONAL[@]} -eq 3 && "${POSITIONAL[2]}" == "tags" ]]; then
             # List tags for a metric
             METRIC="${POSITIONAL[1]}"

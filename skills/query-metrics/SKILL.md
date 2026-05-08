@@ -72,7 +72,7 @@ Re-consult the spec when using an unfamiliar operator, when a query returns a sy
 
 1. **List datasets**: Run `scripts/datasets <deployment>` to see available datasets and their edge deployments
 2. **Fetch the spec**: Run `scripts/metrics-spec <deployment> <dataset>` — **this step is mandatory before writing any query**
-3. **Discover metrics**: List available metrics via `scripts/metrics-info <deployment> <dataset> metrics`
+3. **Discover and classify metrics**: List available metrics via `scripts/metrics-info <deployment> <dataset> metrics`. The response carries each metric's `type`, `temporality`, and `unit` — read these before composing a query (see [Choosing a query shape from metric metadata](#choosing-a-query-shape-from-metric-metadata) below).
 4. **Explore tags**: List tags and tag values to understand filtering options. If metrics listing fails, use tags and tag values to identify relevant entities, then use those to list metrics for specific tags.
 5. **Write and execute query**: Compose a metrics query and run it via `scripts/metrics-query`
 6. **Iterate**: Refine filters, aggregations, and groupings based on results
@@ -81,7 +81,46 @@ If the user provides a specific service, host, or entity name to search for, use
 ```bash
 scripts/metrics-info <deployment> <dataset> find-metrics "frontend"
 ```
-Do NOT use `find-metrics` as a general discovery step — it requires a known search value.
+Do NOT use `find-metrics` as a general discovery step — it requires a known search value. After `find-metrics` returns candidates, fetch each one's metadata with `metrics-info … metrics <metric> info` before writing a query against it.
+
+---
+
+## Choosing a query shape from metric metadata
+
+The `metrics` listing returns a v2 payload where each metric carries three fields that should drive how you write the MPL query. **Always read this metadata before composing a query — never assume a metric is a simple scalar.**
+
+| Field | Values | What it tells you |
+|-------|--------|-------------------|
+| `type` | `Gauge`, `CounterMonotonic`, `CounterNonMonotonic`, `Histogram` | The kind of instrument; determines required pre-aggregation operators |
+| `temporality` | `Cumulative`, `Delta`, or `null` | Whether counter values are running totals or per-interval deltas. `null` is normal for Gauges. |
+| `unit` | UCUM-style string (`Cel`, `kW.h`, `s`, `%`, `[ppm]`, …) or `null` | Display unit; preserve when reporting results to the user |
+
+**Rules of thumb (consult `metrics-spec` for the exact operator names — they may evolve):**
+
+- **Gauge** — instantaneous value. Align directly with `avg`/`min`/`max`/`sum`. Do **not** apply a rate operator; you'd be averaging meaningless deltas of an instantaneous value.
+- **CounterMonotonic + Cumulative** — running total that only goes up (resets aside). The raw values are almost never what the user wants. Convert to a per-second rate first, **then** align/aggregate. Look up the rate operator in the spec's standard library.
+- **CounterMonotonic + Delta** — already per-interval; can be summed/aligned without a rate step.
+- **CounterNonMonotonic** — can go up or down (e.g. queue depth, balance). Intent is ambiguous: rate, delta, or current value all make sense for different questions. **Ask the user what they want to see** before picking one.
+- **Histogram** — not a scalar. Direct `align using avg` will not give you what you expect. Consult the histogram section of `metrics-spec` for quantile/bucket operators.
+- **`temporality: null`** means "not applicable for this instrument type" (the norm for Gauges), not "missing data".
+
+**Reporting results.** When surfacing numbers to the user, attach the metric's `unit` (treat `null` as unitless). If you combine metrics with mismatched units in a single arithmetic expression, surface a warning rather than silently producing a meaningless number.
+
+**Cheap views over the listing.** For datasets with many metrics, the raw object is noisy. Two opt-in views are available:
+
+```bash
+# Group the listing by metric type
+scripts/metrics-info <deploy> <dataset> metrics --by-type
+
+# Filter to one or more types (repeatable; OR semantics; composes with --by-type)
+scripts/metrics-info <deploy> <dataset> metrics --type Histogram
+scripts/metrics-info <deploy> <dataset> metrics --type Gauge --type Histogram --by-type
+
+# Single-metric metadata block ({type, temporality, unit})
+scripts/metrics-info <deploy> <dataset> metrics <metric> info
+```
+
+All three are pure client-side reshapes of the same listing payload — no extra server calls.
 
 ---
 
@@ -163,6 +202,24 @@ Use `scripts/metrics-info` to explore what metrics, tags, and values exist in a 
 ```bash
 scripts/metrics-info <deployment> <dataset> metrics
 ```
+
+Returns a JSON object keyed by metric name; each value is `{type, temporality, unit}`. See [Choosing a query shape from metric metadata](#choosing-a-query-shape-from-metric-metadata) for how to use those fields.
+
+Opt-in views:
+
+```bash
+scripts/metrics-info <deployment> <dataset> metrics --by-type            # grouped by type
+scripts/metrics-info <deployment> <dataset> metrics --type Gauge         # filter (repeatable)
+scripts/metrics-info <deployment> <dataset> metrics --type Counter --type Histogram --by-type
+```
+
+### Get a single metric's metadata
+
+```bash
+scripts/metrics-info <deployment> <dataset> metrics <metric> info
+```
+
+Returns just `{type, temporality, unit}` for the named metric. Exits non-zero if the metric is not present in the listing for the given time range.
 
 ### List tags in a dataset
 
