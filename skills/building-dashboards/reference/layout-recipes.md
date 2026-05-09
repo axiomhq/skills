@@ -1,226 +1,96 @@
 # Layout Recipes
 
-Grid-based layout patterns for common dashboard structures.
+Section blueprints for common dashboard structures. The grid is **12 columns wide**; `dashboard-validate` rejects entries past column 12. `scripts/layout-pack` packs ordered ids into the grid using per-type defaults — most recipes below are expressible as a `layout-pack` invocation.
 
----
+Default per-type sizes (from `layout-pack`): Statistic 3×3, TimeSeries 6×4, Heatmap 6×4, Pie 4×4, Table 6×5, LogStream 12×6, Note 12×2, MonitorList 6×4, SmartFilter 12×1.
 
-## Grid Basics
+## Service Overview (oncall)
 
-- **Dashboard width:** 24 units
-- **Minimum panel width:** 3 units
-- **Panel positioning:** (x, y) coordinates with (w)idth and (h)eight
+Stats row → trend row → breakdowns → evidence.
 
-### Common Panel Sizes
-
-| Panel type | Width (w) | Height (h) | Description |
-|------------|-----------|------------|-------------|
-| Statistic (compact) | 6 | 2 | Quarter width, KPI |
-| Statistic (large) | 8 | 3 | Third width, featured KPI |
-| TimeSeries (half) | 12 | 4 | Side-by-side charts |
-| TimeSeries (full) | 24 | 4–6 | Full-width trend |
-| Table (half) | 12 | 4–6 | Side-by-side tables |
-| Table (full) | 24 | 5–8 | Detailed breakdown |
-| Pie | 8–12 | 4 | Share visualization |
-| LogStream | 24 | 6–10 | Raw events |
-| Note (header) | 24 | 1–2 | Section title |
-| SmartFilter | 24 | 2 | Dashboard filters |
-
----
-
-## Service Overview Layout
-
-Classic 4-section structure for oncall dashboards.
-
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ Row 0-1: Stats (h=2)                                                          │
-│ ┌─────────────┬─────────────┬─────────────┬─────────────┐                    │
-│ │ Error Rate  │ p95 Latency │ Traffic/s   │ Active      │                    │
-│ │ x=0, w=6    │ x=6, w=6    │ x=12, w=6   │ Alerts x=18 │                    │
-│ └─────────────┴─────────────┴─────────────┴─────────────┘                    │
-├──────────────────────────────────────────────────────────────────────────────┤
-│ Row 2-5: TimeSeries (h=4)                                                     │
-│ ┌────────────────────────────────┬────────────────────────────────┐          │
-│ │ Traffic + Errors Over Time     │ Latency Percentiles            │          │
-│ │ x=0, w=12                      │ x=12, w=12                     │          │
-│ └────────────────────────────────┴────────────────────────────────┘          │
-├──────────────────────────────────────────────────────────────────────────────┤
-│ Row 6-9: Tables (h=4)                                                         │
-│ ┌────────────────────────────────┬────────────────────────────────┐          │
-│ │ Top Failing Routes             │ Top Error Messages             │          │
-│ │ x=0, w=12                      │ x=12, w=12                     │          │
-│ └────────────────────────────────┴────────────────────────────────┘          │
-├──────────────────────────────────────────────────────────────────────────────┤
-│ Row 10-15: LogStream (h=6)                                                    │
-│ ┌────────────────────────────────────────────────────────────────────────────┐
-│ │ Recent Errors                                                               │
-│ │ x=0, w=24                                                                   │
-│ └────────────────────────────────────────────────────────────────────────────┘
-└──────────────────────────────────────────────────────────────────────────────┘
+```bash
+layout-pack \
+  err-rate:Statistic p95:Statistic traffic:Statistic alerts:Statistic \
+  traffic-ts:TimeSeries latency-ts:TimeSeries \
+  top-routes:Table top-errors:Table \
+  recent-errors:LogStream
 ```
 
-**Layout JSON:**
-```json
-[
-  {"i": "error-rate", "x": 0, "y": 0, "w": 6, "h": 2},
-  {"i": "p95-latency", "x": 6, "y": 0, "w": 6, "h": 2},
-  {"i": "traffic", "x": 12, "y": 0, "w": 6, "h": 2},
-  {"i": "alerts", "x": 18, "y": 0, "w": 6, "h": 2},
-  {"i": "traffic-errors-ts", "x": 0, "y": 2, "w": 12, "h": 4},
-  {"i": "latency-ts", "x": 12, "y": 2, "w": 12, "h": 4},
-  {"i": "top-routes", "x": 0, "y": 6, "w": 12, "h": 4},
-  {"i": "top-errors", "x": 12, "y": 6, "w": 12, "h": 4},
-  {"i": "logs", "x": 0, "y": 10, "w": 24, "h": 6}
-]
-```
-
----
-
-## Multi-Service Comparison Layout
-
-Side-by-side comparison of multiple services.
+Resulting grid:
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ Row 0: SmartFilter                                                            │
-│ ┌────────────────────────────────────────────────────────────────────────────┐
-│ │ Filters: environment, region                                                │
-│ └────────────────────────────────────────────────────────────────────────────┘
-├──────────────────────────────────────────────────────────────────────────────┤
-│ Row 2-5: TimeSeries (by service)                                              │
-│ ┌────────────────────────────────────────────────────────────────────────────┐
-│ │ Traffic by Service (stacked)                                                │
-│ └────────────────────────────────────────────────────────────────────────────┘
-├──────────────────────────────────────────────────────────────────────────────┤
-│ Row 6-9: TimeSeries (by service)                                              │
-│ ┌────────────────────────────────────────────────────────────────────────────┐
-│ │ Error Rate by Service                                                       │
-│ └────────────────────────────────────────────────────────────────────────────┘
-├──────────────────────────────────────────────────────────────────────────────┤
-│ Row 10-13: Per-service columns                                                │
-│ ┌──────────────────┬──────────────────┬──────────────────┐                   │
-│ │ API Gateway      │ Auth Service     │ Payment Service  │                   │
-│ │ Stats + Table    │ Stats + Table    │ Stats + Table    │                   │
-│ └──────────────────┴──────────────────┴──────────────────┘                   │
-└──────────────────────────────────────────────────────────────────────────────┘
+y= 0  [err-rate 3] [p95 3] [traffic 3] [alerts 3]
+y= 3  [traffic-ts  6      ] [latency-ts  6       ]
+y= 7  [top-routes  6      ] [top-errors  6       ]
+y=12  [recent-errors            12               ]
 ```
 
----
+## Service Overview with Filter Bar
 
-## SLO Tracking Layout
+Add a SmartFilter row at the top (full-width, h=1):
 
-Focus on service level objectives and budget.
-
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ Row 0-2: SLO Stats (large)                                                    │
-│ ┌───────────────────┬───────────────────┬───────────────────┐                │
-│ │ Availability      │ Latency SLO       │ Error Budget      │                │
-│ │ 99.95%           │ p99 < 500ms       │ 23% remaining     │                │
-│ │ x=0, w=8, h=3     │ x=8, w=8, h=3     │ x=16, w=8, h=3    │                │
-│ └───────────────────┴───────────────────┴───────────────────┘                │
-├──────────────────────────────────────────────────────────────────────────────┤
-│ Row 3-8: SLO Trends                                                           │
-│ ┌────────────────────────────────────────────────────────────────────────────┐
-│ │ Availability Over Time (7d) with SLO threshold line                         │
-│ └────────────────────────────────────────────────────────────────────────────┘
-│ ┌────────────────────────────────────────────────────────────────────────────┐
-│ │ Error Budget Burn Rate                                                      │
-│ └────────────────────────────────────────────────────────────────────────────┘
-├──────────────────────────────────────────────────────────────────────────────┤
-│ Row 14+: SLO Violations                                                       │
-│ ┌────────────────────────────────────────────────────────────────────────────┐
-│ │ Table: SLO Violations by Route/Time                                         │
-│ └────────────────────────────────────────────────────────────────────────────┘
-└──────────────────────────────────────────────────────────────────────────────┘
+```bash
+layout-pack \
+  filters:SmartFilter \
+  err-rate:Statistic p95:Statistic traffic:Statistic alerts:Statistic \
+  …
 ```
 
----
+## SLO Tracking
 
-## Incident Investigation Layout
+Three SLO statistics across the top, two trend charts below, violations table at the bottom.
 
-Detailed drilldown for active incidents.
-
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ Row 0: SmartFilter (service, route, status, trace_id)                         │
-├──────────────────────────────────────────────────────────────────────────────┤
-│ Row 2-5: Impact Overview                                                      │
-│ ┌─────────────┬─────────────┬─────────────┬─────────────┐                    │
-│ │ Error Count │ Affected    │ Start Time  │ Duration    │                    │
-│ │             │ Customers   │             │             │                    │
-│ └─────────────┴─────────────┴─────────────┴─────────────┘                    │
-├──────────────────────────────────────────────────────────────────────────────┤
-│ Row 6-11: Timeline                                                            │
-│ ┌────────────────────────────────────────────────────────────────────────────┐
-│ │ Error Timeline (narrow bins, 10s-30s)                                       │
-│ └────────────────────────────────────────────────────────────────────────────┘
-├──────────────────────────────────────────────────────────────────────────────┤
-│ Row 12-17: Breakdown                                                          │
-│ ┌────────────────────────────────┬────────────────────────────────┐          │
-│ │ Errors by Route                │ Errors by Error Message        │          │
-│ └────────────────────────────────┴────────────────────────────────┘          │
-│ ┌────────────────────────────────┬────────────────────────────────┐          │
-│ │ Errors by Pod                  │ Errors by Customer             │          │
-│ └────────────────────────────────┴────────────────────────────────┘          │
-├──────────────────────────────────────────────────────────────────────────────┤
-│ Row 18+: Evidence (large LogStream)                                           │
-│ ┌────────────────────────────────────────────────────────────────────────────┐
-│ │ Raw Error Logs (h=10)                                                       │
-│ └────────────────────────────────────────────────────────────────────────────┘
-└──────────────────────────────────────────────────────────────────────────────┘
+```bash
+layout-pack \
+  avail:4x3 latency-slo:4x3 budget:4x3 \
+  avail-trend:TimeSeries burn-rate:TimeSeries \
+  violations:Table
 ```
 
----
+`Statistic` defaults to 3×3; override with `id:4x3` to fit three across.
+
+## Incident Investigation
+
+Filter bar → impact row → narrow-bin timeline → 4-way breakdown → tall LogStream.
+
+```bash
+layout-pack \
+  filters:SmartFilter \
+  err-count:Statistic affected:Statistic start:Statistic duration:Statistic \
+  err-timeline:12x4 \
+  by-route:Table by-message:Table \
+  by-pod:Table by-customer:Table \
+  raw-logs:12x10
+```
+
+## Multi-Service Comparison
+
+Filter bar → stacked-traffic full-width → error-rate full-width → per-service columns (each column is a `Statistic` + `Table` stack).
+
+```bash
+layout-pack \
+  filters:SmartFilter \
+  traffic-stacked:12x4 \
+  errors-by-service:12x4 \
+  api-stat:4x3 auth-stat:4x3 pay-stat:4x3 \
+  api-table:4x5 auth-table:4x5 pay-table:4x5
+```
 
 ## Kubernetes Cluster Overview
 
-Infrastructure-focused layout.
+Cluster-health stats → resource usage → pod issues → events.
 
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ Row 0: Cluster Health Stats                                                   │
-│ ┌─────────────┬─────────────┬─────────────┬─────────────┐                    │
-│ │ Nodes Ready │ Pods Running│ Restarts    │ OOMKills    │                    │
-│ └─────────────┴─────────────┴─────────────┴─────────────┘                    │
-├──────────────────────────────────────────────────────────────────────────────┤
-│ Row 2-5: Resource Usage                                                       │
-│ ┌────────────────────────────────┬────────────────────────────────┐          │
-│ │ CPU Usage by Namespace         │ Memory Usage by Namespace      │          │
-│ └────────────────────────────────┴────────────────────────────────┘          │
-├──────────────────────────────────────────────────────────────────────────────┤
-│ Row 6-9: Pod Issues                                                           │
-│ ┌────────────────────────────────┬────────────────────────────────┐          │
-│ │ Pods with Restarts             │ Pods with High CPU             │          │
-│ └────────────────────────────────┴────────────────────────────────┘          │
-├──────────────────────────────────────────────────────────────────────────────┤
-│ Row 10+: Events                                                               │
-│ ┌────────────────────────────────────────────────────────────────────────────┐
-│ │ Warning/Error Events (LogStream)                                            │
-│ └────────────────────────────────────────────────────────────────────────────┘
-└──────────────────────────────────────────────────────────────────────────────┘
+```bash
+layout-pack \
+  nodes:Statistic pods:Statistic restarts:Statistic oomkills:Statistic \
+  cpu-by-ns:TimeSeries mem-by-ns:TimeSeries \
+  pods-restarts:Table pods-cpu:Table \
+  events:LogStream
 ```
 
----
+## Best Practices
 
-## Layout Best Practices
-
-### Alignment
-- Align related panels vertically or horizontally
-- Keep consistent heights within rows
-- Don't mix units in adjacent panels without clear separation
-
-### Visual Hierarchy
-- Most important panels: top-left, larger
-- Supporting context: smaller, below/right
-- Evidence/logs: bottom, full-width
-
-### Responsive Considerations
-- Minimum useful width: w=6 for stats, w=12 for charts/tables
-- Full-width panels (w=24) for logs and complex tables
-- Test at common screen sizes
-
-### Section Separation
-- Use Note panels as section headers
-- Or use vertical spacing (leave y gaps)
-- Group related panels by theme/question
+- Keep adjacent panels at consistent heights within a row; mixed heights wrap correctly via `layout-pack`'s row-major fill but read as messy.
+- One question per panel. Split rather than overload.
+- Notes as section headers (`12x2`) instead of large vertical gaps.
+- Rule of thumb panel order: critical-top-left, supporting-context middle, evidence (LogStream) bottom.

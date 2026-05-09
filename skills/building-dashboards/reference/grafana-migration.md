@@ -8,15 +8,15 @@ Guide for converting Grafana dashboards (Prometheus-backed) to Axiom dashboards 
 
 ## Migration Workflow
 
-1. **Export the Grafana dashboard JSON** (UI: Share → Export → Save to file, or via the Grafana HTTP API).
-2. **Project the canonical panel spec** for every panel — `expr`, `legendFormat`, `unit`, `title`, `description`. Use the `jq` recipe below. **Mandatory.** Skipping this step is the F4 failure mode.
-3. **Reconcile prose against `expr`** for each panel — more-restrictive wins (see "Reconciling description and expr").
-4. **Map visualization types** Grafana → Axiom (table below).
-5. **Translate PromQL → MPL** preserving every selector and grouping. See `reference/promql-to-mpl.md` for the full rules; the short version is in this file.
-6. **Resolve metric/label name mismatches** by applying Prometheus → OTel renaming rules first, then validating with `scripts/metrics/metrics-info`. Only escalate after both steps fail.
-7. **Test queries** with `scripts/metrics/metrics-query`, keeping `$__interval` verbatim — do not rewrite it to a fixed duration just to make the test pass.
-8. **Build the Axiom dashboard JSON** starting from [`reference/templates/blank.json`](./templates/blank.json) — do **not** carry the Grafana wrapper forward. The blank skeleton has the correct `refreshTime`, `schemaVersion`, and `timeWindowStart`/`End` defaults; populate `name`, `description`, `datasets`, `charts`, and `layout`. See [Top-Level Dashboard Fields](#top-level-dashboard-fields) for the field-by-field translation when you do need to carry a value over (e.g. preserving the source refresh interval). Remove any inline time ranges from panel queries.
-9. **Validate and deploy** with `dashboard-validate` and `dashboard-create`. Get the URL via `dashboard-link` — never construct it.
+1. **Export the Grafana dashboard JSON** (Share → Export, or Grafana HTTP API).
+2. **Project the canonical panel spec** for every panel — `expr`, `legendFormat`, `unit`, `title`, `description`. Use the `jq` recipe below. Skipping this step is the most common failure mode.
+3. **Reconcile prose against `expr`** — more-restrictive wins. See [Reconciling description and expr](#reconciling-description-and-expr).
+4. **Map visualization types** (table below).
+5. **Translate PromQL → MPL** preserving every selector and grouping. Full rules: [`promql-to-mpl.md`](./promql-to-mpl.md).
+6. **Resolve metric/label name mismatches** by applying OTel renaming rules first, then validating with `metrics-info`. Escalate only after both fail.
+7. **Validate each query** with `scripts/metrics/mpl-validate-chart` (preserves `$__interval`).
+8. **Compose the Axiom dashboard** with `chart-add` + `layout-pack` + `dashboard-assemble`. For top-level field mappings (`refresh` → `refreshTime`, `time.from` → `timeWindowStart` with `qr-` prefix, etc.) see [Top-Level Dashboard Fields](#top-level-dashboard-fields).
+9. **Deploy** with `dashboard-create`; URL via `dashboard-link`.
 
 ---
 
@@ -64,14 +64,12 @@ jq '
 
 ### The conjunction rule
 
-The five fields together **are** the spec. Pull them together; reason about them together; author the MPL using their conjunction.
+The five fields together **are** the spec. Author the MPL from their conjunction:
 
-- `description` adds narrative context. It does not replace `expr`.
-- `expr` carries machine-readable structure. It does not replace `description`.
-- `legendFormat` reveals grouping intent that may not be obvious from `expr` alone.
-- `unit` and `title` together drive the chart's unit configuration on the Axiom side.
-
-The skill's job is to make sure the agent reads what the source dashboard already wrote down. The source dashboard carries the domain knowledge.
+- `description` adds narrative constraints — does not replace `expr`.
+- `expr` carries machine-readable structure — does not replace `description`.
+- `legendFormat` reveals grouping intent often hidden in `expr`.
+- `unit` + `title` drive chart unit configuration on the Axiom side.
 
 ---
 
@@ -101,7 +99,7 @@ Rule of thumb when both are present and disagree: **the more-restrictive constra
 | `table`            | Table                 | Direct. Preserve column projections.                                                               |
 | `heatmap`          | Heatmap               | Histograms map to `summarize histogram(...) by bin_auto(_time)` on APL datasets; for OTel histogram metrics, see `metrics-mpl.md`. |
 | `piechart`         | Pie                   | Pie is for ≤6 slices — refuse to translate a pie of unbounded cardinality, switch to Table.        |
-| `text`             | Note                  | Body is GitHub-flavored markdown. **Lift Grafana's `options.content` to a top-level `text` field on the Axiom chart** (Axiom rejects `options{}` on every chart kind, and rejects `[charts N text]: expected string, received undefined` if `text` is missing). Strip the Grafana panel's chart-level `description` — it is also universally rejected. See [Note Options](./chart-config.md#note-options) and [Fields Rejected on Create](./chart-config.md#fields-rejected-on-create-cross-chart). |
+| `text`             | Note                  | `chart-add --type Note --text "<md>"` handles the shape (top-level `text`, no `options{}` wrapper). Strip Grafana's chart-level `description` — universally rejected. |
 | `logs`             | LogStream             | Only when the source data is logs (events dataset), not a metrics dataset.                         |
 | `barchart`, `histogram` | TimeSeries (variant `bars`) or Table | Choose by whether the x-axis is `_time` (TimeSeries with bar variant) or a category (Table). |
 | `row`              | (none — recurse)      | A row groups child panels; project its `panels` array.                                             |
@@ -117,7 +115,7 @@ The canonical move is to start from [`reference/templates/blank.json`](./templat
 | Grafana field | Axiom field | Translation |
 |:---|:---|:---|
 | `title` | `name` | Direct copy. |
-| `description` (dashboard-level) | `description` (dashboard-level) | Direct copy. Note: chart-level `description` is rejected on every chart kind — see [Fields Rejected on Create](./chart-config.md#fields-rejected-on-create-cross-chart). |
+| `description` (dashboard-level) | `description` (dashboard-level) | Direct copy. Chart-level `description` is rejected on every chart kind — see [chart-config.md § Fields Rejected on Create](./chart-config.md#fields-rejected-on-create). |
 | `refresh` (string, e.g. `"10s"`, `"5m"`) | `refreshTime` (integer seconds) | Convert: `"10s"` → `10`, `"30s"` → `30`, `"1m"` → `60`, `"5m"` → `300`. Sending the string form fails with `unmarshal dashboard document: json: cannot unmarshal string into Go struct field Dashboard.refreshTime of type int64`. Default in `blank.json` is `60`. |
 | `schemaVersion` (integer, often `0` or Grafana's current version like `39`) | `schemaVersion` | Always set to `2` — the Axiom dashboard schema is unrelated to Grafana's. `schemaVersion: 0` triggers a `dashboard-validate --strict` failure. |
 | `time.from`, `time.to` (e.g. `"now-6h"`, `"now"`) | `timeWindowStart`, `timeWindowEnd` | Prefix with `qr-`: `"now-6h"` → `"qr-now-6h"`, `"now"` → `"qr-now"`. The bare `"now"` form fails with `[timeWindowStart]: expected string, received null` if omitted. Defaults in `blank.json`: `"qr-now-1h"` / `"qr-now"`. |
@@ -192,22 +190,22 @@ When a PromQL label name does not exist verbatim in the MPL dataset *after* appl
 ## Common Migration Pitfalls
 
 ### Pulling `expr` but ignoring `description` (or vice versa)
-The classic F4 failure. The fields are complementary, not redundant. `expr` is machine-readable; `description` carries narrative constraints, intent, and subset enumerations the panel author wrote down deliberately. The MPL equivalent must reflect both. **Fix:** always project the canonical panel spec (all five fields) before authoring.
+The most common failure. The fields are complementary. `expr` is machine-readable; `description` carries narrative constraints. **Fix:** always project all five fields before authoring.
 
 ### Using discovery to invent the subset
-Symptom: agent runs `metrics-info`, finds N metrics in the dataset, picks the few that "look right", ships those. That is invention, not translation. The source dashboard already wrote down the subset; the agent's job is to translate it, not redesign it. **Fix:** discovery confirms the spec'd subset exists; it does not generate the subset.
+Symptom: agent runs `metrics-info`, picks metrics that "look right", ships those. That's invention, not translation. **Fix:** discovery confirms the spec'd subset exists; it doesn't generate it.
 
-### Hand-rolling renaming guesses before consulting the spec
-Symptom: `http_requests_total` doesn't exist verbatim → agent tries `http_requests`, then `http_request_count`, then `requests`. **Fix:** apply the OTel renaming rules deterministically (drop `_total`, keep the rest), validate with `metrics-info`, escalate if both fail. Do not iterate on guesses.
+### Hand-rolling rename guesses
+Symptom: `http_requests_total` not found → tries `http_requests`, `http_request_count`, … **Fix:** apply OTel rename rules deterministically (drop `_total`), validate once with `metrics-info`, escalate.
 
-### Multi-target panels with one target translated
-Symptom: a Grafana panel with two `targets` (e.g. `total` and `errors`) translates to a single MPL pipeline. **Fix:** project `targets[]` plural; translate every entry; combine in MPL or split into two panels if the original used Grafana transforms.
+### Multi-target panels translated as one
+Symptom: a panel with `total` + `errors` targets becomes a single MPL pipeline. **Fix:** iterate `targets[]`; translate every entry. Combine in MPL or split into two panels if Grafana used transforms.
 
 ### Substituting a different quantity when blocked
-Symptom: the requested ratio cannot be computed (parser limit, missing tag), agent ships a different quantity Y labelled "Y replaces X". This is never acceptable, however honestly disclosed. **Fix:** mark the panel as deferred with a Note panel naming the blocker, and ship the rest of the dashboard. (Fuller rule lands as item C1 in the skill's fix plan.)
+Symptom: ratio can't be computed → agent ships a related quantity Y labelled "Y replaces X". Never acceptable. **Fix:** defer the panel with a Note documenting the blocker. See [SKILL.md § Compute or Defer](../SKILL.md#compute-or-defer).
 
-### Translating against a "live" Grafana instance instead of the exported JSON
-Symptom: agent screen-scrapes a Grafana panel and translates from the rendered chart. **Fix:** always work from the exported JSON. The panel text shown in the UI is generated from `title` + `legendFormat` and may obscure parts of the spec.
+### Translating from the live Grafana UI instead of the export
+Symptom: agent screen-scrapes the rendered chart. **Fix:** always work from the exported JSON — UI text is generated from `title` + `legendFormat` and obscures parts of the spec.
 
 ---
 

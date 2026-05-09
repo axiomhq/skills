@@ -1,13 +1,13 @@
 # PromQL → MPL Translation
 
-How to translate a PromQL expression into an Axiom MPL pipeline without losing structure. The translation rules are mechanical; the source PromQL carries the spec.
+Mechanical translation rules. The source PromQL carries the spec — translate, don't reinvent.
 
-> **Two rules govern this whole document:**
->
-> 1. **Mechanical preservation.** Every PromQL `{label="x"}` selector becomes an MPL `where` clause. Every PromQL `by(label1, label2)` dimension becomes an MPL `group by`. Never drop one because the metric name "feels" scoped to it — the selector or grouping was a deliberate authoring choice, not decoration.
-> 2. **Reverse-tag discovery for name mismatches.** When a PromQL label name does not exist verbatim in the MPL dataset, **do not drop the selector**. Apply the OTel ingest rename rules first, then use `scripts/metrics/metrics-info` to find the equivalent tag, then map. Discovery is a validator, never a generator.
+**Two rules:**
 
-This doc covers translation, not MPL syntax. Run `scripts/metrics/metrics-spec <deploy> <dataset>` before authoring to fetch the live spec for the target deployment — operator names and availability evolve, and the spec is the only source of truth. The translation rules below assume you've done that.
+1. **Preserve structure.** Every `{label="x"}` selector → MPL `where`. Every `by(label1, label2)` → MPL `group by`. Never drop one because the metric "feels" scoped to it.
+2. **Reverse-tag discovery for missing labels.** Apply OTel rename rules first, then use `metrics-info` to find the equivalent tag. Discovery is a validator, not a generator.
+
+Run `scripts/metrics/metrics-spec <deploy> <dataset>` before authoring — operator names evolve and the spec is the source of truth.
 
 ---
 
@@ -31,29 +31,20 @@ Full rules and order of operations are in [grafana-migration.md § Name Mapping]
 
 Every label matcher in the PromQL `{…}` becomes a `where` clause on the MPL pipeline. Multiple matchers are conjunctive in PromQL and translate to a chain of `where` clauses (also conjunctive) — or one `where` with `and`.
 
-> **Fetch the tag type before translating.** PromQL stores every label as a string, so its only comparison operators are equality (`=`, `!=`) and regex (`=~`, `!~`). MPL has typed tags — string, int, float, bool — and supports typed comparisons (`==`, `!=`, `<`, `<=`, `>`, `>=`) on numeric and bool tags. **The right MPL operator depends on the tag's type in the dataset, not on what PromQL did with it.**
->
-> **The authoritative type check is MPL's `<tag> is <type>` operator** (run via `metrics-query`):
->
-> ```bash
-> scripts/metrics/metrics-query <deploy> '`<dataset>`:`<metric>` | filter `<tag>` is int | align to 5m using sum' now-1h now
-> ```
->
-> Non-empty `series` in the response means the tag is `int`-typed for that metric. Run the probe for `int`, `float`, `string`, `bool` as needed; the type that returns series is the type the dataset stores. Type can vary across datasets — Prometheus-imported data tends to stringify everything (even values that look numeric or boolean), OTel-native ingest preserves types — so probe per dataset, never assume.
->
-> **The `tags/<tag>/values` endpoint is a hint, not a determination:**
->
-> ```bash
-> scripts/metrics/metrics-info <deploy> <dataset> tags <tag> values
-> ```
->
-> Unquoted numbers in the JSON response strongly suggest numeric typing. Uniformly quoted values are **inconclusive** — could be a string-typed tag, a numeric tag stringified at ingest, or a float tag with `+Inf`/`NaN` rendered as JSON strings (JSON has no infinity literal even though MPL types these as `float`). Use the values list to pick candidate types, then confirm with the `is <type>` probe.
->
-> **For tags with inconsistent type across rows,** use the defensive form (from the `/v1/query/_mpl` OPTIONS spec):
->
-> ```mpl
-> | filter (`tag` is int and `tag` == 200) or (`tag` is string and `tag` == "200")
-> ```
+**Fetch the tag type before translating.** PromQL stores every label as a string; MPL has typed tags (string/int/float/bool) and the right operator depends on the dataset's type, not on what PromQL did:
+
+```bash
+scripts/metrics/metrics-info <deploy> <dataset> metrics <metric> tags <tag> type
+# -> {"type": "int", "present_types": ["int"]}
+```
+
+Don't infer from `metrics-info … tags <tag> values` alone — Prometheus-imported tags often stringify numerics; quoted values in JSON are inconclusive. The probe runs `filter <tag> is <T>` for each candidate type and reports which return non-empty series.
+
+If `type` comes back `"mixed"`, the tag carries multiple types across rows. Use the defensive form:
+
+```mpl
+| filter (`tag` is int and `tag` == 200) or (`tag` is string and `tag` == "200")
+```
 
 ### Translation by tag type
 
@@ -91,13 +82,15 @@ http_request_duration_seconds_count{
 }
 ```
 
-Probe each tag's type before authoring (per the type-fetch rule above):
+Probe each tag's type before authoring:
 
 ```bash
-scripts/metrics/metrics-query test '`test`:`http_request_duration_seconds_count` | filter `code` is int | align to 5m using sum' now-1h now
+scripts/metrics/metrics-info test test http_request_duration_seconds_count tags code type
+scripts/metrics/metrics-info test test http_request_duration_seconds_count tags container type
+scripts/metrics/metrics-info test test http_request_duration_seconds_count tags path type
 ```
 
-Non-empty result confirms `code` is `int`-typed. Repeat for `container` and `path` with `is string`. If `code` came back empty for `is int` and non-empty for `is string`, the dataset stores `code` as a string and you'd translate the regex form instead (`| where code == #/[5-9]../`) — see the string-typed table above.
+If `code` comes back `"int"`, use the typed-comparison form below. If it comes back `"string"`, translate the regex instead (`| where code == #/[5-9]../`) — see the string-typed table above.
 
 In MPL, with `container` and `path` confirmed as strings and `code` confirmed as int:
 
@@ -147,7 +140,7 @@ test:http_requests_total
 
 ### `by(...)` is mandatory to preserve
 
-The single most common F3 failure: dropping a dimension from `by(...)` because the metric name "feels" scoped to one of them. Never do this — the dimension was specified for a reason. Drop one and the resulting chart has the wrong shape.
+Most common translation bug: dropping a `by(...)` dimension because the metric "feels" scoped to one. Never do this — the dimension was specified deliberately. Drop one and the chart has the wrong shape.
 
 ```promql
 sum by (instance, name) (workqueue_depth)   // two dimensions, both required
@@ -229,7 +222,7 @@ sum(rate(http_requests_total[5m]))
 **Two notes for translators:**
 
 1. **Both branches must have the same shape** — same `align` window, same grouping. If one has `group by service` and the other doesn't, the join will not line up.
-2. **Ratios are 0–1 fractions, not percentages.** If the chart is a Statistic with `unit: "Percent100"`, multiply by 100 in MPL before deploying: `| map * 100`. See [chart-config.md § Unit Configuration](./chart-config.md#unit-configuration-cross-chart) and [metrics-mpl.md § Percentages and ratios](./metrics-mpl.md#percentages-and-ratios-otel-01-fractions).
+2. **Ratios are 0–1 fractions, not percentages.** Multiply by 100 in MPL before passing to `chart-add --unit "%"`: `| map * 100`. See [metrics-mpl.md § Percentages and ratios](./metrics-mpl.md#percentages-and-ratios-otel-01-fractions).
 
 For naming a branch in `compute`, use the `as` keyword: `test:http_requests_total as failure`. Helpful when the same metric appears twice with different filters.
 
@@ -269,18 +262,18 @@ Discovery validates that the spec'd subset exists in the dataset. It **does not*
 
 ---
 
-## Selector Values Not in the Dataset Are Aliases — Cite the Source
+## Selector Values Absent from the Dataset Are Aliases — Cite the Source
 
-When a PromQL selector value is **absent** from the dataset's tag values, the value is a recording-rule alias or other shorthand defined elsewhere — not a literal value to translate. Shape of the case: PromQL has `{<label>="<alias>"}`, but `metrics-info … tags <label> values` returns a set that does not include `"<alias>"`. The alias resolves to some subset `{A, B, …}` of the values that *are* in the dataset, but the subset is defined outside the dashboard JSON.
+When a PromQL selector value isn't in `metrics-info … tags <label> values`, the value is a recording-rule alias defined elsewhere, not a literal to translate. The alias expands to a subset of the dataset's values — but that subset is defined *outside* the dashboard JSON.
 
-Resolve the alias by citing a **written source**:
+Resolve by citing a **written source**:
 
-- the panel's `description` field (often enumerates the subset in prose), **or**
-- the upstream rule library file and line (e.g. `<rule-library>.<ext>:L<n>`).
+- the panel's `description` field (often enumerates the subset in prose), or
+- the upstream rule library file + line (e.g. `<rule-library>.<ext>:L<n>`).
 
-**Memory is not a source.** Prior knowledge of an upstream rule library is unreliable — agents recall the *shape* of definitions more confidently than they recall the exact contents, and rule libraries get edited over time. The failure mode on file: an agent expanded an alias from memory instead of opening either the panel `description` or the upstream rule definition; both written sources agreed on the subset, the agent's recall matched neither, and the deployed panel filtered a different subset than the source dashboard. The fix is procedural: **no expansion of an alias may be attributed to general knowledge — produce a citation, or defer the panel with a Note.**
+**Memory is not a source.** Agents recall the *shape* of rule definitions more confidently than the exact contents, and rule libraries change over time. No citation → defer the panel with a Note.
 
-Detection trigger: `metrics-info <deploy> <dataset> tags <label> values` does not contain the value the PromQL selector expects. That absence is the cue that an alias is in play; from that moment forward, prior-knowledge expansion is forbidden.
+Detection trigger: the value isn't in `metrics-info … tags <label> values`. From that point on, no prior-knowledge expansion is allowed.
 
 ---
 
