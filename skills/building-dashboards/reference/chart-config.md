@@ -6,11 +6,11 @@ Charts support JSON configuration options beyond the query. These are set at the
 
 ```json
 {
-  "overrideDashboardTimeRange": false,
-  "overrideDashboardCompareAgainst": false,
   "hideHeader": false
 }
 ```
+
+> **Do not send `overrideDashboardTimeRange` or `overrideDashboardCompareAgainst`.** They are frontend-only fields. The create/update API silently drops them on data charts (Statistic, TimeSeries, Pie, Table, LogStream, Heatmap) — they never round-trip on GET, so they have no effect — and **rejects them outright on `Note` and `SmartFilter` charts** with `Unrecognized keys: "overrideDashboardCompareAgainst", "overrideDashboardTimeRange"` at `[charts <index>]`. They are also rejected at the dashboard top level (`unknown field`). Per-panel time override is UI-only; there is no API representation today. Verified empirically against `dev`, `staging`, and `axiom` on 2026-05-09.
 
 ## Metrics/MPL Query (MetricsDB Charts)
 
@@ -91,6 +91,32 @@ These chart types reject the `unit` enum on the create/update API (`Unrecognized
 - **Always also include the unit in the chart `name`**, e.g. `"Memory (MB)"`, `"P95 Latency (s)"`. The header label is the most reliable mechanism for non-Statistic charts.
 - For magnitude conversion, scale in the MPL pipeline (`| map / 1048576` for bytes → MB, `| map * 100` for 0–1 ratio → percent) since `customUnits` is purely a label, not a formatter.
 
+## Fields Rejected on Create (Cross-Chart)
+
+The create API enforces a closed field list per chart kind. Sending a field outside the accepted set fails fast with HTTP 400 and a uniform error string:
+
+```
+dashboard validation failed at [charts <index>]: Unrecognized key: "<field>"
+```
+
+**Universally rejected** (every chart kind, including `Statistic` and `Note`):
+
+| Field | Notes |
+|---|---|
+| `decimals` | Returned by GET on existing dashboards (UI-created charts may include it), but the create/update API rejects it. Omit from create payloads. |
+| `description` (chart-level) | Chart-level `description` is rejected on every chart kind. The dashboard-level `description` (top-level, sibling of `name` and `owner`) **is** accepted — that's the field templates use. |
+| `aggChartOpts` (chart-level) | Per-series chart options live **inside the query**, at `query.queryOptions.aggChartOpts`, as a JSON-encoded string. Placing `aggChartOpts` at the chart top level fails with `Unrecognized key: "aggChartOpts"` on every chart kind. Only `TimeSeries` consumes the nested form (`Statistic`, `Note`, `SmartFilter`, `Pie`, `Table`, `LogStream`, `Heatmap` have no per-series options). See [TimeSeries Options](#timeseries-options) for the correct shape. |
+| `options` | Rejected on every chart kind. Common contamination from Grafana text panels (`options.content`) or over-generalization from Axiom's *named* nested chart options (`tableSettings`, `aggChartOpts`). Note `text` is a top-level field, not `options.text`. There is no generic `options` bag at the chart level. |
+
+**Per-chart-kind rejections** — see [Unit Configuration (Cross-Chart)](#unit-configuration-cross-chart) for the full matrix:
+
+- `unit` is rejected on `TimeSeries`, `Heatmap`, `Pie`, `Table`, `LogStream`, `Note`. Accepted on `Statistic` only.
+- `customUnits` is rejected on `Note`. Accepted on every other chart kind.
+
+**Asymmetric: silently dropped on data charts, rejected on `Note` and `SmartFilter`** — `overrideDashboardTimeRange` and `overrideDashboardCompareAgainst`. On `Statistic`, `TimeSeries`, `Pie`, `Table`, `LogStream`, and `Heatmap` the create API accepts these keys but does not persist them — they are absent on read-back, so they are no-ops. On `Note` and `SmartFilter` the same payload is rejected with `Unrecognized keys: "overrideDashboardCompareAgainst", "overrideDashboardTimeRange"` at `[charts <index>]`. They are also rejected at the dashboard top level. Treat them as unsupported by the API and never include them. (`SmartFilter` is commonly chart 0 on dashboards that use a filter bar, which is why this error often surfaces as `[charts 0]`.)
+
+Verified empirically against the staging create endpoint (28-cell probe, 2026-05-08) and against `dev`, `staging`, and `axiom` for the override keys (2026-05-09).
+
 ## Statistic Options
 
 ```json
@@ -109,7 +135,7 @@ These chart types reject the `unit` enum on the create/update API (`Unrecognized
 }
 ```
 
-> **API gotcha:** `decimals` is returned by GET and may appear in existing dashboards, but the create API rejects it. Omit `decimals` from create payloads.
+> **API gotcha:** `decimals` is rejected on create for every chart kind, including `Statistic`. The field round-trips on GET (and UI-created dashboards may include it), but omit it from create payloads. See [Fields Rejected on Create (Cross-Chart)](#fields-rejected-on-create-cross-chart) for the full closed-list rules.
 
 | Option | Values | Description |
 |--------|--------|-------------|
@@ -345,6 +371,4 @@ Use in dashboard URL: `?t_qr=24h&t_against=-1d`
 
 ## Custom Time Range per Panel
 
-Individual panels can override the dashboard time range:
-- Set `overrideDashboardTimeRange: true` in chart config
-- Via UI: Edit panel → Time range → Custom
+Per-panel time-range override is **UI-only**. The dashboard create/update API has no field for it — `overrideDashboardTimeRange` is silently dropped on data charts and rejected on `Note`/`SmartFilter` (see [Fields Rejected on Create](#fields-rejected-on-create-cross-chart)). To diverge a panel from the dashboard picker today, edit it in the UI (Edit panel → Time range → Custom); the JSON payload you POST cannot encode this.

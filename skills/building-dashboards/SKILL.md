@@ -14,6 +14,7 @@ You design dashboards that help humans make decisions quickly. Dashboards are pr
 3. **Rates and percentiles over averages.** Averages hide problems; p95/p99 expose them.
 4. **Simple beats dense.** One question per panel. No chart junk.
 5. **Validate with data.** Never guess fields—discover schema first.
+6. **Compute what's asked, or defer with a blocker.** Substituting a different quantity Y for the requested X is never acceptable, even with disclosure. If X is blocked, ship a Note panel that documents the blocker. See [Required: Compute What's Asked, or Defer With a Blocker](#required-compute-whats-asked-or-defer-with-a-blocker).
 
 ---
 
@@ -26,6 +27,7 @@ Choose your starting point:
 | **Vague description** | Intake → check dataset kind → design blueprint (APL or MPL) → queries per panel → deploy |
 | **Template** | Pick template → customize dataset/service/env → deploy |
 | **Splunk dashboard** | Extract SPL → translate via spl-to-apl → map to chart types → deploy |
+| **Grafana dashboard** | Project canonical panel spec (`expr`, `legendFormat`, `unit`, `title`, `description`) → translate PromQL → map chart types → deploy. See [reference/grafana-migration.md](./reference/grafana-migration.md). |
 | **Exploration** | Use axiom-sre to discover schema/signals → productize into panels |
 
 ---
@@ -123,7 +125,7 @@ Raw events that answer "what exactly happened?"
 >
 > **No `param` declaration needed in the chart `query.apl`** — the dashboard runtime injects `param $__interval: Duration;` automatically. (The Grafana datasource does the same via a preamble; the Axiom-native dashboard runtime behaves identically.)
 >
-> **🚫 NEVER use inline time ranges in dashboard chart queries.** The dashboard runtime always supplies `start`/`end` over the API on every query. An inline `[1h..]`, `[30d..]`, etc. in the MPL collides with the API range and the backend rejects the query with `AST Error (Time is provided both in the query and as a parameter)`. The dashboard time picker is the user's UI for time control — let it do its job. `overrideDashboardTimeRange: true` does NOT exempt a metrics chart from this rule; the runtime still passes a range.
+> **🚫 NEVER use inline time ranges in dashboard chart queries.** The dashboard runtime always supplies `start`/`end` over the API on every query. An inline `[1h..]`, `[30d..]`, etc. in the MPL collides with the API range and the backend rejects the query with `AST Error (Time is provided both in the query and as a parameter)`. The dashboard time picker is the user's UI for time control — let it do its job. (Per-panel time override is UI-only and has no API field — `overrideDashboardTimeRange` is silently dropped on data charts and rejected on `Note`; see [reference/chart-config.md § Fields Rejected on Create](./reference/chart-config.md#fields-rejected-on-create-cross-chart).)
 >
 > ```mpl
 > `dataset`:metric | align to $__interval using avg          ✅ dashboard panels
@@ -200,6 +202,58 @@ The console uses `react-grid-layout` which requires `minH`, `minW`, `moved`, and
 Use descriptive kebab-case IDs (e.g. `error-rate`, `p95-latency`, `traffic-rps`). The `dashboard-validate` and deploy scripts enforce this automatically.
 
 ---
+
+## Required Chart Unit Configuration
+
+**Every non-Note chart MUST have its unit configured before deploy.** The required field set is asymmetric across chart types — sending the wrong field produces an API rejection (`Unrecognized key: "unit"`), and the most common reaction is to globally strip `unit` from every chart, losing every Statistic's suffix at the same time. Don't react globally; configure per chart type.
+
+| Chart type                                                  | `unit` (enum)            | `customUnits` (suffix)   | Rule                                                                                                                                                            |
+|:------------------------------------------------------------|:------------------------:|:------------------------:|:----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Statistic`                                                  | accepts                  | accepts                  | **Both required.** `unit` formats the value (scaling, abbreviation); `customUnits` paints the suffix string. `unit` alone renders bare numbers (e.g. `Percent100` without `customUnits: "%"` shows `99.5`, not `99.5%`). |
+| `TimeSeries`, `Heatmap`, `Pie`, `Table`, `LogStream`         | **rejected**             | accepts                  | **Only `customUnits`** *plus* encode the unit in the chart `name` (e.g. `"P95 Latency (ms)"`, `"Memory (MB)"`). Sending `unit` returns `Unrecognized key: "unit"`. |
+| `Note`                                                       | n/a                      | n/a                      | Markdown panel — no value to format.                                                                                                                            |
+
+For metrics-backed charts: read the metric's `unit` metadata via `scripts/metrics/metrics-info <deploy> <dataset> metrics <metric> info`, pipe through `scripts/metrics/unit-for`, and splice the result into the chart. **Magnitude conversion happens in MPL** (`| map / 1048576` for bytes → MB; `| map * 100` for 0–1 ratio → percent) — `customUnits` is a label, not a formatter. See [reference/chart-config.md § Unit Configuration](./reference/chart-config.md#unit-configuration-cross-chart) and [reference/metrics-mpl.md § Unit Handling](./reference/metrics-mpl.md#unit-handling) for the full mechanics.
+
+**Pre-deploy check:** every non-Note chart in the dashboard JSON has either (a) `unit` + `customUnits` (Statistic) or (b) `customUnits` and a unit-bearing `name` (everything else). Missing both is a polish failure, not just a cosmetic one — operators can't read magnitudes without context.
+
+---
+
+## Required: Compute What's Asked, or Defer With a Blocker
+
+Every panel asks a specific question. The only acceptable outcomes are:
+
+1. **Compute the requested quantity.** The panel renders the value the source dashboard / spec / user asked for.
+2. **Defer with a documented blocker.** Replace the panel with a `Note` that records what was supposed to be there and why it's blocked. The rest of the dashboard still ships.
+
+**Substituting a different quantity Y is never acceptable, however honestly disclosed.** Labels like "Y replaces X" or "X unavailable; showing Y instead" do not redeem a panel that answers the wrong question — the user reads Y's value and acts on it; the disclaimer doesn't propagate to whoever takes action on the number.
+
+### Defer mechanism: Note panel
+
+The canonical defer mechanism is a `Note` panel in the same layout slot the original panel would have occupied:
+
+```json
+{
+  "id": "availability-deferred",
+  "name": "Availability (deferred)",
+  "type": "Note",
+  "text": "**Deferred — blocked by:** [one-line reason].\n\n**Original spec:** [what the panel was supposed to compute, including the dimension(s) and unit].\n\n**To unblock:** [pointer to the fix, e.g. parser version, missing tag, missing operator]."
+}
+```
+
+Why this beats other options:
+
+- **Don't skip the panel silently.** Omitting it from `charts[]` / `layout[]` ships a dashboard that looks complete but is missing a question the user asked. Deferral is honest; silent omission is not.
+- **Don't use the chart-level `description` field.** It's rejected on create across every chart kind — see [reference/chart-config.md § Fields Rejected on Create](./reference/chart-config.md#fields-rejected-on-create-cross-chart).
+- **Don't bury the blocker in the dashboard-level top `description`.** That field is per-dashboard, not per-panel; readers won't see the blocker next to the deferred slot.
+
+Common blocked-X cases where deferral is the right move:
+
+- The MPL parser doesn't support the ratio computation shape — try the existing ratio blueprint in [reference/promql-to-mpl.md § Ratios and division](./reference/promql-to-mpl.md#ratios-and-division-compute--using-); if it doesn't apply, defer.
+- A required tag is absent from the dataset and reverse-tag discovery finds no equivalent — defer; don't drop the dimension or substitute a different one.
+- The required metric doesn't exist in the dataset and OTel rename rules don't produce one that does — defer; don't render a different metric labelled with the original's name.
+
+See [reference/design-playbook.md § Substituting a Different Quantity](./reference/design-playbook.md#substituting-a-different-quantity-for-the-asked-one) for the full rationale.
 
 ## Metrics/MPL Chart Contract
 
@@ -363,11 +417,24 @@ No APL needed—select monitors from the UI. Shows:
 ### Note
 **When:** Context, instructions, section headers.
 
+Note panels carry their content in a **top-level `text` field** (Markdown). They have no `query`.
+
+```json
+{
+  "id": "header",
+  "name": "API Gateway — Oncall",
+  "type": "Note",
+  "text": "**Purpose:** Quick triage for API incidents.\n\n**Escalation:** Page #platform-oncall if error rate > 5%."
+}
+```
+
 Use GitHub Flavored Markdown for:
 - Dashboard purpose and audience
 - Runbook links
 - Section dividers
 - On-call instructions
+
+**Pitfall:** `text` is a **top-level** chart field, **not** nested in an `options` object. Wrapping it as `options: { text: ... }` is rejected by the create API with `Unrecognized key: "options"`. Grafana text panels use `options.content`; do not carry that shape over.
 
 ---
 
@@ -386,9 +453,9 @@ Charts support JSON configuration options beyond the query. See `reference/chart
 | Note | `text` (markdown), `variant` |
 
 **Common options (all charts):**
-- `overrideDashboardTimeRange`: boolean
-- `overrideDashboardCompareAgainst`: boolean  
 - `hideHeader`: boolean
+
+> **Do not send `overrideDashboardTimeRange` or `overrideDashboardCompareAgainst`.** They are frontend-only fields with no API representation — silently dropped on data charts and rejected on `Note` and `SmartFilter` with `Unrecognized keys` at `[charts <index>]`. See [reference/chart-config.md § Fields Rejected on Create](./reference/chart-config.md#fields-rejected-on-create-cross-chart).
 
 ---
 
@@ -662,8 +729,16 @@ scripts/dashboard-create prod ./dashboard.json
 | `decimals` rejected on create | Create API does not accept chart-level `decimals` even though GET may return it | Omit `decimals` from create payloads |
 | Statistic for an availability/error rate shows `1` instead of `100%` | OTel ratios are 0–1 fractions; `Percent` enum does NOT auto-multiply | `\| map * 100` in MPL, then set `unit: "Percent100"` + `customUnits: "%"`. See [metrics-mpl.md § Percentages and ratios](./reference/metrics-mpl.md#percentages-and-ratios-otel-01-fractions). |
 | Statistic Percent100 renders bare `99.5` instead of `99.5%` | `Percent100` scales the value but does not paint the suffix | Add `customUnits: "%"` alongside `unit: "Percent100"`. |
-| `AST Error (Time is provided both in the query and as a parameter)` on a chart | Inline `[…]` time range in the MPL conflicts with the dashboard runtime's API-supplied `start`/`end`. `overrideDashboardTimeRange: true` does NOT suppress the API range for metrics charts. | Remove the inline range. Dashboards always inherit time from the picker; use `$__interval` for bucketing and let `timeWindowStart`/`timeWindowEnd` (or the user's picker) control the window. |
+| `Unrecognized key: "unit"` on create | Sent the `unit` enum on a non-Statistic chart — TimeSeries, Heatmap, Pie, Table, and LogStream all reject it | Move the suffix to `customUnits` on that chart and encode the unit in the chart `name` (e.g. `"P95 Latency (ms)"`). **Don't react by stripping `unit` from Statistic charts too** — Statistic *needs* both fields. See [Required Chart Unit Configuration](#required-chart-unit-configuration). |
+| `AST Error (Time is provided both in the query and as a parameter)` on a chart | Inline `[…]` time range in the MPL conflicts with the dashboard runtime's API-supplied `start`/`end`. There is no chart-level escape hatch — `overrideDashboardTimeRange` is not a real API field (silently dropped on data charts, rejected on `Note`). | Remove the inline range. Dashboards always inherit time from the picker; use `$__interval` for bucketing and let `timeWindowStart`/`timeWindowEnd` (or the user's picker) control the window. |
+| `Unrecognized keys: "overrideDashboardCompareAgainst", "overrideDashboardTimeRange"` at `[charts N]` on create | A `Note` or `SmartFilter` chart at index N includes one or both of these keys. Data-display chart kinds silently drop them; `Note` and `SmartFilter` reject them. (`SmartFilter` is commonly chart 0 on dashboards with a filter bar, so this often surfaces as `[charts 0]`.) | Strip both keys from every `Note` and `SmartFilter` chart. Best practice: strip from every chart — they have no API effect anywhere. Per-panel time override is UI-only. |
 | `The param $__interval is not defined` from `metrics-query` | The chart query uses `$__interval` but `metrics-query` does not auto-inject the `param` declaration or value the way the dashboard runtime does. | Prepend `param $__interval: Duration;` to the query passed to `metrics-query` and add `-p __interval=5m`. Do NOT rewrite the chart `apl` itself to a fixed duration. |
+| Translated Grafana panel filters or groups on a different subset than the original | Read `expr` but ignored `description` (or vice versa) — both fields carry parts of the panel's spec | Project the canonical panel spec (all five fields together) before authoring MPL. See [reference/grafana-migration.md](./reference/grafana-migration.md). |
+| Metric name from PromQL `expr` not found in the dataset | Hand-rolled guesses instead of applying Prometheus → OTel metric-name rename rules first | Apply rename rules deterministically (drop `_total`, decompose histograms, handle unit suffixes), then validate with `scripts/metrics/metrics-info`. **Label names are not deterministic** — resolve them via reverse-tag discovery, not assumed renaming. See [reference/grafana-migration.md § Name Mapping](./reference/grafana-migration.md#name-mapping-promql--otel-ingest). |
+| Translated MPL chart aggregates across a dimension the PromQL filtered or grouped on | Selector or `by(...)` dimension dropped during PromQL→MPL translation — often because the metric "feels" scoped to the right thing | Every PromQL `{label=…}` becomes a `where`; every `by(…)` dimension becomes a `group by` dimension. See [reference/promql-to-mpl.md](./reference/promql-to-mpl.md). |
+| Panel shipped a different quantity than the one asked for | Author hit a blocker (parser, missing tag, missing metric) and substituted a related quantity instead of deferring — even with a "Y replaces X" disclaimer | If the requested quantity X can't be computed, replace the panel with a `Note` documenting the blocker. Never substitute Y and disclaim it; the disclaimer doesn't propagate to whoever acts on the number. See [Required: Compute What's Asked, or Defer With a Blocker](#required-compute-whats-asked-or-defer-with-a-blocker). |
+| Note panel rejected with `Unrecognized key: "options"` (or `expected string, received undefined` at `[charts N text]`) | Wrapped the Markdown content in `options: { text: ... }`, likely carried over from Grafana text panels (`options.content`) or generalized from Axiom's nested chart options (`tableSettings`, `aggChartOpts`) | `text` is a top-level chart field on Note, never nested. Send `{"type": "Note", "text": "…"}` directly. The `options` key is rejected on every chart kind, not just Note. See [Note](#note) and [reference/chart-config.md § Fields Rejected on Create](./reference/chart-config.md#fields-rejected-on-create-cross-chart). |
+| OTel histogram chart shows nonsense values (`align to … using avg` on a histogram metric) | Histogram translated as a scalar — `histogram_quantile(...)` was not mapped to `bucket … using interpolate_*_histogram` | Read the metric `type` from `metrics-info … metrics <m> info`; use `interpolate_cumulative_histogram` (cumulative) or `interpolate_delta_histogram` (delta) based on the metric's temporality. See [reference/promql-to-mpl.md § Histogram translation](./reference/promql-to-mpl.md#histogram-translation-histogram_quantile--bucket--using-interpolate__histogram). |
 
 ---
 
@@ -675,6 +750,8 @@ scripts/dashboard-create prod ./dashboard.json
 - `reference/chart-cookbook.md` — APL patterns per chart type
 - `reference/layout-recipes.md` — Grid layouts and section blueprints
 - `reference/splunk-migration.md` — Splunk panel → Axiom mapping
+- `reference/grafana-migration.md` — Grafana panel → Axiom mapping (canonical-spec projection, PromQL→MPL pointers, OTel rename rules)
+- `reference/promql-to-mpl.md` — PromQL → MPL translation rules (selectors, groupings, rate, histograms, ratios, reverse-tag discovery)
 - `reference/design-playbook.md` — Decision-first design principles
 - `reference/templates/` — Ready-to-use dashboard JSON files
 

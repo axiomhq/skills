@@ -106,6 +106,21 @@ Users should be able to:
 **Problem:** "Errors", "Latency", "Traffic" don't explain what you're looking at.
 **Fix:** Question-style names: "Error rate by route", "p95 latency trend", "Requests per minute".
 
+### Substituting a Different Quantity for the Asked One
+**Problem:** A panel asks for X (e.g. an availability ratio). X computation is blocked — the MPL parser doesn't support the ratio shape, a required tag is missing, the metric doesn't exist, etc. The author substitutes a related quantity Y (e.g. raw success count) and labels the panel "Y — X unavailable" or "Y replaces X."
+
+The substitution is dishonest in effect even when honestly labelled. The user reads Y's value and acts on it. The disclaimer text in the chart name or description doesn't propagate to whoever takes action on the number — the disclaimer lives on the panel; the action lives in the rest of someone's brain.
+
+**Fix:** If X can be computed, compute it. If X is blocked, **defer the panel with a Note** that documents what was supposed to be there and why. The rest of the dashboard ships normally. See [SKILL.md § Required: Compute What's Asked, or Defer With a Blocker](../SKILL.md#required-compute-whats-asked-or-defer-with-a-blocker) for the canonical Note-panel template.
+
+Common blocked-X cases:
+
+- The MPL parser doesn't support the ratio computation shape — use the existing ratio blueprint in `reference/promql-to-mpl.md § Ratios and division`; if the blueprint doesn't apply, defer.
+- A required tag is absent from the dataset and reverse-tag discovery (`metrics-info … tags`) finds no equivalent — defer; don't drop the dimension or substitute a different one.
+- The required metric doesn't exist in the dataset and OTel rename rules don't produce one that does — defer; don't render a different metric labelled with the original's name.
+
+**Why a Note and not silent omission?** Silent omission ships a dashboard that looks complete but is missing a question the user asked. Six months later, the next author can't tell whether the panel was forgotten, deemed unnecessary, or deferred for cause. A Note panel records the audit trail in the same layout slot, so the structural intent stays visible and grep-able for "Deferred".
+
 ---
 
 ## Golden Signals Coverage
