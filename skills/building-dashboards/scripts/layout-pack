@@ -49,7 +49,7 @@
 #
 # Composing with chart-add:
 #   chart-add --type Note --id intro --name "..." --text "..."  > /tmp/c-intro.json
-#   chart-add --type Statistic --id avail --name "..." --apl '...' --dataset ds --unit "%" > /tmp/c-avail.json
+#   chart-add --type Statistic --id avail --name "..." --mpl '...' --dataset ds --unit "%" > /tmp/c-avail.json
 #   CHARTS=$(jq -s '.' /tmp/c-intro.json /tmp/c-avail.json)
 #   LAYOUT=$(layout-pack intro:Note avail:Statistic)
 #   jq -n --argjson c "$CHARTS" --argjson l "$LAYOUT" \

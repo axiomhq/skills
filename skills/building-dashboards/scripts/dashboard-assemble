@@ -66,7 +66,7 @@
 #   chart-add --type Note --id intro --name Notice --text "..." \
 #     > /tmp/d/c-intro.json
 #   chart-add --type Statistic --id avail --name "Availability" \
-#       --apl '...' --dataset k8s-metrics-staging --unit "%" \
+#       --mpl '...' --dataset k8s-metrics-staging --unit "%" \
 #     > /tmp/d/c-avail.json
 #   layout-pack intro:Note avail:Statistic > /tmp/d/layout.json
 #
