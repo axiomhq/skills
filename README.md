@@ -9,6 +9,7 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 | [sre](skills/sre/)                             | Hypothesis-driven SRE investigation with Axiom |
 | [spl-to-apl](skills/spl-to-apl/)               | Translate Splunk SPL queries to Axiom APL      |
 | [building-dashboards](skills/building-dashboards/) | Design and build Axiom dashboards from intent, templates, Splunk migrations, and metrics/MPL chart payloads (works with [query-metrics](skills/query-metrics/)) |
+| [axiom-alerting](skills/axiom-alerting/) | Unified monitor + notifier management for Axiom alerting via the v2 API |
 | [controlling-costs](skills/controlling-costs/) | Analyze query patterns to find unused data and optimize Axiom costs |
 | [query-metrics](skills/query-metrics/) | Run metrics queries against Axiom MetricsDB and discover available metrics, tags, and values |
 | [writing-evals](skills/writing-evals/) | Scaffold evaluation suites for the Axiom AI SDK |
