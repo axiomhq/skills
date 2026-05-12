@@ -154,7 +154,6 @@ HTTP_CODE=$(curl -sS -o "$RESP_BODY" -D "$RESP_HEADERS" -w "%{http_code}" \
   -H "Authorization: Bearer $AXIOM_TOKEN" \
   -H "X-Axiom-Org-Id: $AXIOM_ORG_ID" \
   -H "Content-Type: application/json" \
-  -H "User-Agent: axiom-skills/1.0 (agent)" \
   -d "$PAYLOAD")
 
 if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
