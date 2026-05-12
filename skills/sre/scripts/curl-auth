@@ -136,6 +136,7 @@ case "$TOOL" in
             -H "Authorization: Bearer $AXIOM_TOKEN" \
             -H "X-Axiom-Org-Id: $AXIOM_ORG_ID" \
             -H "Content-Type: application/json" \
+            -H "User-Agent: axiom-skills/1.0 (agent)" \
             "$URL" "$@"
         ;;
     
