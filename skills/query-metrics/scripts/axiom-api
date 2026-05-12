@@ -57,6 +57,7 @@ CURL_ARGS=(
     -H "X-Axiom-Org-Id: $ORG_ID"
     -H "Content-Type: application/json"
     -H "Accept: ${AXIOM_ACCEPT:-application/json}"
+    -H "User-Agent: axiom-skills/1.0 (agent)"
 )
 
 if [[ -n "$BODY" ]]; then
