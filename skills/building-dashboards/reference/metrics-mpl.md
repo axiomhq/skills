@@ -49,6 +49,44 @@ When generating metrics chart JSON:
 
 > **Note:** `find-metrics <value>` searches tag values, not metric names. Use `metrics-info <deploy> <dataset> metrics` to list metric names.
 
+## Filter Bar / SmartFilter Integration
+
+Metrics charts support optional filter bar variables via the `ifdef` operator. When the filter bar is unset (the "All" / no-filter default is active) the `ifdef` block is skipped and all series are returned. When a value is selected, the filter is applied.
+
+### Chart query
+
+Use `ifdef` in the MPL pipeline. **Do not** add `param` declarations to the chart query string — the dashboard runtime injects them automatically from the filter bar metadata.
+
+```mpl
+`otel-metrics`:`http.server.duration`
+| ifdef($service_filter) { where `service.name` == $service_filter }
+| align to $__interval using avg
+| group by `service.name` using avg
+```
+
+### Filter bar JSON
+
+The "All" default option **must** include `"unset": true`. Without it the variable is sent as an empty string (a required `string` param), which causes the MPL engine to error because `ifdef` expects `Option<string>`.
+
+```json
+{
+  "id": "service_filter",
+  "name": "Service",
+  "type": "select",
+  "selectType": "apl",
+  "active": true,
+  "apl": {
+    "apl": "['logs'] | distinct ['service.name'] | project key=['service.name'], value=['service.name'] | sort by key asc",
+    "queryOptions": {"quickRange": "1h"}
+  },
+  "options": [
+    {"key": "All", "value": "", "default": true, "unset": true}
+  ]
+}
+```
+
+See `reference/smartfilter.md` for the full SmartFilter JSON structure.
+
 ## Metrics Discovery & Query Scripts
 
 | Script | Usage |

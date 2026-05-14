@@ -77,9 +77,9 @@ Free-text input instead of dropdown:
 }
 ```
 
-## Panel Query Integration
+## Panel Query Integration (APL)
 
-Panel queries must declare parameters and handle empty (All) case:
+APL panel queries declare parameters and handle the empty ("All") case:
 
 ```apl
 declare query_parameters (country_filter:string = "");
@@ -87,6 +87,40 @@ declare query_parameters (country_filter:string = "");
 | where isempty(country_filter) or ['geo.country'] == country_filter
 | summarize count() by bin_auto(_time)
 ```
+
+## Panel Query Integration (MPL / Metrics)
+
+Metrics charts use `ifdef` instead of `declare query_parameters`. The dashboard runtime automatically injects the `param $<id>: Option<string>;` declaration when the filter has an unset-default option — no manual declaration is needed in the chart query.
+
+```mpl
+`my-dataset`:`http.server.duration`
+| ifdef($service_filter) { where `service.name` == $service_filter }
+| align to $__interval using avg
+| group by `service.name` using avg
+```
+
+For this to work the filter bar option that means "no filter" must have `"unset": true` instead of just `"default": true`:
+
+```json
+{
+  "id": "service_filter",
+  "name": "Service",
+  "type": "select",
+  "selectType": "apl",
+  "active": true,
+  "apl": {
+    "apl": "['my-dataset'] | distinct ['service.name'] | project key=['service.name'], value=['service.name'] | sort by key asc",
+    "queryOptions": {"quickRange": "1h"}
+  },
+  "options": [
+    {"key": "All", "value": "", "default": true, "unset": true}
+  ]
+}
+```
+
+The `unset: true` field signals that when this option is selected the variable is passed as an optional type. The `ifdef` block is then skipped entirely — the query returns all series instead of erroring on a missing required parameter.
+
+**Without `unset: true` on the default option** the variable is sent as an empty string, which is a required `string` param — the MPL engine rejects it because `ifdef` expects `Option<string>`. Always set `unset: true` on the "All" / no-filter default when writing MPL queries with `ifdef`.
 
 ## Filter Query for Dynamic Dropdowns
 
