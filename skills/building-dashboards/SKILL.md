@@ -322,13 +322,22 @@ SmartFilter is a **chart type** that creates dropdown/search filters. Requires:
 - `selectType: "list"` — Static dropdown with predefined options
 - `type: "search"` — Free-text input
 
-**Panel query pattern:**
+**APL panel query pattern:**
 ```apl
 declare query_parameters (country_filter:string = "");
 ['logs'] | where isempty(country_filter) or ['geo.country'] == country_filter
 ```
 
-See `reference/smartfilter.md` for full JSON structure and cascading filter examples.
+**MPL (metrics) panel query pattern — use `ifdef`, not `declare query_parameters`:**
+```mpl
+`dataset`:`metric`
+| ifdef($service_filter) { where `service.name` == $service_filter }
+| align to $__interval using avg
+```
+
+For MPL, the default "All" option in the filter bar **must** have `"unset": true` so the variable is treated as optional. The dashboard runtime auto-injects the `param $<id>: Option<string>;` declaration — do not add it manually. When the filter is unset the `ifdef` block is skipped entirely.
+
+See `reference/smartfilter.md` for full JSON structure, `unset` option details, and cascading filter examples.
 
 ### Monitor List
 **When:** Display monitor status on operational dashboards.
