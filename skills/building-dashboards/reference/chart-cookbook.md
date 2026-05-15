@@ -337,7 +337,18 @@ No APL needed—configure these fields for interactive filtering:
 
 ## Note
 
-Markdown panels for context and navigation.
+Markdown panels for context and navigation. The chart object carries Markdown in a **top-level `text`** field. There is no `query`, and `text` is **not** wrapped in an `options` object — the create API rejects `options` with `Unrecognized key: "options"`.
+
+```json
+{
+  "id": "dashboard-header",
+  "name": "API Gateway",
+  "type": "Note",
+  "text": "# API Gateway — Oncall\n\n**Purpose:** Quick triage."
+}
+```
+
+The recipes below are the Markdown that goes inside `text`. JSON-escape the content (newlines as `\n`, quotes as `\"`) when embedding it as the chart's `text` value.
 
 ### Dashboard Header
 ```markdown

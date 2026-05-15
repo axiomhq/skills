@@ -3,201 +3,144 @@ name: query-metrics
 description: Runs metrics queries against Axiom MetricsDB via scripts. Discovers available metrics, tags, and tag values. Use when asked to query metrics, explore metric datasets, check metric values, or investigate OTel metrics data.
 ---
 
-> **CRITICAL:** ALL script paths are relative to this skill's folder. Run them with full path (e.g., `scripts/metrics-query`).
-
 # Querying Axiom Metrics
 
-Query OpenTelemetry metrics stored in Axiom's MetricsDB.
+All script paths are relative to this skill's folder; invoke as `scripts/<name>`. The target dataset must be of kind `otel:metrics:v1`.
 
-## Setup
-
-Run `scripts/setup` to check requirements (curl, jq, ~/.axiom.toml).
-
-Config in `~/.axiom.toml` (shared with axiom-sre):
-```toml
-[deployments.prod]
-url = "https://api.axiom.co"
-token = "xaat-your-token"
-org_id = "your-org-id"
-```
-
-The target dataset must be of kind `otel:metrics:v1`.
-
----
-
-## Discovering Datasets
-
-List all datasets in a deployment:
-
-```bash
-scripts/datasets <deployment>
-```
-
-Filter to only metrics datasets:
-
-```bash
-scripts/datasets <deployment> --kind otel:metrics:v1
-```
-
-This returns each dataset's `name`, `edgeDeployment`, and `kind`. Use the dataset name in subsequent `metrics-info` and `metrics-query` calls.
-
----
-
-## Edge Deployment Resolution
-
-Datasets can live in different edge deployments (e.g., `us-east-1` vs `eu-central-1`). The scripts **automatically resolve** the correct regional edge URL before querying. No manual configuration is needed — `metrics-info` and `metrics-query` detect the dataset's edge deployment and route requests to the right endpoint.
-
-| Edge Deployment | Edge Endpoint |
-|---|---|
-| `cloud.us-east-1.aws` | `https://us-east-1.aws.edge.axiom.co` |
-| `cloud.eu-central-1.aws` | `https://eu-central-1.aws.edge.axiom.co` |
-
-If resolution fails or the edge deployment is unknown, requests fall back to the deployment URL in `~/.axiom.toml`.
-
----
-
-## Learning the Metrics Query Syntax
-
-> **CRITICAL:** You MUST run `metrics-spec` before composing your first query in a session. NEVER guess MPL syntax — it changes over time and the spec is the only source of truth.
-
-```bash
-scripts/metrics-spec <deployment> <dataset>
-```
-
-Re-consult the spec when using an unfamiliar operator, when a query returns a syntax error, or when constructing histogram/multi-metric queries.
-
----
+Setup, prerequisites, and `~/.axiom.toml` configuration: see `README.md`. Edge-deployment routing is automatic — the scripts read each dataset's `edgeDeployment` and route to the right regional endpoint without configuration.
 
 ## Workflow
 
-1. **List datasets**: Run `scripts/datasets <deployment>` to see available datasets and their edge deployments
-2. **Fetch the spec**: Run `scripts/metrics-spec <deployment> <dataset>` — **this step is mandatory before writing any query**
-3. **Discover metrics**: List available metrics via `scripts/metrics-info <deployment> <dataset> metrics`
-4. **Explore tags**: List tags and tag values to understand filtering options. If metrics listing fails, use tags and tag values to identify relevant entities, then use those to list metrics for specific tags.
-5. **Write and execute query**: Compose a metrics query and run it via `scripts/metrics-query`
-6. **Iterate**: Refine filters, aggregations, and groupings based on results
+1. `scripts/datasets <deploy> --kind otel:metrics:v1` — list metrics datasets.
+2. `scripts/metrics-spec <deploy> <dataset>` — **required** before composing any query. MPL evolves; the spec is the source of truth.
+3. `scripts/metrics-info <deploy> <dataset> metrics` — list metrics with `{type, temporality, unit}` metadata. Read this before writing the query (see [Choosing a Query Shape](#choosing-a-query-shape)).
+4. `scripts/metrics-info <deploy> <dataset> tags [<tag> values]` — explore filter dimensions.
+5. `scripts/metrics-query <deploy> '<MPL>' <start> <end>` — execute. Iterate.
 
-If the user provides a specific service, host, or entity name to search for, use `find-metrics` to locate matching metrics:
-```bash
-scripts/metrics-info <deployment> <dataset> find-metrics "frontend"
-```
-Do NOT use `find-metrics` as a general discovery step — it requires a known search value.
+If the user names a specific entity (service, host, …), `scripts/metrics-info <deploy> <dataset> find-metrics "<value>"` finds the metrics carrying it. `find-metrics` searches **tag values**, not metric names — don't use it for general discovery.
 
----
+## Choosing a Query Shape
+
+The `metrics-info` listing returns each metric's `{type, temporality, unit}`. Read these before composing — never assume a metric is a simple scalar.
+
+| Field | Values | Drives |
+|---|---|---|
+| `type` | `Gauge`, `CounterMonotonic`, `CounterNonMonotonic`, `Histogram` | Required pre-aggregation operators. |
+| `temporality` | `Cumulative`, `Delta`, `null` | Whether counter values are running totals or per-interval deltas. `null` is normal for Gauges. |
+| `unit` | UCUM string (`Cel`, `kW.h`, `s`, `%`, `[ppm]`, …) or `null` | Display unit; preserve when reporting results. |
+
+Rules per type (consult `metrics-spec` for exact operator names — they evolve):
+
+- **Gauge** — instantaneous value. Align directly with `avg`/`min`/`max`/`sum`. Don't apply a rate; you'd be averaging meaningless deltas of an instantaneous value.
+- **CounterMonotonic + Cumulative** — running total (resets aside). The raw values are rarely what you want. Convert to a per-second rate first, **then** align/aggregate.
+- **CounterMonotonic + Delta** — already per-interval. Sum/align without a rate step.
+- **CounterNonMonotonic** — can go up or down (queue depth, balance). Intent is ambiguous: rate, delta, or current value all make sense for different questions. **Ask the user** before picking one.
+- **Histogram** — not a scalar. `align using avg` produces nonsense. Use the bucket/quantile operators from `metrics-spec`.
+- **`temporality: null`** — "not applicable for this instrument type" (the norm for Gauges), not "missing data".
+
+When surfacing numbers, attach the `unit` (treat `null` as unitless). If you combine metrics with mismatched units in arithmetic, warn rather than silently producing a meaningless number.
 
 ## Query Metrics
 
-Execute a metrics query against a dataset:
-
 ```bash
-scripts/metrics-query <deployment> '<mpl>' '<startTime>' '<endTime>'
+scripts/metrics-query <deploy> '<MPL>' <start> <end>
 ```
 
-**Examples:**
+| Parameter | Notes |
+|---|---|
+| `deploy` | Name from `~/.axiom.toml` (e.g. `prod`). |
+| `MPL` | Pipeline string. Dataset is parsed from the MPL itself. |
+| `start` / `end` | RFC3339 (`2025-01-01T00:00:00Z`) or relative (`now-1h`, `now`). |
+
+Examples:
+
 ```bash
-# Simple query
 scripts/metrics-query prod \
   '`my-dataset`:`http.server.duration` | align to 5m using avg' \
-  '2025-06-01T00:00:00Z' \
-  '2025-06-02T00:00:00Z'
+  now-1h now
 
-# Query with filtering (note backticks on dotted tag names)
 scripts/metrics-query prod \
-  '`my-dataset`:`http.server.duration` | where `service.name` == "frontend" and method == "GET" | align to 5m using avg | group by status_code using sum' \
-  'now-1d' \
-  'now'
+  '`my-dataset`:`http.server.duration`
+   | where `service.name` == "frontend" and method == "GET"
+   | align to 5m using avg
+   | group by status_code using sum' \
+  now-1d now
 ```
 
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `deployment` | Yes | Name from `~/.axiom.toml` (e.g., `prod`) |
-| `mpl` | Yes | Metrics query string. Dataset is extracted from the query itself. |
-| `startTime` | Yes | RFC3339 (e.g., `2025-01-01T00:00:00Z`) or relative expression (e.g., `now-1h`, `now-1d`) |
-| `endTime` | Yes | RFC3339 (e.g., `2025-01-02T00:00:00Z`) or relative expression (e.g., `now`) |
+### Parameters
 
----
-
-## Discovery (Info Endpoints)
-
-Use `scripts/metrics-info` to explore what metrics, tags, and values exist in a dataset before writing queries. Time range defaults to the last 24 hours; override with `--start` and `--end`.
-
-### List metrics in a dataset
+MPL can declare parameters (`param $svc: string;`). Pass values with repeated `-p name=value`. The script applies the API's `param__` prefix; values are forwarded verbatim as MPL literals (string literals include their quotes).
 
 ```bash
-scripts/metrics-info <deployment> <dataset> metrics
+scripts/metrics-query \
+  -p svc='"frontend"' \
+  -p window='5m' \
+  prod \
+  'param $svc: string; param $window: Duration;
+   `otel-metrics`:`http.server.duration` | where `service.name` == $svc | align to $window using avg' \
+  now-1h now
 ```
 
-### List tags in a dataset
+Required parameters must be supplied; optional ones may be omitted. Resulting request body shape:
 
-```bash
-scripts/metrics-info <deployment> <dataset> tags
+```json
+{
+  "apl": "param $svc: string; …",
+  "startTime": "now-1h",
+  "endTime": "now",
+  "params": { "param__svc": "\"frontend\"", "param__window": "5m" }
+}
 ```
 
-### List values for a specific tag
+Literal syntax per type lives in `metrics-spec`.
 
-```bash
-scripts/metrics-info <deployment> <dataset> tags <tag> values
-```
+## Discovery (`metrics-info`)
 
-### List tags for a specific metric
+Time range defaults to the last 24h; override with `--start` / `--end`.
 
-```bash
-scripts/metrics-info <deployment> <dataset> metrics <metric> tags
-```
-
-### List tag values for a specific metric and tag
-
-```bash
-scripts/metrics-info <deployment> <dataset> metrics <metric> tags <tag> values
-```
-
-### Find metrics matching a tag value
-
-```bash
-scripts/metrics-info <deployment> <dataset> find-metrics "<search-value>"
-```
-
-### Custom time range
-
-All info commands accept `--start` and `--end` for custom time ranges:
-
-```bash
-scripts/metrics-info prod my-dataset metrics \
-  --start 2025-06-01T00:00:00Z \
-  --end 2025-06-02T00:00:00Z
-```
-
----
+| Command | Returns |
+|---|---|
+| `metrics-info <d> <ds> metrics` | All metrics, keyed by name, with `{type, temporality, unit}`. |
+| `metrics-info <d> <ds> metrics --by-type` | Same listing grouped by `type` (client-side reshape). |
+| `metrics-info <d> <ds> metrics --type Gauge --type Histogram` | Filtered listing (repeatable, OR semantics; composes with `--by-type`). |
+| `metrics-info <d> <ds> metrics <metric> info` | Single metric's `{type, temporality, unit}`. Non-zero exit if absent. |
+| `metrics-info <d> <ds> metrics <metric> describe` | Bundle: metadata + all tags + tag values in one call (replaces 1+1+N round trips). Flags: `--no-values` (tag names only), `--values-limit N` (cap per-tag values; default 50, 0 = unlimited). |
+| `metrics-info <d> <ds> metrics <metric> tags` | Tags carried by a specific metric. |
+| `metrics-info <d> <ds> metrics <metric> tags <tag> values` | Tag values for that metric. |
+| `metrics-info <d> <ds> metrics <metric> tags <tag> type` | Probe whether the tag is `int`/`float`/`string`/`bool`. Returns `{type, present_types}`; `mixed` if multiple types coexist, `absent` if not present. |
+| `metrics-info <d> <ds> tags` | All tags in the dataset. |
+| `metrics-info <d> <ds> tags <tag> values` | All values for a tag (across metrics). |
+| `metrics-info <d> <ds> find-metrics "<value>"` | Metrics that carry the given tag *value* (not metric name). |
 
 ## Error Handling
 
-HTTP errors return JSON with `message`, `code`, and optional `detail` fields:
+HTTP errors return JSON with `message`, `code`, and optional `detail`:
+
 ```json
-{"message": "description", "code": 400, "detail": {"errorType": 1, "message": "raw error"}}
+{"message": "...", "code": 400, "detail": {"errorType": 1, "message": "raw error"}}
 ```
 
-Common status codes:
-- 400 — Invalid query syntax or bad dataset name
-- 401 — Missing or invalid authentication
-- 403 — No permission to query/ingest this dataset
-- 404 — Dataset not found
-- 429 — Rate limited
-- 500 — Internal server error
+| Code | Cause |
+|---|---|
+| 400 | Invalid query syntax or bad dataset name |
+| 401 | Missing/invalid auth |
+| 403 | No permission |
+| 404 | Dataset not found |
+| 429 | Rate limited |
+| 500 | Internal error |
 
-On a **500 error**, re-run the failing script call with `curl -v` flags to capture response headers, then report the `traceparent` or `x-axiom-trace-id` header value to the user. This trace ID is essential for debugging the failure with the backend team.
-
----
+On 500, re-run with `curl -v` to capture the `traceparent` / `x-axiom-trace-id` header and report it — the trace ID is what the backend team needs to debug.
 
 ## Scripts
 
 | Script | Usage |
-|--------|-------|
-| `scripts/setup` | Check requirements and config |
-| `scripts/datasets <deploy> [--kind <kind>]` | List datasets (with edge deployment info) |
-| `scripts/metrics-spec <deploy> <dataset>` | Fetch metrics query specification |
-| `scripts/metrics-query <deploy> <mpl> <start> <end>` | Execute a metrics query |
-| `scripts/metrics-info <deploy> <dataset> ...` | Discover metrics, tags, and values |
-| `scripts/axiom-api <deploy> <method> <path> [body]` | Low-level API calls |
-| `scripts/resolve-url <deploy> <dataset>` | Resolve dataset to edge deployment URL |
+|---|---|
+| `scripts/setup` | Check requirements and config. |
+| `scripts/datasets <deploy> [--kind <kind>]` | List datasets with edge deployment. |
+| `scripts/metrics-spec <deploy> <dataset>` | Fetch the MPL query spec. |
+| `scripts/metrics-query <deploy> <mpl> <start> <end>` | Execute a query. |
+| `scripts/metrics-info <deploy> <dataset> ...` | Discover metrics, tags, values. |
+| `scripts/axiom-api <deploy> <method> <path> [body]` | Low-level API calls. |
+| `scripts/resolve-url <deploy> <dataset>` | Resolve to the edge deployment URL. |
 
-Run any script without arguments to see full usage.
+Run any script without arguments for full usage.

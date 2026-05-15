@@ -136,7 +136,6 @@
       "errorThresholdValue": "25",
       "id": "wow-change",
       "name": "Week-over-Week",
-      "overrideDashboardTimeRange": true,
       "query": {
         "apl": "declare query_parameters (org_filter:string = \"\", dataset_filter:string = \"\");\n['axiom-audit']\n| where _time between (ago(14d) .. now())\n| where action == 'usageCalculated'\n| where isempty(org_filter) or ['resource.id'] == org_filter\n| where isempty(dataset_filter) or tostring(['properties.dataset']) == dataset_filter\n| summarize this_week = sumif(['properties.hourly_ingest_bytes'], _time >= ago(7d)), last_week = sumif(['properties.hourly_ingest_bytes'], _time < ago(7d) and _time >= ago(14d))\n| extend ['WoW %'] = iff(last_week == 0, real(null), round(100.0 * (this_week - last_week) / last_week, 1))\n| project ['WoW %']"
       },
@@ -158,8 +157,6 @@
       "id": "ingest-by-dataset-ts",
       "name": "Daily Ingest by Dataset (GB)",
       "numSeries": 1,
-      "overrideDashboardCompareAgainst": false,
-      "overrideDashboardTimeRange": false,
       "query": {
         "apl": "declare query_parameters (org_filter:string = \"\", dataset_filter:string = \"\");\n[\"axiom-audit\"]\n| where action == \"usageCalculated\"\n| where isempty(org_filter) or [\"resource.id\"] == org_filter\n| where isempty(dataset_filter) or tostring([\"properties.dataset\"]) == dataset_filter\n| summarize [\"GB\"] = round(sum([\"properties.hourly_ingest_bytes\"]) / 1000000000, 1) by bin(_time, 1d), Dataset = tostring([\"properties.dataset\"])",
         "endTime": "",
