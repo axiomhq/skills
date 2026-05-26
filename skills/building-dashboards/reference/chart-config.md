@@ -1,113 +1,34 @@
-# Chart Configuration Options
+# Chart Configuration — Advanced Options
 
-Charts support JSON configuration options beyond the query. These are set at the chart level.
+`scripts/chart-add` covers the common fields per chart kind (id, name, query, dataset, unit, sparkline, Note text). It also enforces the type-aware unit rules and never emits the deny-listed fields below — so when authoring through `chart-add` none of this reference is needed.
 
-## Common Options (All Charts)
+This file documents the options `chart-add` does **not** expose. Reach for it when you need to merge advanced fields with `jq` after `chart-add` emits the base chart, or when extending `chart-add` itself.
 
-```json
-{
-  "overrideDashboardTimeRange": false,
-  "overrideDashboardCompareAgainst": false,
-  "hideHeader": false
-}
-```
+## TimeSeries — `query.queryOptions`
 
-## Metrics/MPL Query (MetricsDB Charts)
+`chart-add` doesn't write `query.queryOptions`. Merge it in with `jq` for non-default rendering.
 
-Metrics charts require both `query.apl` (the MPL pipeline string) and `query.metricsDataset` (the dataset name, e.g. `"otel-metrics"`). The `metricsDataset` field is what flags the chart as MPL; without it the backend treats `apl` as APL and the chart misbehaves. Do not send `query.mpl` — the create API rejects it. Run `scripts/metrics/metrics-spec` to learn the full syntax before composing queries.
+### `aggChartOpts` (per-series rendering)
 
-### Minimal Metrics Query
+JSON-encoded string keyed by query column. Per-series options:
 
-```json
-{
-  "type": "TimeSeries",
-  "query": {
-    "apl": "`otel-metrics`:`system.cpu.utilization`",
-    "metricsDataset": "otel-metrics"
-  }
-}
-```
+| Option | Values | Effect |
+|--------|--------|--------|
+| `variant` | `line` (default), `area`, `bars` | Render mode |
+| `scaleDistr` | `linear` (default), `log` | Y-axis scale |
+| `displayNull` | `auto`, `null` (gaps), `span` (join), `zero` (fill) | Missing-data handling |
 
-### Metrics Query with Filters and Transformations
+**Deriving the column key** — `aggChartOpts` is keyed by a JSON-stringified column descriptor:
 
-```json
-{
-  "type": "TimeSeries",
-  "query": {
-    "apl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| where `deployment.environment` == \"prod\"\n| align to $__interval using avg\n| group by `service.name` using avg",
-    "metricsDataset": "otel-metrics"
-  }
-}
-```
-
-For full contract details, see `reference/metrics-mpl.md`.
-
-## Statistic Options
-
-```json
-{
-  "type": "Statistic",
-  "colorScheme": "Blue",
-  "customUnits": "req/s",
-  "unit": "Auto",
-  "showChart": true,
-  "hideValue": false,
-  "errorThreshold": "Above",
-  "errorThresholdValue": "100",
-  "warningThreshold": "Above",
-  "warningThresholdValue": "50",
-  "invertTheme": false
-}
-```
-
-> **API gotcha:** `decimals` is returned by GET and may appear in existing dashboards, but the create API rejects it. Omit `decimals` from create payloads.
-
-| Option | Values | Description |
-|--------|--------|-------------|
-| `colorScheme` | Blue, Orange, Red, Purple, Teal, Yellow, Green, Pink, Grey, Brown | Color theme |
-| `customUnits` | string | Unit suffix (e.g., "ms", "req/s") |
-| `unit` | Auto, Abbreviated, Byte, KB, MB, GB, TimeMS, TimeSec, Percent, etc. | Value formatting |
-| `decimals` | number | Decimal places in readback/GET payloads; omit on create because the API rejects it |
-| `showChart` | boolean | Show sparkline |
-| `hideValue` | boolean | Hide the main value |
-| `errorThreshold` | Above, AboveOrEqual, Below, BelowOrEqual, AboveOrBelow | Error condition |
-| `errorThresholdValue` | string | Error threshold value |
-| `warningThreshold` | same as error | Warning condition |
-| `warningThresholdValue` | string | Warning threshold value |
-| `invertTheme` | boolean | Invert colors |
-
-### Available Units
-
-- **Numbers**: `Auto`, `Abbreviated`
-- **Data**: `Byte`, `Kilobyte`, `Megabyte`, `Gigabyte`
-- **Data rates**: `BitsSec`, `BytesSec`, `KilobitsSec`, `KilobytesSec`, `MegabitsSec`, `MegabytesSec`, `GigabitsSec`, `GigabytesSec`
-- **Time**: `TimeNS`, `TimeUS`, `TimeMS`, `TimeSec`, `TimeMin`, `TimeHour`, `TimeDay`
-- **Percent**: `Percent` (0-1), `Percent100` (0-100)
-- **Currency**: `CurrencyUSD`, `CurrencyEUR`, `CurrencyGBP`, `CurrencyCAD`, `CurrencyAUD`, `CurrencyJPY`, `CurrencyINR`, `CurrencyCZK`, `CurrencyPLN`
-- **Date**: `DateDateTime`, `DateFromNow`, `DateYYYYMMDDHHmmss`
-
-## TimeSeries Options
-
-TimeSeries chart options are stored in `query.queryOptions.aggChartOpts` as a JSON string.
-
-### Key Formats
-
-**Important:** The `"*"` wildcard is unreliable. Always use the specific key format derived from your query.
-
-#### Deriving the Key
-
-The key format depends on how the column is computed:
-
-| Query Pattern | Key Format |
-|---------------|------------|
+| Query pattern | Key |
+|---|---|
 | `summarize count()` | `{"alias":"count_","op":"count"}` |
 | `summarize sum(field)` | `{"alias":"sum_field","op":"sum"}` |
 | `summarize ['Name'] = sum(field) / 1000` | `{"alias":"Name","field":"field","op":"computed"}` |
-| `summarize ['Name'] = round(sum(field), 1)` | `{"alias":"Name","field":"field","op":"computed"}` |
 
-**Rule:** If the column uses any expression (math, `round()`, etc.), use `"op":"computed"` and include the source `"field"`.
+Any expression on the right-hand side (math, `round()`, etc.) makes it `op:"computed"` with the source `field`. Wildcard `"*"` is unreliable — always use the specific key. The `field` value is the bare source name (no brackets, no `properties.` prefix).
 
-#### Simple Aggregation Example
+Simple example:
 
 ```json
 {
@@ -121,56 +42,17 @@ The key format depends on how the column is computed:
 }
 ```
 
-#### Computed Column Example
+### `timeSeriesView`
 
-For `['Ingest GB'] = round(sum(['properties.hourly_ingest_bytes']) / 1e9, 1)`:
+Set in `query.queryOptions.timeSeriesView`:
 
-```json
-{
-  "aggChartOpts": "{\"{\\\"alias\\\":\\\"Ingest GB\\\",\\\"field\\\":\\\"properties.hourly_ingest_bytes\\\",\\\"op\\\":\\\"computed\\\"}\":{\"variant\":\"bars\",\"displayNull\":\"auto\"}}"
-}
-```
+| Value | Effect |
+|---|---|
+| `charts` (default) | Chart only |
+| `resultsTable` | Summary totals only |
+| `charts\|resultsTable` | Chart + totals below |
 
-**Note:** The `field` value is the source field name without brackets or the `properties.` prefix path as written in the query.
-
-### View Mode (timeSeriesView)
-
-Controls what the TimeSeries panel displays. Set in `query.queryOptions.timeSeriesView`.
-
-| Value | Description |
-|-------|-------------|
-| `charts` | Chart only (default) |
-| `resultsTable` | Summary totals table only |
-| `charts\|resultsTable` | Chart with totals table below — shows both the time series and an aggregated summary |
-
-```json
-{
-  "type": "TimeSeries",
-  "query": {
-    "apl": "['logs'] | summarize count() by bin_auto(_time), service",
-    "queryOptions": {
-      "timeSeriesView": "charts|resultsTable"
-    }
-  }
-}
-```
-
-### Per-Series Options (inside aggChartOpts)
-
-| Option | Values | Description |
-|--------|--------|-------------|
-| `variant` | `line`, `area`, `bars` | Chart display mode |
-| `scaleDistr` | `linear`, `log` | Y-axis scale |
-| `displayNull` | `auto`, `null`, `span`, `zero` | Missing data handling |
-
-### displayNull Values
-
-- `auto`: Best representation based on chart type
-- `null`: Skip/ignore missing values (gaps in chart)
-- `span`: Join adjacent values across gaps
-- `zero`: Fill missing with zeros
-
-## LogStream / Table Options
+## LogStream / Table — `tableSettings`
 
 ```json
 {
@@ -193,59 +75,46 @@ Controls what the TimeSeries panel displays. Set in `query.queryOptions.timeSeri
 }
 ```
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `columns` | array | Column order and widths (objects with `name` and `width`) |
-| `fontSize` | string | Font size (e.g., "12px") |
-| `highlightSeverity` | boolean | Color-code by log level |
-| `showRaw` | boolean | Show raw JSON |
-| `showEvent` | boolean | Show event column |
-| `showTimestamp` | boolean | Show timestamp column |
-| `wrapLines` | boolean | Wrap long lines |
-| `hideNulls` | boolean | Hide null values |
+| Field | Effect |
+|---|---|
+| `columns` | Column order and widths (`{name, width}` objects). |
+| `fontSize` | CSS string (e.g. `"12px"`). |
+| `highlightSeverity` | Color rows by log level. |
+| `showRaw` / `showEvent` / `showTimestamp` | Toggle built-in columns. |
+| `wrapLines` | Wrap long lines. |
+| `hideNulls` | Hide null cells. |
 
-## Pie Options
+## Statistic — extra cosmetic options
 
-```json
-{
-  "type": "Pie",
-  "hideHeader": false
-}
-```
+`chart-add` exposes `--unit` and `--show-chart`. The other Statistic fields:
 
-## Note Options
+| Field | Values | Effect |
+|---|---|---|
+| `colorScheme` | Blue, Orange, Red, Purple, Teal, Yellow, Green, Pink, Grey, Brown | Color theme. |
+| `hideValue` | bool | Hide the main value (e.g. show only the sparkline). |
+| `invertTheme` | bool | Invert colors. |
+| `errorThreshold` / `warningThreshold` | `Above`, `AboveOrEqual`, `Below`, `BelowOrEqual`, `AboveOrBelow` | Comparison direction. The companion *value* field is not reachable through the create API on probed deployments — see `chart-add` header for the gap; set thresholds via the UI for now. |
 
-```json
-{
-  "type": "Note",
-  "text": "## Section Header\n\nMarkdown content here.",
-  "variant": "default"
-}
-```
+## `unit` enum reference (Statistic only)
 
-Note content supports GitHub Flavored Markdown.
+`chart-add --unit` accepts a friendly string and maps via `scripts/metrics/unit-for`. The enum it picks from:
 
-## Heatmap Options
+- Numbers: `Auto`, `Abbreviated`
+- Data: `Byte`, `Kilobyte`, `Megabyte`, `Gigabyte`
+- Data rates: `BitsSec`, `BytesSec`, `KilobitsSec`/…/`GigabytesSec`
+- Time: `TimeNS`, `TimeUS`, `TimeMS`, `TimeSec`, `TimeMin`, `TimeHour`, `TimeDay`
+- Percent: `Percent100` (input is 0–100; pair with `customUnits: "%"`). The `Percent` enum does NOT auto-multiply — convert OTel 0–1 ratios in MPL.
+- Currency: `CurrencyUSD`, `CurrencyEUR`, `CurrencyGBP`, `CurrencyCAD`, `CurrencyAUD`, `CurrencyJPY`, `CurrencyINR`, `CurrencyCZK`, `CurrencyPLN`
+- Date: `DateDateTime`, `DateFromNow`, `DateYYYYMMDDHHmmss`
 
-Heatmap charts use the default options. Color scheme is fixed to blue gradient.
-
-```json
-{
-  "type": "Heatmap",
-  "query": {
-    "apl": "['logs'] | summarize histogram(duration_ms, 15) by bin_auto(_time)"
-  }
-}
-```
+`TimeSeries`/`Heatmap`/`Pie`/`Table`/`LogStream` reject the `unit` enum entirely — set `customUnits` and encode the unit in `name` instead.
 
 ## Annotations
 
-Display deployment markers, incidents, or custom events on charts.
-
-Annotations are managed via the Axiom API `/v2/annotations` endpoint:
+Annotations (deployment markers, incidents) are managed via `/v2/annotations`, not via chart JSON:
 
 ```bash
-curl -X 'POST' 'https://api.axiom.co/v2/annotations' \
+curl -X POST 'https://api.axiom.co/v2/annotations' \
   -H 'Authorization: Bearer $AXIOM_TOKEN' \
   -H 'Content-Type: application/json' \
   -d '{
@@ -258,28 +127,37 @@ curl -X 'POST' 'https://api.axiom.co/v2/annotations' \
   }'
 ```
 
-Or use GitHub Actions:
-```yaml
-- name: Add annotation
-  uses: axiomhq/annotation-action@v0.1.0
-  with:
-    axiomToken: ${{ secrets.AXIOM_TOKEN }}
-    datasets: http-logs
-    type: "deploy"
-    title: "Production deployment"
+Or via GitHub Actions: `axiomhq/annotation-action@v0.1.0`.
+
+## Comparison Period
+
+Compare current time range against a historical offset via URL params, not chart JSON: `?t_qr=24h&t_against=-1d` (or `-1W`). No equivalent chart-level field today.
+
+## Per-Panel Time-Range Override
+
+UI-only. `overrideDashboardTimeRange` has no API representation — silently dropped on data charts, rejected on `Note`/`SmartFilter`. Edit per-panel time in the UI (Edit panel → Time range → Custom).
+
+## Fields Rejected on Create
+
+The create API has a closed field list per chart kind. Sending an unknown field returns:
+
+```
+dashboard validation failed at [charts <index>]: Unrecognized key: "<field>"
 ```
 
-## Comparison Period (Against)
+`chart-add` never emits these, so authoring through it can't trigger the error. Useful when debugging a hand-written or migrated payload, or when extending `chart-add`.
 
-Compare current time range against a historical period:
-- `-1D`: Same time yesterday
-- `-1W`: Same time last week
-- Custom offset
+**Universally rejected** (every chart kind):
 
-Use in dashboard URL: `?t_qr=24h&t_against=-1d`
+| Field | Notes |
+|---|---|
+| `decimals` | GET returns it on UI-created charts; create rejects it. |
+| `description` (chart-level) | Rejected on every chart kind. The dashboard-level `description` (top-level, sibling of `name`) **is** accepted. |
+| `aggChartOpts` (chart-level) | Belongs at `query.queryOptions.aggChartOpts`, not at chart top level. Only `TimeSeries` consumes it. |
+| `options` | Rejected on every chart kind. Common contamination from Grafana text panels (`options.content`). Note `text` is top-level, not `options.text`. |
+| `overrideDashboardTimeRange`, `overrideDashboardCompareAgainst` | No API representation. Silently dropped on data charts, rejected on `Note` and `SmartFilter`, rejected at dashboard top level. |
 
-## Custom Time Range per Panel
+**Per-chart rejections:**
 
-Individual panels can override the dashboard time range:
-- Set `overrideDashboardTimeRange: true` in chart config
-- Via UI: Edit panel → Time range → Custom
+- `unit` — accepted on `Statistic` only. Rejected on `TimeSeries`, `Heatmap`, `Pie`, `Table`, `LogStream`, `Note`.
+- `customUnits` — rejected on `Note`. Accepted on every other chart kind.

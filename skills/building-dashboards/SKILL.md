@@ -5,8 +5,6 @@ description: Designs and builds Axiom dashboards via API. Covers chart types, AP
 
 # Building Dashboards
 
-You design dashboards that help humans make decisions quickly. Dashboards are products: audience, questions, and actions matter more than chart count.
-
 ## Philosophy
 
 1. **Decisions first.** Every panel answers a question that leads to an action.
@@ -14,25 +12,23 @@ You design dashboards that help humans make decisions quickly. Dashboards are pr
 3. **Rates and percentiles over averages.** Averages hide problems; p95/p99 expose them.
 4. **Simple beats dense.** One question per panel. No chart junk.
 5. **Validate with data.** Never guess fields—discover schema first.
+6. **Compute what's asked, or defer.** If a panel can't be computed, replace it with a `Note` documenting the blocker. Never substitute a different quantity, even disclosed. See [Compute or Defer](#compute-or-defer).
 
 ---
 
 ## Entry Points
-
-Choose your starting point:
 
 | Starting from | Workflow |
 |---------------|----------|
 | **Vague description** | Intake → check dataset kind → design blueprint (APL or MPL) → queries per panel → deploy |
 | **Template** | Pick template → customize dataset/service/env → deploy |
 | **Splunk dashboard** | Extract SPL → translate via spl-to-apl → map to chart types → deploy |
+| **Grafana dashboard** | Project canonical panel spec (`expr`, `legendFormat`, `unit`, `title`, `description`) → translate PromQL → map chart types → deploy. See [reference/grafana-migration.md](./reference/grafana-migration.md). |
 | **Exploration** | Use axiom-sre to discover schema/signals → productize into panels |
 
 ---
 
 ## Intake: What to Ask First
-
-Before designing, clarify:
 
 1. **Audience & decision**
    - Oncall triage? (fast refresh, error-focused)
@@ -43,28 +39,20 @@ Before designing, clarify:
    - Service, environment, region, cluster, endpoint?
    - Single service or cross-service view?
 
-3. **Dataset kind (mandatory first step)**
-   - Run `scripts/metrics/datasets <deploy>` to identify each dataset's `kind`
-   - **If `kind` is `otel:metrics:v1`** → this is a metrics dataset. Follow the **Metrics path** below.
-   - **Otherwise** → this is an events/logs dataset. Follow the **APL path** below.
+3. **Dataset kind.** Run `scripts/metrics/datasets <deploy>` and check `kind`.
+   - `otel:metrics:v1` → metrics dataset, follow the **Metrics path**.
+   - anything else → events/logs dataset, follow the **APL path**.
 
-   > **⚠️ NEVER run `getschema` on a metrics dataset.** APL queries against `otel:metrics:v1` datasets return 0 rows without error — you will waste calls widening time ranges before realizing it's the wrong discovery method.
+   > **Never run `getschema` on a metrics dataset.** It returns 0 rows without error.
 
-   **APL path** (events/logs datasets):
-   - Discover fields with `getschema`:
-   ```apl
-   ['dataset'] | where _time between (ago(1h) .. now()) | getschema
-   ```
-   - Continue to steps 4–5 below.
+   **APL path:** discover fields with `['dataset'] | where _time between (ago(1h) .. now()) | getschema`. Continue to steps 4–5.
 
-   **Metrics path** (`otel:metrics:v1` datasets):
-   - Run `scripts/metrics/metrics-spec <deploy> <dataset>` — **mandatory before composing any MPL query**
-   - Discover available metrics: `scripts/metrics/metrics-info <deploy> <dataset> metrics`
-   - Discover tags: `scripts/metrics/metrics-info <deploy> <dataset> tags`
-   - Explore tag values: `scripts/metrics/metrics-info <deploy> <dataset> tags <tag> values`
-   - If discovery returns empty results, retry with `--start` set to 7 days ago — sparse metrics (sensors, batch jobs, crons) may not have data in the default 24h window
-   - `find-metrics <value>` searches **tag values**, not metric names — use it only when you know a specific entity name (service, host, device) to find which metrics are associated with it
-   - Skip to the **Metrics/MPL Blueprint** below for panel design.
+   **Metrics path:**
+   - `scripts/metrics/metrics-spec <deploy> <dataset>` — required before any MPL query.
+   - `scripts/metrics/metrics-info <deploy> <dataset> metrics | tags | tags <tag> values` for discovery.
+   - If discovery is empty, retry with `--start` 7 days ago (sparse metrics).
+   - `find-metrics <value>` searches tag *values*, not metric names — use it only with a known entity name.
+   - Skip to the **Metrics/MPL Blueprint**.
 
 4. **Golden signals** (APL path)
    - Traffic: requests/sec, events/min
@@ -79,7 +67,7 @@ Before designing, clarify:
 
 ## Dashboard Blueprint
 
-Choose the blueprint that matches your dataset kind (identified in Intake step 3).
+Pick the blueprint matching the dataset kind.
 
 ### APL Blueprint (events/logs datasets)
 
@@ -112,186 +100,61 @@ Raw events that answer "what exactly happened?"
 
 ### Metrics/MPL Blueprint (metrics datasets)
 
-> **Prerequisite:** You MUST have run `scripts/metrics/metrics-spec` and `scripts/metrics/metrics-info` before designing panels. Never guess MPL syntax or metric/tag names.
+Use `align to $__interval using …` for bucketing — `$__interval` is supplied by the dashboard runtime. Hard-coded windows over- or under-resolve. Validate every pipeline with `scripts/metrics/mpl-validate-chart`; both it and `chart-add --mpl` reject inline time ranges (`[1h..]`).
 
-> **🚨 ALIGNMENT RULE — non-negotiable for dashboard panels:** Always align to the dashboard-supplied variable `$__interval`, not a fixed window. The dashboard runtime substitutes `$__interval` based on the active time range and panel width, so the same chart stays usable from a 5-minute to a 30-day view. Hard-coding `align to 1m` (or any constant) over-resolves long ranges and under-resolves short ones.
->
-> ```mpl
-> | align to $__interval using avg   ✅ dashboard panels
-> | align to 1m using avg            ❌ fixed window — wrong granularity at most time ranges
-> ```
->
-> **No `param` declaration needed in the chart `query.apl`** — the dashboard runtime injects `param $__interval: Duration;` automatically. (The Grafana datasource does the same via a preamble; the Axiom-native dashboard runtime behaves identically — verified against working production dashboards.)
->
-> **Exceptions:** If you are pre-validating a query through `scripts/metrics/metrics-query` (which has no dashboard runtime), substitute a concrete duration for the test call only — do NOT commit that to the chart JSON. For genuinely sparse metrics where `$__interval` would round to an empty bucket (sensors, batch jobs, crons), a fixed wider window (e.g. `1h`) is acceptable; document why in the chart description.
+Exception: for sparse metrics where `$__interval` rounds to empty buckets, a fixed wider window (e.g. `1h`) is acceptable; document why on the chart.
 
 #### 1. At-a-Glance (Statistic panels)
-Current values for key metrics — answer "what's the state right now?"
-- Latest value of primary metrics (e.g., current temperature, power draw)
-- Use `group using avg` or `group using last` depending on metric type (gauge vs counter)
+Current values — "what's the state right now?"
+- Use `group using avg` (gauges) or `group using last` (counters).
+- Read the metric's `unit` via `metrics-info … metrics <m> info` and pass it to `chart-add --unit`. Ratio metrics (0–1) need `| map * 100` in MPL before `--unit "%"`.
 
 #### 2. Trends (TimeSeries panels)
-Metric trends over time — answer "what changed?"
-- Primary metrics over time, grouped by key dimension
-- Use `align to $__interval using avg|sum|last` for proper time bucketing — `$__interval` is supplied by the dashboard runtime
-- Group by low-cardinality tags only (≤10 series per chart)
+Trends over time — "what changed?"
+- `align to $__interval using avg|sum|last`.
+- Group by low-cardinality tags only (≤10 series per chart).
+- Embed the unit in `--name` (`"P95 Latency (ms)"`, `"Memory (MiB)"`); scale magnitudes in MPL (`| map / 1048576` for bytes → MiB).
 
 #### 3. Breakdowns (TimeSeries or Table panels)
-Per-entity detail — answer "where should I look?"
-- Metrics broken down by entity (room, host, pod, service)
-- Filter by tag values to keep series count manageable
-- Use separate panels per dimension rather than one overloaded chart
+Per-entity detail — "where should I look?"
+- Metrics broken down by entity (host, pod, service).
+- Filter to keep series count manageable.
+- One dimension per panel; don't overload a single chart.
 
 #### 4. Entity State (TimeSeries or Table panels)
 Boolean/state metrics — answer "what is on/off/active?"
-- Use `align to $__interval using last` for state metrics
-- Sparse metrics may need wider **fixed** align intervals (1h+) to show data — this is the documented exception to the `$__interval` rule
-
----
-
-## Layout Auto-Normalization
-
-The console uses `react-grid-layout` which requires `minH`, `minW`, `moved`, and `static` on every layout entry. The `dashboard-create` and `dashboard-update` scripts auto-fill these if omitted, so layout entries only need `i`, `x`, `y`, `w`, `h`.
+- Use `align to $__interval using last`.
+- Sparse state metrics may need a fixed wider interval (1h+).
 
 ---
 
 ## Required Chart Structure
 
-**Every chart MUST have a unique `id` field.** Every layout entry's `i` field MUST reference a chart `id`. Missing or mismatched IDs will corrupt the dashboard in the UI (blank state, unable to save/revert).
-
-```json
-{
-  "charts": [
-    {
-      "id": "error-rate",
-      "name": "Error Rate",
-      "type": "Statistic",
-      "query": { "apl": "..." }
-    }
-  ],
-  "layout": [
-    {"i": "error-rate", "x": 0, "y": 0, "w": 3, "h": 2}
-  ]
-}
-```
-
-Use descriptive kebab-case IDs (e.g. `error-rate`, `p95-latency`, `traffic-rps`). The `dashboard-validate` and deploy scripts enforce this automatically.
+Each chart needs a unique kebab-case `id` (`error-rate`, `p95-latency`); every layout `i` must match one. Pass the same id to `chart-add --id` and `layout-pack <id>:…`. `dashboard-assemble` cross-checks before emit.
 
 ---
 
-## Metrics/MPL Chart Contract
+## Chart Unit Configuration
 
-Metrics-backed charts require both `query.apl` (the MPL pipeline string) and `query.metricsDataset` (the dataset name). The `metricsDataset` field is what tells the backend to interpret `apl` as MPL rather than APL — omitting it causes the chart to misbehave even if the pipeline string is well-formed.
-
-> **CRITICAL:** Run `scripts/metrics/metrics-spec <deployment> <dataset>` before composing your first MPL query in a session. NEVER guess MPL syntax.
->
-> **API gotcha:** Set `query.metricsDataset` to the dataset name (e.g. `"otel-metrics"`). The create API rejects `query.mpl` even though GET responses for existing metrics dashboards may include it — put the MPL string in `query.apl` instead.
-
-```json
-{
-  "type": "TimeSeries",
-  "query": {
-    "apl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| align to $__interval using avg\n| group by `service.name` using avg",
-    "metricsDataset": "otel-metrics"
-  }
-}
-```
-
-Validate queries with `scripts/metrics/metrics-query` before embedding in dashboard JSON.
-
-See `reference/metrics-mpl.md` for the full contract and discovery scripts.
+Pass a friendly unit string to `chart-add --unit` (`"%"`, `"s"`, `"ms"`, `"B"`, `"req/s"`). The script picks `unit` enum + `customUnits` suffix per chart type. `customUnits` is a label, not a formatter — scale magnitudes in MPL (`| map / 1048576` for bytes → MiB, `| map / 1000000` for bytes → MB, `| map * 100` for 0–1 ratio → percent). For metrics charts, read the source unit from `metrics-info … metrics <m> info` and pass it through. Internals (advanced options the agent may merge with `jq`): [reference/chart-config.md](./reference/chart-config.md).
 
 ---
 
-## Chart Types
+## Compute or Defer
 
-**Note:** Dashboard queries inherit time from the UI picker—no explicit `_time` filter needed.
+Each panel either computes the requested quantity, or it's replaced by a `Note` documenting the blocker. Substituting a different quantity is never acceptable — disclaimers don't reach whoever acts on the number.
 
-**Validation:** TimeSeries, Statistic, Table, Pie, LogStream, Note, MonitorList are fully validated by `dashboard-validate`. Heatmap, ScatterPlot, SmartFilter work but may trigger warnings.
+Defer template (use `chart-add --type Note`):
 
-### Statistic
-**When:** Single KPI, current value, threshold comparison.
+```
+**Deferred — blocked by:** <one-line reason>.
 
-```apl
-['logs']
-| where service == "api"
-| summarize 
-    total = count(),
-    errors = countif(status >= 500)
-| extend error_rate = round(100.0 * errors / total, 2)
-| project error_rate
+**Original spec:** <what the panel should compute, dimensions, unit>.
+
+**To unblock:** <pointer to the fix>.
 ```
 
-**Pitfalls:** Don't use for time series; ensure query returns single row.
-
-### TimeSeries
-**When:** Trends over time, before/after comparison, rate changes.
-
-```apl
-// Single metric - use bin_auto for automatic sizing
-['logs']
-| summarize ['req/min'] = count() by bin_auto(_time)
-
-// Latency percentiles - use percentiles_array for proper overlay
-['logs']
-| summarize percentiles_array(duration_ms, 50, 95, 99) by bin_auto(_time)
-```
-
-**Best practices:**
-- Use `bin_auto(_time)` instead of fixed `bin(_time, 1m)` — auto-adjusts to time window
-- Use `percentiles_array()` instead of multiple `percentile()` calls — renders as one chart
-- Too many series = unreadable; use `top N` or filter
-
-### Table
-**When:** Top-N lists, detailed breakdowns, exportable data.
-
-```apl
-['logs']
-| where status >= 500
-| summarize errors = count() by route, error_message
-| top 10 by errors
-| project route, error_message, errors
-```
-
-**Pitfalls:**
-- Always use `top N` to prevent unbounded results
-- Use `project` to control column order and names
-
-### Pie
-**When:** Share-of-total for LOW cardinality dimensions (≤6 slices).
-
-```apl
-['logs']
-| summarize count() by status_class = case(
-    status < 300, "2xx",
-    status < 400, "3xx",
-    status < 500, "4xx",
-    "5xx"
-  )
-```
-
-**Pitfalls:**
-- Never use for high cardinality (routes, user IDs)
-- Prefer tables for >6 categories
-- Always aggregate to reduce slices
-
-### LogStream
-**When:** Raw event inspection, debugging, evidence gathering.
-
-```apl
-['logs']
-| where service == "api" and status >= 500
-| project-keep _time, trace_id, route, status, error_message, duration_ms
-| take 100
-```
-
-**Pitfalls:**
-- Always include `take N` (100-500 max)
-- Use `project-keep` to show relevant fields only
-- Filter aggressively—raw logs are expensive
-
-### Heatmap
-**When:** Distribution visualization, latency patterns, density analysis.
+Common blockers: MPL parser limits, missing tag with no reverse-tag equivalent, missing metric with no OTel rename match. Full rationale: [reference/design-playbook.md § Substituting a Different Quantity](./reference/design-playbook.md#substituting-a-different-quantity-for-the-asked-one).
 
 ```apl
 ['logs']
@@ -347,84 +210,48 @@ No APL needed—select monitors from the UI. Shows:
 - Run history (green/red squares)
 - Dataset, type, notifiers
 
-### Note
-**When:** Context, instructions, section headers.
+## Chart Types
 
-Use GitHub Flavored Markdown for:
-- Dashboard purpose and audience
-- Runbook links
-- Section dividers
-- On-call instructions
+| Type          | When                                                | Key constraint                                                       |
+|---------------|-----------------------------------------------------|----------------------------------------------------------------------|
+| Statistic     | Single KPI, current value                           | Query must return one row.                                           |
+| TimeSeries    | Trends over time, percentile overlays               | `bin_auto(_time)`; `percentiles_array()` for multi-percentile.       |
+| Table         | Top-N lists, breakdowns                             | Bound with `top N`; control columns via `project`.                   |
+| Pie           | Share-of-total for ≤6 categories                    | Aggregate to ≤6 slices; never high-cardinality.                      |
+| LogStream     | Raw event inspection                                | `take 100–500`; `project-keep` to relevant fields; filter hard.      |
+| Heatmap       | Distribution / latency density                      | `summarize histogram(field, buckets) by bin_auto(_time)`.            |
+| Scatter Plot  | Correlate two metrics per group                     | `summarize avg(x), avg(y) by group`.                                 |
+| SmartFilter   | Interactive filter bar                              | Each panel query needs `declare query_parameters`. See `reference/smartfilter.md`. |
+| Monitor List  | Monitor status display                              | No APL — select monitors in UI.                                      |
+| Note          | Markdown context, headers, runbook links            | `chart-add --type Note --text "<md>"`.                               |
+
+Per-type APL recipes: `reference/chart-cookbook.md`.
 
 ---
 
 ## Chart Configuration
 
-Charts support JSON configuration options beyond the query. See `reference/chart-config.md` for full details.
-
-**Quick reference:**
-
-| Chart Type | Key Options |
-|------------|-------------|
-| Statistic | `colorScheme`, `customUnits`, `unit`, `showChart` (sparkline), `errorThreshold`/`warningThreshold` |
-| TimeSeries | `aggChartOpts`: `variant` (line/area/bars), `scaleDistr` (linear/log), `displayNull` |
-| LogStream/Table | `tableSettings`: `columns`, `fontSize`, `highlightSeverity`, `wrapLines` |
-| Pie | `hideHeader` |
-| Note | `text` (markdown), `variant` |
-
-**Common options (all charts):**
-- `overrideDashboardTimeRange`: boolean
-- `overrideDashboardCompareAgainst`: boolean  
-- `hideHeader`: boolean
+`chart-add` covers the common path (type, id, name, query, dataset, unit, sparkline). For options it doesn't expose — `aggChartOpts` variants on TimeSeries, `tableSettings.columns` on Table/LogStream, `hideHeader`, etc. — start from a `chart-add` output and merge the extra fields with `jq`. See `reference/chart-config.md` for the full option set, and the rejected-field list before merging anything bespoke.
 
 ---
 
 ## APL Patterns
 
-### Time Filtering in Dashboards vs Ad-hoc Queries
+### Time Filtering
 
-**Dashboard panel queries do NOT need explicit time filters.** The dashboard UI time picker automatically scopes all queries to the selected time window.
-
-```apl
-// DASHBOARD QUERY — no time filter needed
-['logs']
-| where service == "api"
-| summarize count() by bin_auto(_time)
-```
-
-**Ad-hoc queries (Axiom Query tab, axiom-sre exploration) MUST have explicit time filters:**
-
-```apl
-// AD-HOC QUERY — always include time filter
-['logs']
-| where _time between (ago(1h) .. now())
-| where service == "api"
-| summarize count() by bin_auto(_time)
-```
+Dashboard chart queries inherit time from the picker — omit `_time` filters. Ad-hoc queries (Axiom Query tab, `axiom-sre`) need an explicit `where _time between (ago(1h) .. now())`.
 
 ### Bin Size Selection
 
-**Prefer `bin_auto(_time)`** — it automatically adjusts to the dashboard time window.
-
-Manual bin sizes (only when auto doesn't fit your needs):
-
-| Time window | Bin size |
-|-------------|----------|
-| 15m | 10s–30s |
-| 1h | 1m |
-| 6h | 5m |
-| 24h | 15m–1h |
-| 7d | 1h–6h |
+Use `bin_auto(_time)` — it adjusts to the dashboard time window. Manual `bin(_time, …)` is only justified for non-standard cases (e.g. matching an upstream batch interval); document why.
 
 ### Cardinality Guardrails
-Prevent query explosion:
+
+Bound `summarize … by …` with `top N` or a filter. Unbounded grouping on high-cardinality fields (`user_id`, `trace_id`) blows up.
 
 ```apl
-// GOOD: bounded
-| summarize count() by route | top 10 by count_
-
-// BAD: unbounded high-cardinality grouping
-| summarize count() by user_id  // millions of rows
+| summarize count() by route | top 10 by count_   // bounded
+| summarize count() by user_id                    // unbounded — avoid
 ```
 
 ### Field Escaping
@@ -440,71 +267,27 @@ Fields with dots IN the name (not hierarchy) need escaping:
 | where ['kubernetes.labels.app\\.kubernetes\\.io/name'] == "frontend"
 ```
 
-### Golden Signal Queries
+### Recipes
 
-**Traffic:**
-```apl
-| summarize requests = count() by bin_auto(_time)
-```
-
-**Errors (as rate %):**
-```apl
-| summarize total = count(), errors = countif(status >= 500) by bin_auto(_time)
-| extend error_rate = iff(total > 0, round(100.0 * errors / total, 2), 0.0)
-| project _time, error_rate
-```
-
-**Latency (use percentiles_array for proper chart overlay):**
-```apl
-| summarize percentiles_array(duration_ms, 50, 95, 99) by bin_auto(_time)
-```
+Traffic, error-rate, latency-percentile, and other golden-signal APL recipes: `reference/chart-cookbook.md`.
 
 ---
 
 ## Layout Composition
 
-### Grid Principles
-- Dashboard width = 12 units
-- Typical panel: w=3 (quarter), w=4 (third), w=6 (half), w=12 (full)
-- Stats row: 4 panels × w=3, h=2
-- TimeSeries row: 2 panels × w=6, h=4
-- Tables: w=6 or w=12, h=4–6
-- LogStream: w=12, h=6–8
-
-### Section Layout Pattern
-
-```
-Row 0-1:  [Stat w=3] [Stat w=3] [Stat w=3] [Stat w=3]
-Row 2-5:  [TimeSeries w=6, h=4] [TimeSeries w=6, h=4]
-Row 6-9:  [Table w=6, h=4] [Pie w=6, h=4]
-Row 10+:  [LogStream w=12, h=6]
-```
-
-### Naming Conventions
-- Use question-style titles: "Error rate by route" not "Errors"
-- Prefix with context if multi-service: "[API] Error rate"
-- Include units: "Latency (ms)", "Traffic (req/s)"
+`layout-pack` packs charts row-major into the 12-column grid using per-type defaults (Statistic 3×3, TimeSeries 6×4, Table 6×5, LogStream 12×6, Note 12×2). Override with `id:WxH` when needed. Section blueprints: `reference/layout-recipes.md`. Naming and panel-ordering conventions: `reference/design-playbook.md`.
 
 ---
 
 ## Dashboard Settings
 
 ### Refresh Rate
-Dashboard auto-refreshes at configured interval. Options: 15s, 30s, 1m, 5m, etc.
 
-**⚠️ Query cost warning:** Short refresh (15s) + long time range (90d) = expensive queries running constantly.
-
-Recommendations:
-| Use case | Refresh rate |
-|----------|-------------|
-| Oncall/real-time | 15s–30s |
-| Team health | 1m–5m |
-| Executive/weekly | 5m–15m |
+`dashboard-assemble --refresh oncall|team|exec` (60/300/900s) or pass an explicit integer (≥60). Short refresh + long time range = expensive queries; pick the longer end for exec/weekly boards.
 
 ### Sharing
-All dashboards created via API tokens are shared with everyone in the org (`owner: "X-AXIOM-EVERYONE"`). Private dashboards are not supported with API tokens.
 
-Data visibility is still governed by dataset permissions—users only see data from datasets they can access.
+API tokens create shared dashboards only (`owner: "X-AXIOM-EVERYONE"`); private dashboards aren't supported. Per-user data visibility is still enforced by dataset permissions.
 
 ### URL Time Range Parameters
 
@@ -514,15 +297,7 @@ Data visibility is still governed by dataset permissions—users only see data f
 
 ## Setup
 
-Run `scripts/setup` to check requirements (curl, jq, ~/.axiom.toml).
-
-Config in `~/.axiom.toml` (shared with axiom-sre):
-```toml
-[deployments.prod]
-url = "https://api.axiom.co"
-token = "xaat-your-token"
-org_id = "your-org-id"
-```
+Tools, prerequisites, and `~/.axiom.toml` configuration: see `README.md`. Verify with `scripts/setup`.
 
 ---
 
@@ -532,6 +307,9 @@ org_id = "your-org-id"
 
 | Script | Usage |
 |--------|-------|
+| `scripts/chart-add --type <T> --id <id> --name <n> [--apl <q> \| --mpl <q> --dataset <d>] [--unit <u>]` | **Emit a single chart JSON** to stdout. Splits APL vs MPL; MPL queries are checked for inline time ranges; unit fields applied per chart type. |
+| `scripts/layout-pack <id>:<Type\|WxH> ...` | **Emit a layout JSON array** to stdout. Row-major into a 12-column grid; type names map to default sizes. |
+| `scripts/dashboard-assemble --name … --datasets … --layout F.json [opts] CHART_FILES…` | **Compose a complete dashboard JSON** from chart files + layout. Owns the envelope (`owner`, `schemaVersion`, `qr-` prefix, `refreshTime` validation, id cross-checks). |
 | `scripts/dashboard-list <deploy>` | List all dashboards |
 | `scripts/dashboard-get <deploy> <id>` | Fetch dashboard JSON |
 | `scripts/dashboard-validate <file>` | Validate JSON structure |
@@ -546,9 +324,10 @@ org_id = "your-org-id"
 | `scripts/metrics/datasets <deploy>` | List datasets with `kind` and edge deployment |
 | `scripts/metrics/metrics-spec <deploy> <dataset>` | Fetch MPL query specification |
 | `scripts/metrics/metrics-info <deploy> <dataset> ...` | Discover metrics, tags, and values |
-| `scripts/metrics/metrics-query <deploy> <mpl> <start> <end>` | Execute a metrics query |
+| `scripts/metrics/metrics-query <deploy> <mpl> <start> <end>` | Execute a metrics query (raw — no `$__interval` injection) |
+| `scripts/metrics/mpl-validate-chart <deploy> '<MPL>' [start] [end] [--interval D]` | **Validate a chart MPL pipeline.** Auto-injects `param $__interval: Duration;` and `-p __interval=…`; rejects inline time ranges. Use this in place of raw `metrics-query` when authoring chart queries. |
 
-> **⚠️ Two `axiom-api` scripts exist with different behaviors.** `scripts/axiom-api` rewrites URLs for the dashboard app API (`app.*`). `scripts/metrics/axiom-api` uses raw URLs and supports edge deployment routing. Using the wrong one will produce 404 errors.
+> The two `axiom-api` scripts are not interchangeable. `scripts/axiom-api` is for the dashboard app API; `scripts/metrics/axiom-api` is for data/metrics endpoints and edge routing. Wrong one → 404.
 
 ### Targeted Chart Updates
 
@@ -570,63 +349,29 @@ Use `--version <version>` for optimistic concurrency after fetching the dashboar
 
 ### Workflow
 
-**⚠️ CRITICAL: Always validate queries BEFORE deploying.**
+`chart-add`, `layout-pack`, and `dashboard-assemble` own the JSON shape. Each chart lives in its own temp file; nothing chart-shaped re-enters the agent's context.
 
-**APL workflow:**
-1. Design dashboard (sections + panels)
-2. Write APL for each panel
-3. Build JSON (from template or manually)
-4. **Validate queries** using axiom-sre with explicit time filter
-5. `dashboard-validate` to check structure
-6. `dashboard-create` or `dashboard-update` to deploy
-7. **`dashboard-link` to get URL** — NEVER construct Axiom URLs manually (org IDs and base URLs vary per deployment)
-8. Share link with user
-
-**Metrics/MPL workflow:**
-1. Run `scripts/metrics/metrics-spec` to learn MPL syntax
-2. Run `scripts/metrics/metrics-info` to discover metrics and tags
-3. Design dashboard using the Metrics/MPL Blueprint
-4. Write MPL for each panel
-5. **Validate queries** with `scripts/metrics/metrics-query` using explicit time range
-6. Build JSON: put the full MPL string in `query.apl` AND set `query.metricsDataset` to the dataset name (required — denotes the chart as MPL). Do not set `query.mpl` (rejected by create API).
-7. `dashboard-validate` to check structure
-8. `dashboard-create` or `dashboard-update` to deploy
-9. **`dashboard-link` to get URL**
-10. Share link with user
+1. Discover schema (`axiom-sre` / `getschema` for events; `metrics-spec` + `metrics-info` for metrics).
+2. Write each panel query. Validate APL via `axiom-sre` with an explicit time filter; validate MPL via `scripts/metrics/mpl-validate-chart`.
+3. `chart-add --type … --apl '<APL>'` *or* `chart-add --type … --mpl '<MPL>' --dataset <name>` per chart, redirected to its own file.
+4. `layout-pack <id>:<Type|WxH> …` for the layout (ids in display order).
+5. `dashboard-assemble --name … --datasets … --layout LAYOUT CHART_FILES…` to compose.
+6. `dashboard-validate` then `dashboard-create` (or `dashboard-update`).
+7. `dashboard-link` for the URL — never hand-construct.
 
 ---
 
 ## Sibling Skill Integration
 
-**spl-to-apl:** Translate Splunk SPL → APL. Map `timechart` → TimeSeries, `stats` → Statistic/Table. See `reference/splunk-migration.md`.
-
-**axiom-sre:** Discover schema with `getschema`, explore baselines, identify dimensions, then productize into panels.
-
-**query-metrics:** Discover metrics datasets, metric names, tags, and tag values. Metrics discovery scripts are also vendored locally in `scripts/metrics/`.
+- **spl-to-apl** — Splunk SPL → APL (`timechart` → TimeSeries, `stats` → Statistic/Table). See `reference/splunk-migration.md`.
+- **axiom-sre** — schema discovery via `getschema`, baseline exploration.
+- **query-metrics** — metrics dataset/tag/value discovery; same scripts vendored under `scripts/metrics/`.
 
 ---
 
 ## Templates
 
-Pre-built templates in `reference/templates/`:
-
-| Template | Use case |
-|----------|----------|
-| `service-overview.json` | Single service oncall dashboard with Heatmap |
-| `service-overview-with-filters.json` | Same with SmartFilter (route/status dropdowns) |
-| `api-health.json` | HTTP API with traffic/errors/latency |
-| `blank.json` | Minimal skeleton |
-
-**Placeholders:** `{{service}}`, `{{dataset}}`
-
-**Usage:**
-```bash
-scripts/dashboard-from-template service-overview "my-service" "my-dataset" ./dashboard.json
-scripts/dashboard-validate ./dashboard.json
-scripts/dashboard-create prod ./dashboard.json
-```
-
-**⚠️ Templates assume field names** (`service`, `status`, `route`, `duration_ms`). Discover your schema first and use `sed` to fix mismatches.
+Compose with `chart-add` + `layout-pack` + `dashboard-assemble`. Pre-built templates remain under `reference/templates/` (`blank.json`, `service-overview.json`, `service-overview-with-filters.json`, `api-health.json`) for legacy use; `dashboard-from-template` instantiates them but assumes specific field names (`service`, `status`, `route`, `duration_ms`) and needs sed-fixing. Prefer composition for new work.
 
 ---
 
@@ -634,19 +379,16 @@ scripts/dashboard-create prod ./dashboard.json
 
 | Problem | Cause | Solution |
 |---------|-------|----------|
-| "unable to find dataset" errors | Dataset name doesn't exist in your org | Check available datasets in Axiom UI |
-| "creating private dashboards" 403 | API tokens can only create shared dashboards | Use `owner: "X-AXIOM-EVERYONE"` (the default) |
-| All panels show errors | Field names don't match your schema | Discover schema first, use sed to fix field names |
-| Dashboard shows no data | Service filter too restrictive | Remove or adjust `where service == 'x'` filters |
-| Queries time out | Missing time filter or too broad | Dashboard inherits time from picker; ad-hoc queries need explicit time filter |
-| Wrong org in dashboard URL | Manually constructed URL | **Always use `dashboard-link <deploy> <id>`** — never guess org IDs or base URLs |
-| `getschema` returns 0 rows | Dataset is `otel:metrics:v1`, not events | Run `scripts/metrics/datasets <deploy>` to check kind; use `scripts/metrics/metrics-info` for metrics discovery |
-| Metrics discovery returns empty | Sparse metrics (sensors, batch, cron) outside default 24h window | Retry with `--start` set to 7 days ago; some metrics only report intermittently |
-| 404 from metrics API calls | Used `scripts/axiom-api` (dashboard) instead of `scripts/metrics/axiom-api` (data) | Use `scripts/metrics/axiom-api` for all `/v1/query/`, `/v1/datasets` paths |
-| `find-metrics` returns unexpected results | It searches tag values, not metric names | Use `metrics-info <deploy> <dataset> metrics` to list metric names; `find-metrics` finds metrics associated with a known tag value |
-| Metrics chart renders blank or wrong values | Missing `query.metricsDataset` — backend treats `apl` as APL, not MPL | Set `query.metricsDataset` to the dataset name alongside `query.apl` |
-| `query.mpl` rejected on create | GET may return `query.mpl` for existing metrics charts, but create expects `query.apl` | Move/copy the MPL string into `query.apl` before deploy |
-| `decimals` rejected on create | Create API does not accept chart-level `decimals` even though GET may return it | Omit `decimals` from create payloads |
+| `getschema` returns 0 rows | Dataset is `otel:metrics:v1` | Use `scripts/metrics/metrics-info` for metrics discovery. |
+| Metrics discovery returns empty | Sparse metrics outside the 24h default window | Retry with `--start` 7 days ago. |
+| 404 from metrics API calls | Used `scripts/axiom-api` (dashboard) instead of `scripts/metrics/axiom-api` | Use `scripts/metrics/axiom-api` for `/v1/query/*`, `/v1/datasets`. |
+| Statistic shows `1` instead of `100%` for a 0–1 ratio | `Percent` enum doesn't auto-multiply | `\| map * 100` in MPL, then `chart-add --unit "%"`. |
+| OTel histogram chart shows nonsense | Histogram aligned as a scalar | Use `bucket … using interpolate_cumulative_histogram` (or `_delta` per `temporality`). See [promql-to-mpl.md § Histogram translation](./reference/promql-to-mpl.md#histogram-translation-histogram_quantile--bucket--using-interpolate__histogram). |
+| Grafana migration filters/groups on the wrong subset | Read `expr` without `description`, or vice versa | Project all five panel fields before authoring; see [reference/grafana-migration.md](./reference/grafana-migration.md). |
+| PromQL metric name not found | Skipped OTel rename rules | Drop `_total`, decompose histograms, normalise units; validate with `metrics-info`. Labels need reverse-tag discovery. See [grafana-migration.md § Name Mapping](./reference/grafana-migration.md#name-mapping-promql--otel-ingest). |
+| MPL chart aggregates across a dimension PromQL filtered/grouped on | Dropped a selector or `by(...)` during translation | Every `{label=…}` → `where`; every `by(…)` → `group by`. See [reference/promql-to-mpl.md](./reference/promql-to-mpl.md). |
+| Panel shipped a different quantity than asked | Substituted instead of deferring | Replace with a `Note` documenting the blocker. See [Compute or Defer](#compute-or-defer). |
+| 403 "creating private dashboards" | API tokens only create shared dashboards | Leave `owner` as `dashboard-assemble`'s default (`X-AXIOM-EVERYONE`). |
 
 ---
 
@@ -658,6 +400,8 @@ scripts/dashboard-create prod ./dashboard.json
 - `reference/chart-cookbook.md` — APL patterns per chart type
 - `reference/layout-recipes.md` — Grid layouts and section blueprints
 - `reference/splunk-migration.md` — Splunk panel → Axiom mapping
+- `reference/grafana-migration.md` — Grafana panel → Axiom mapping (canonical-spec projection, PromQL→MPL pointers, OTel rename rules)
+- `reference/promql-to-mpl.md` — PromQL → MPL translation rules (selectors, groupings, rate, histograms, ratios, reverse-tag discovery)
 - `reference/design-playbook.md` — Decision-first design principles
 - `reference/templates/` — Ready-to-use dashboard JSON files
 

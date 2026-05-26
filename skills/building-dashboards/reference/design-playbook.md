@@ -2,23 +2,13 @@
 
 ## Decision-First Design
 
-Every dashboard exists to help someone make a decision. Before adding panels, answer:
+Each panel must inform a decision. Before adding one, answer:
 
-1. **Who is the audience?**
-   - Oncall engineer (needs fast triage, error focus)
-   - Team lead (needs weekly trends, SLO tracking)
-   - Executive (needs high-level health, business impact)
+1. **Audience:** oncall (fast triage), team lead (weekly trends, SLO), executive (high-level health).
+2. **Decision:** "Should I page?" / "Which service?" / "Are we meeting SLOs?" / "What changed after deploy?"
+3. **Action:** rollback, scale, investigate, escalate, ignore.
 
-2. **What decisions will they make?**
-   - "Should I page someone?"
-   - "Which service is causing this?"
-   - "Are we meeting our SLOs?"
-   - "What changed after the deploy?"
-
-3. **What actions follow?**
-   - Rollback, scale, investigate, escalate, ignore
-
-If a panel doesn't inform a decision → remove it.
+No decision → no panel.
 
 ---
 
@@ -39,10 +29,7 @@ Structure dashboards in layers:
 └─────────────────────────────────────────────────────────┘
 ```
 
-Users should be able to:
-1. Glance at overview → "something's wrong with errors"
-2. Scan drilldown → "it's the /checkout route"
-3. Dive into evidence → "null pointer in payment handler"
+Visual flow: glance overview ("errors are up") → scan drilldown ("on `/checkout`") → dive into evidence ("null pointer in payment handler").
 
 ---
 
@@ -105,6 +92,20 @@ Users should be able to:
 ### Generic Panel Names
 **Problem:** "Errors", "Latency", "Traffic" don't explain what you're looking at.
 **Fix:** Question-style names: "Error rate by route", "p95 latency trend", "Requests per minute".
+
+### Substituting a Different Quantity for the Asked One
+**Problem:** A panel asks for X (an availability ratio, say). X is blocked — parser limit, missing tag, missing metric. The author ships a different quantity Y labelled "Y replaces X."
+
+The disclaimer doesn't propagate to whoever acts on the number. The user reads Y's value and takes action; the panel-level caveat stays on the panel.
+
+**Fix:** Defer with a `Note` panel in the same layout slot. See [SKILL.md § Compute or Defer](../SKILL.md#compute-or-defer) for the template.
+
+Common blocked-X cases:
+- MPL parser can't express the ratio — try the blueprint in [`promql-to-mpl.md § Ratios`](./promql-to-mpl.md#ratios-and-division-compute--using-); if not applicable, defer.
+- Required tag absent + reverse-tag discovery yields no equivalent — defer.
+- Required metric absent + OTel rename rules yield no match — defer.
+
+Silent omission is worse than deferral: six months later, the next author can't tell whether a missing panel was forgotten or deferred for cause. A Note keeps the audit trail in place.
 
 ---
 

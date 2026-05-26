@@ -10,6 +10,13 @@
 #   cloud.us-east-1.aws    → https://us-east-1.aws.edge.axiom.co
 #   cloud.eu-central-1.aws → https://eu-central-1.aws.edge.axiom.co
 #   (null/empty)           → falls back to deployment URL from config
+#
+# Environment overrides:
+#   AXIOM_URL_OVERRIDE     → if set, returned verbatim and no API/cache
+#                            lookup is performed. Mirrors axiom-api's own
+#                            AXIOM_URL_OVERRIDE handling so callers can
+#                            point both scripts at a non-default edge with
+#                            a single env var.
 
 set -euo pipefail
 
@@ -21,6 +28,14 @@ DATASET="${2:-}"
 if [[ -z "$DEPLOYMENT" || -z "$DATASET" ]]; then
     echo "Usage: resolve-url <deployment> <dataset>" >&2
     exit 1
+fi
+
+# Honour an explicit override before touching the cache or the API.
+# Skipping the cache write keeps session-scoped overrides from leaking
+# into later invocations that don't set the env var.
+if [[ -n "${AXIOM_URL_OVERRIDE:-}" ]]; then
+    echo "$AXIOM_URL_OVERRIDE"
+    exit 0
 fi
 
 CONFIG_FILE="$HOME/.axiom.toml"
@@ -51,7 +66,7 @@ extract_value() {
 
 FALLBACK_URL=$(extract_value "url")
 
-EDGE_DEPLOYMENT=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET /v1/datasets \
+EDGE_DEPLOYMENT=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET /v2/datasets \
     | jq -r --arg name "$DATASET" '.[] | select(.name == $name) | .edgeDeployment // empty')
 
 RESOLVED_URL=""

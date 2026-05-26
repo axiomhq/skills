@@ -136,7 +136,6 @@
       "errorThresholdValue": "25",
       "id": "wow-change",
       "name": "Week-over-Week",
-      "overrideDashboardTimeRange": true,
       "query": {
         "apl": "declare query_parameters (org_filter:string = \"\", dataset_filter:string = \"\");\n['axiom-audit']\n| where _time between (ago(14d) .. now())\n| where action == 'usageCalculated'\n| where isempty(org_filter) or ['resource.id'] == org_filter\n| where isempty(dataset_filter) or tostring(['properties.dataset']) == dataset_filter\n| summarize this_week = sumif(['properties.hourly_ingest_bytes'], _time >= ago(7d)), last_week = sumif(['properties.hourly_ingest_bytes'], _time < ago(7d) and _time >= ago(14d))\n| extend ['WoW %'] = iff(last_week == 0, real(null), round(100.0 * (this_week - last_week) / last_week, 1))\n| project ['WoW %']"
       },
@@ -144,7 +143,6 @@
       "warningThreshold": "Above",
       "warningThresholdValue": "10"
     },
-
     {
       "colorScheme": "Green",
       "id": "active-datasets",
@@ -160,8 +158,6 @@
       "modified": 1769193868070,
       "name": "Daily Ingest by Dataset (GB)",
       "numSeries": 1,
-      "overrideDashboardCompareAgainst": false,
-      "overrideDashboardTimeRange": false,
       "query": {
         "apl": "declare query_parameters (org_filter:string = \"\", dataset_filter:string = \"\");\n[\"axiom-audit\"]\n| where action == \"usageCalculated\"\n| where isempty(org_filter) or [\"resource.id\"] == org_filter\n| where isempty(dataset_filter) or tostring([\"properties.dataset\"]) == dataset_filter\n| summarize [\"GB\"] = round(sum([\"properties.hourly_ingest_bytes\"]) / 1000000000, 1) by bin(_time, 1d), Dataset = tostring([\"properties.dataset\"])",
         "endTime": "",
@@ -190,9 +186,18 @@
       },
       "tableSettings": {
         "columns": [
-          {"name": "Dataset", "width": 200},
-          {"name": "Ingest GB", "width": 100},
-          {"name": "Query GB·ms", "width": 120}
+          {
+            "name": "Dataset",
+            "width": 200
+          },
+          {
+            "name": "Ingest GB",
+            "width": 100
+          },
+          {
+            "name": "Query GB·ms",
+            "width": 120
+          }
         ]
       },
       "type": "Table"
@@ -205,10 +210,22 @@
       },
       "tableSettings": {
         "columns": [
-          {"name": "Dataset", "width": 200},
-          {"name": "Ingest GB", "width": 100},
-          {"name": "Query GB·ms", "width": 120},
-          {"name": "Work/GB", "width": 90}
+          {
+            "name": "Dataset",
+            "width": 200
+          },
+          {
+            "name": "Ingest GB",
+            "width": 100
+          },
+          {
+            "name": "Query GB·ms",
+            "width": 120
+          },
+          {
+            "name": "Work/GB",
+            "width": 90
+          }
         ]
       },
       "type": "Table"
@@ -221,10 +238,22 @@
       },
       "tableSettings": {
         "columns": [
-          {"name": "Org", "width": 180},
-          {"name": "Ingest GB", "width": 100},
-          {"name": "Query GB·ms", "width": 120},
-          {"name": "Datasets", "width": 80}
+          {
+            "name": "Org",
+            "width": 180
+          },
+          {
+            "name": "Ingest GB",
+            "width": 100
+          },
+          {
+            "name": "Query GB·ms",
+            "width": 120
+          },
+          {
+            "name": "Datasets",
+            "width": 80
+          }
         ]
       },
       "type": "Table"
@@ -255,11 +284,26 @@
       },
       "tableSettings": {
         "columns": [
-          {"name": "Dataset", "width": 180},
-          {"name": "This Week GB", "width": 110},
-          {"name": "Last Week GB", "width": 110},
-          {"name": "Delta GB", "width": 90},
-          {"name": "Delta %", "width": 80}
+          {
+            "name": "Dataset",
+            "width": 180
+          },
+          {
+            "name": "This Week GB",
+            "width": 110
+          },
+          {
+            "name": "Last Week GB",
+            "width": 110
+          },
+          {
+            "name": "Delta GB",
+            "width": 90
+          },
+          {
+            "name": "Delta %",
+            "width": 80
+          }
         ]
       },
       "type": "Table"
@@ -272,9 +316,18 @@
       },
       "tableSettings": {
         "columns": [
-          {"name": "User", "width": 250},
-          {"name": "Cost GB·ms", "width": 120},
-          {"name": "Queries", "width": 80}
+          {
+            "name": "User",
+            "width": 250
+          },
+          {
+            "name": "Cost GB·ms",
+            "width": 120
+          },
+          {
+            "name": "Queries",
+            "width": 80
+          }
         ]
       },
       "type": "Table"
@@ -287,9 +340,18 @@
       },
       "tableSettings": {
         "columns": [
-          {"name": "User", "width": 180},
-          {"name": "Cost GB·ms", "width": 100},
-          {"name": "Query", "width": 300}
+          {
+            "name": "User",
+            "width": 180
+          },
+          {
+            "name": "Cost GB·ms",
+            "width": 100
+          },
+          {
+            "name": "Query",
+            "width": 300
+          }
         ]
       },
       "type": "Table"
@@ -338,11 +400,26 @@
       },
       "tableSettings": {
         "columns": [
-          {"name": "Dataset", "width": 140},
-          {"name": "Field", "width": 180},
-          {"name": "Op", "width": 70},
-          {"name": "Value", "width": 150},
-          {"name": "Queries", "width": 80}
+          {
+            "name": "Dataset",
+            "width": 140
+          },
+          {
+            "name": "Field",
+            "width": 180
+          },
+          {
+            "name": "Op",
+            "width": 70
+          },
+          {
+            "name": "Value",
+            "width": 150
+          },
+          {
+            "name": "Queries",
+            "width": 80
+          }
         ]
       }
     }
@@ -353,26 +430,146 @@
   ],
   "description": "Usage monitoring dashboard for tracking ingest volume, query costs, burn rate projections, and waste identification. Filter by org to scope analysis.",
   "layout": [
-    { "i": "filters", "x": 0, "y": 0, "w": 12, "h": 1 },
-    { "i": "total-ingest-gb", "x": 0, "y": 1, "w": 3, "h": 2 },
-    { "i": "daily-burn-rate", "x": 3, "y": 1, "w": 3, "h": 2 },
-    { "i": "monthly-projection", "x": 6, "y": 1, "w": 3, "h": 2 },
-    { "i": "over-contract-pct", "x": 9, "y": 1, "w": 3, "h": 2 },
-    { "i": "required-cut-pct", "x": 0, "y": 3, "w": 3, "h": 2 },
-    { "i": "wow-change", "x": 3, "y": 3, "w": 3, "h": 2 },
-    { "i": "total-query-cost", "x": 6, "y": 3, "w": 3, "h": 2 },
-    { "i": "active-datasets", "x": 9, "y": 3, "w": 3, "h": 2 },
-    { "i": "ingest-by-dataset-ts", "x": 0, "y": 5, "w": 6, "h": 4 },
-    { "i": "query-cost-by-dataset-ts", "x": 6, "y": 5, "w": 6, "h": 4 },
-    { "i": "wow-ingest-delta", "x": 0, "y": 9, "w": 6, "h": 4 },
-    { "i": "waste-candidates", "x": 6, "y": 9, "w": 6, "h": 4 },
-    { "i": "top-datasets-ingest", "x": 0, "y": 13, "w": 6, "h": 4 },
-    { "i": "top-orgs", "x": 6, "y": 13, "w": 6, "h": 4 },
-    { "i": "top-queried-fields", "x": 0, "y": 17, "w": 6, "h": 4 },
-    { "i": "note-actions", "x": 6, "y": 17, "w": 6, "h": 4 },
-    { "i": "top-users-query-cost", "x": 0, "y": 21, "w": 6, "h": 4 },
-    { "i": "top-expensive-queries", "x": 6, "y": 21, "w": 6, "h": 4 },
-    { "i": "queries-per-user-ts", "x": 0, "y": 25, "w": 12, "h": 4 }
+    {
+      "i": "filters",
+      "x": 0,
+      "y": 0,
+      "w": 12,
+      "h": 1
+    },
+    {
+      "i": "total-ingest-gb",
+      "x": 0,
+      "y": 1,
+      "w": 3,
+      "h": 2
+    },
+    {
+      "i": "daily-burn-rate",
+      "x": 3,
+      "y": 1,
+      "w": 3,
+      "h": 2
+    },
+    {
+      "i": "monthly-projection",
+      "x": 6,
+      "y": 1,
+      "w": 3,
+      "h": 2
+    },
+    {
+      "i": "over-contract-pct",
+      "x": 9,
+      "y": 1,
+      "w": 3,
+      "h": 2
+    },
+    {
+      "i": "required-cut-pct",
+      "x": 0,
+      "y": 3,
+      "w": 3,
+      "h": 2
+    },
+    {
+      "i": "wow-change",
+      "x": 3,
+      "y": 3,
+      "w": 3,
+      "h": 2
+    },
+    {
+      "i": "total-query-cost",
+      "x": 6,
+      "y": 3,
+      "w": 3,
+      "h": 2
+    },
+    {
+      "i": "active-datasets",
+      "x": 9,
+      "y": 3,
+      "w": 3,
+      "h": 2
+    },
+    {
+      "i": "ingest-by-dataset-ts",
+      "x": 0,
+      "y": 5,
+      "w": 6,
+      "h": 4
+    },
+    {
+      "i": "query-cost-by-dataset-ts",
+      "x": 6,
+      "y": 5,
+      "w": 6,
+      "h": 4
+    },
+    {
+      "i": "wow-ingest-delta",
+      "x": 0,
+      "y": 9,
+      "w": 6,
+      "h": 4
+    },
+    {
+      "i": "waste-candidates",
+      "x": 6,
+      "y": 9,
+      "w": 6,
+      "h": 4
+    },
+    {
+      "i": "top-datasets-ingest",
+      "x": 0,
+      "y": 13,
+      "w": 6,
+      "h": 4
+    },
+    {
+      "i": "top-orgs",
+      "x": 6,
+      "y": 13,
+      "w": 6,
+      "h": 4
+    },
+    {
+      "i": "top-queried-fields",
+      "x": 0,
+      "y": 17,
+      "w": 6,
+      "h": 4
+    },
+    {
+      "i": "note-actions",
+      "x": 6,
+      "y": 17,
+      "w": 6,
+      "h": 4
+    },
+    {
+      "i": "top-users-query-cost",
+      "x": 0,
+      "y": 21,
+      "w": 6,
+      "h": 4
+    },
+    {
+      "i": "top-expensive-queries",
+      "x": 6,
+      "y": 21,
+      "w": 6,
+      "h": 4
+    },
+    {
+      "i": "queries-per-user-ts",
+      "x": 0,
+      "y": 25,
+      "w": 12,
+      "h": 4
+    }
   ],
   "name": "Org Usage & Cost Control",
   "owner": "8bc79245-bc38-4a2b-a37e-2e5b2fd5ec70",

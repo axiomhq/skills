@@ -11,6 +11,11 @@
 #   5. Chart IDs match layout IDs
 #   6. LogStream queries have take limits
 #   7. Grid layout doesn't exceed 12 columns
+#   8. Per-chart-kind closed-field schema (mirrors the create API)
+#      - Source of truth: reference/chart-config.md
+#        § Fields Rejected on Create (Cross-Chart)
+#      - Verified empirically against staging create endpoint
+#        (28-cell + 3 null-value probes, 2026-05-08)
 #
 # Options:
 #   --strict  Treat warnings as errors
@@ -137,6 +142,59 @@ fi
 missing_min=$(jq -r '.layout[] | select(.minH == null or .minW == null) | .i' "$FILE" 2>/dev/null || true)
 if [[ -n "$missing_min" ]]; then
     info "$(echo "$missing_min" | wc -l | tr -d ' ') layout entries missing minH/minW (will be auto-fixed on deploy)"
+fi
+
+# 12. Per-chart-kind closed-field schema check.
+#
+# The create API rejects certain fields per chart kind with HTTP 400 and a
+# uniform error string:
+#   dashboard validation failed at [charts <i>]: Unrecognized key: "<field>"
+#
+# Rules (verified empirically; see reference/chart-config.md
+# § Fields Rejected on Create):
+#   - decimals    : rejected on every chart kind (universal)
+#   - description : rejected on every chart kind (universal; chart-level only,
+#                   the dashboard-level top-level description is fine)
+#   - options     : rejected on every chart kind (universal). Common
+#                   carry-over from Grafana text panels (options.content)
+#                   or over-generalization from Axiom's nested chart options
+#                   like tableSettings / aggChartOpts. Note `text` is a
+#                   top-level chart field, not nested under options.
+#   - unit        : rejected on TimeSeries, Heatmap, Pie, Table, LogStream, Note
+#                   (i.e. every kind except Statistic)
+#   - customUnits : rejected on Note only
+#
+# Only flag when the field is present AND non-null — the API treats null as
+# field-absent and strips the key on ingest, so null-valued rejected keys
+# create successfully. Flagging null would over-flag and block deploys for
+# payloads the API would actually accept.
+#
+# Unknown chart .type values are skipped silently — we don't have empirical
+# evidence for chart kinds the probe didn't cover, and false-flagging a valid
+# future kind is worse than missing one rejection.
+schema_violations=$(jq -r '
+  .charts | to_entries[] |
+    .key as $idx |
+    .value.type as $t |
+    .value as $c |
+    # Universal rejections
+    (if $c.decimals != null    then "\($idx)\tdecimals"    else empty end),
+    (if $c.description != null then "\($idx)\tdescription" else empty end),
+    (if $c.options != null     then "\($idx)\toptions"     else empty end),
+    # unit rejected on every kind except Statistic (only for kinds we have
+    # empirical evidence for)
+    (if (["TimeSeries","Heatmap","Pie","Table","LogStream","Note"] | index($t)) and $c.unit != null
+     then "\($idx)\tunit" else empty end),
+    # customUnits rejected on Note
+    (if $t == "Note" and $c.customUnits != null
+     then "\($idx)\tcustomUnits" else empty end)
+' "$FILE" 2>/dev/null || true)
+
+if [[ -n "$schema_violations" ]]; then
+    while IFS=$'\t' read -r idx field; do
+        [[ -z "$idx" ]] && continue
+        error "API will reject — dashboard validation failed at [charts $idx]: Unrecognized key: \"$field\""
+    done <<< "$schema_violations"
 fi
 
 # Summary
