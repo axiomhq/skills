@@ -271,24 +271,51 @@ Each scorer runs independently. Results are reported per-scorer in the Axiom con
 
 ## Pattern 9: Async Scorer (LLM-as-Judge)
 
-**When:** Using another LLM to evaluate output quality.
+**When:** A failure mode requires interpretation (tone, faithfulness, relevance). Use only after exhausting code-based checks — many failures that seem subjective reduce to keyword checks, regex, or API calls. Example: detecting whether an AI coach suggests "general" questions instead of specific ones seems semantic, but a keyword check for "usually," "typical," "normally" works well.
+
+One judge per failure mode. Binary pass/fail. Critique before verdict. Every judge prompt needs these 4 components — adapt each to the specific failure mode:
+
+1. **Criterion** — "You are an evaluator assessing whether [specific failure mode]."
+2. **Pass/Fail definitions** — Exact conditions for each, derived from error analysis.
+3. **Few-shot examples** — 1 clear pass, 1 clear fail, 1 borderline (from labeled traces, not from your eval `data:` array).
+4. **Structured output** — Critique first, then verdict.
+
+Example — faithfulness judge:
 
 ```typescript
-const LLMJudge = Scorer(
-  'llm-judge',
-  async ({ output, expected }: { output: string; expected: string }) => {
-    const result = await generateText({
-      model: openai('gpt-4o-mini'),
-      prompt: `Rate how well this output matches the expected answer.
-Expected: ${expected}
-Actual: ${output}
-Return a number 0-1 where 1 is perfect match.`,
+const FaithfulnessJudge = Scorer(
+  'faithfulness-judge',
+  async ({ output, input }: { output: string; input: string }) => {
+    const { object } = await generateObject({
+      model: openai('gpt-4o'),
+      schema: z.object({
+        critique: z.string(),
+        result: z.enum(['Pass', 'Fail']),
+      }),
+      prompt: `You are an evaluator assessing whether the response is faithful to the provided context — it must not state facts absent from the context.
+
+Pass: Every claim in the response is supported by the context.
+Fail: The response contains at least one claim not found in the context.
+
+Examples:
+- Context: "Store hours are 9-5 Mon-Fri." Response: "We're open 9-5 weekdays." → Pass
+- Context: "Store hours are 9-5 Mon-Fri." Response: "We're open 9-5 every day." → Fail (added weekends)
+
+Context: ${input}
+Response: ${output}
+
+First write a critique examining each claim, then give your verdict.`,
     });
-    const score = parseFloat(result.text);
-    return isNaN(score) ? 0 : Math.max(0, Math.min(1, score));
+    return object.result === 'Pass';
   },
 );
 ```
+
+**Rules:**
+- Pass only what the judge needs — don't dump the full trace if it only needs context + response.
+- Few-shot examples must not overlap with your eval `data:` array (data leakage).
+- Start with the most capable model; optimize cost after alignment is confirmed.
+- After writing a judge, validate it against human labels using TPR/TNR (not raw accuracy) before trusting its scores. Target: both >90%.
 
 **Pitfall:** Async scorers add latency and cost. Use sparingly, consider `sampling` in online evals.
 
