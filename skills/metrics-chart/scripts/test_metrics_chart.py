@@ -155,6 +155,29 @@ class ReductionTests(unittest.TestCase):
         self.assertEqual(len(reps), 2)
         self.assertEqual(n_collapsed, 0)
 
+    def test_flat_disjoint_series_do_not_collapse(self):
+        # Both constant at 5.0 (global range == 0) but with NO timestamps in
+        # common: their lines never align, so they must stay distinct. A naive
+        # rng==0 short-circuit would wrongly merge them and drop one series.
+        a = mc.Series(label="a", metric="m", tags={}, start=0,
+                      resolution=60, values=[5.0, 5.0, 5.0])    # t=0,60,120
+        b = mc.Series(label="b", metric="m", tags={}, start=180,
+                      resolution=60, values=[5.0, 5.0, 5.0])    # t=180,240,300
+        reps, n_collapsed = mc.collapse_overlapping([a, b], eps=0.02)
+        self.assertEqual(sorted(s.label for s in reps), ["a", "b"])
+        self.assertEqual(n_collapsed, 0)
+
+    def test_flat_overlapping_identical_series_collapse(self):
+        # Same constant value AND same timestamps: the lines coincide exactly,
+        # so they should still collapse to a single representative.
+        a = mc.Series(label="a", metric="m", tags={}, start=0,
+                      resolution=60, values=[5.0, 5.0, 5.0])
+        b = mc.Series(label="b", metric="m", tags={}, start=0,
+                      resolution=60, values=[5.0, 5.0, 5.0])
+        reps, n_collapsed = mc.collapse_overlapping([a, b], eps=0.02)
+        self.assertEqual(len(reps), 1)
+        self.assertEqual(n_collapsed, 1)
+
     def test_select_caps_at_top_n_and_counts_dropped(self):
         # 5 clearly-separated series, keep top 2 by peak.
         ss = [self._series(str(i), [float(i * 100)]) for i in range(1, 6)]
