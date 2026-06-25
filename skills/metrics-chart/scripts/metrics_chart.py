@@ -185,7 +185,10 @@ def collapse_overlapping(series: list, eps: float = 0.02) -> "tuple[list, int]":
 
     reps: list = []
     for s in sorted(series, key=Series.peak, reverse=True):
-        if any(rng == 0 or _aligned_max_diff(s, r) <= eps * rng for r in reps):
+        # _aligned_max_diff returns +inf for series with no shared timestamps,
+        # so disjoint lines never collapse even when rng == 0 (all values equal
+        # collapses eps*rng to 0, which still demands an exact overlap).
+        if any(_aligned_max_diff(s, r) <= eps * rng for r in reps):
             continue
         reps.append(s)
     return reps, len(series) - len(reps)
