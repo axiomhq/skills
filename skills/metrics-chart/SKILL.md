@@ -127,7 +127,7 @@ Do not paste the PNG bytes or the ASCII into chat.
 | ------------------- | ------- | -------------------------------------------------- |
 | `--format`          | `auto`  | `auto`/`ascii`/`png`/`svg`/`sixel`.                |
 | `--tz NAME`         | local   | IANA tz for the x-axis; `UTC` for UTC.             |
-| `--top N`           | `8`     | Max series drawn after collapsing overlaps.        |
+| `--top N`           | `8`     | Max series after collapse; must be >= 1.           |
 | `--eps F`           | `0.02`  | Overlap threshold as a fraction of the y-range.    |
 | `--all`             | off     | Draw every series (disable collapse + top-N).      |
 | `--width` / `--height` | auto | Chart size (cells for ASCII, pixels for images).   |

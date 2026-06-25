@@ -579,6 +579,19 @@ def _resolve_format(requested: str, has_gnuplot: bool, image_kind: Optional[str]
     return "png"            # piped/captured (e.g. agent): write a file to display.
 
 
+def _positive_int(value: str) -> int:
+    # --top is a peak cap, not a Python slice: 0 selects nothing and negatives
+    # drop a suffix (reps[:top_n]), so an empty plot would reach gnuplot. Reject
+    # non-positive values at the CLI boundary instead.
+    try:
+        n = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid int value: {value!r}")
+    if n < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return n
+
+
 def _resolve_tz(name: Optional[str]) -> Optional[tzinfo]:
     if name is None:
         return None  # local time (datetime.fromtimestamp with tz=None)
@@ -596,7 +609,8 @@ def main(argv=None) -> int:
     p.add_argument("--format", choices=["auto", "ascii", "png", "svg", "sixel"],
                    default="auto")
     p.add_argument("--tz", help="IANA tz name (default: local; 'UTC' for UTC)")
-    p.add_argument("--top", type=int, default=8, help="max series to draw (default 8)")
+    p.add_argument("--top", type=_positive_int, default=8,
+                   help="max series to draw (default 8); must be >= 1")
     p.add_argument("--eps", type=float, default=0.02,
                    help="overlap threshold as fraction of y-range (default 0.02)")
     p.add_argument("--all", action="store_true",

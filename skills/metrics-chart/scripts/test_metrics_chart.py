@@ -9,6 +9,8 @@ application/vnd.metrics.v3+json.
 
 from __future__ import annotations
 
+import argparse
+import io
 import json
 import unittest
 
@@ -313,6 +315,55 @@ class InlineEscapeTests(unittest.TestCase):
         out = self._capture(mc.emit_kitty, b"abc")
         self.assertIn("\x1b_Ga=T,f=100,q=2,m=0;", out)  # small => one chunk
         self.assertIn("\x1b\\", out)
+
+
+class TopValidationTests(unittest.TestCase):
+    # --top is a peak cap, not a Python slice: it must be a positive integer.
+    # Non-positive values previously fed reps[:top_n], so --top 0 selected
+    # nothing and negatives dropped a suffix, producing an empty gnuplot plot.
+    def test_positive_int_accepts_positive_values(self):
+        self.assertEqual(mc._positive_int("1"), 1)
+        self.assertEqual(mc._positive_int("8"), 8)
+
+    def test_positive_int_rejects_zero(self):
+        with self.assertRaises(argparse.ArgumentTypeError):
+            mc._positive_int("0")
+
+    def test_positive_int_rejects_negative(self):
+        with self.assertRaises(argparse.ArgumentTypeError):
+            mc._positive_int("-3")
+
+    def test_positive_int_rejects_non_integer(self):
+        with self.assertRaises(argparse.ArgumentTypeError):
+            mc._positive_int("abc")
+
+    def _run_main(self, argv):
+        # Feed a valid one-series payload so the only failure mode under test is
+        # --top validation, which must happen before any input is consumed.
+        old_stdin = mc.sys.stdin
+        old_stderr = mc.sys.stderr
+        err = io.StringIO()
+        mc.sys.stdin = io.TextIOWrapper(io.BytesIO(json.dumps(V3_DOC).encode()))
+        mc.sys.stderr = err
+        try:
+            return mc.main(argv), err.getvalue()
+        finally:
+            mc.sys.stdin = old_stdin
+            mc.sys.stderr = old_stderr
+
+    def test_main_rejects_top_zero(self):
+        with self.assertRaises(SystemExit) as ctx:
+            self._run_main(["--top", "0", "--format", "ascii"])
+        self.assertEqual(ctx.exception.code, 2)
+
+    def test_main_rejects_top_negative(self):
+        with self.assertRaises(SystemExit) as ctx:
+            self._run_main(["--top", "-2", "--format", "ascii"])
+        self.assertEqual(ctx.exception.code, 2)
+
+    def test_main_accepts_top_one(self):
+        rc, _ = self._run_main(["--top", "1", "--format", "ascii"])
+        self.assertEqual(rc, 0)
 
 
 if __name__ == "__main__":
