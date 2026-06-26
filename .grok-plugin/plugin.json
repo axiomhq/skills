@@ -1,0 +1,13 @@
+{
+  "name": "axiom",
+  "version": "1.0.0",
+  "description": "Agent skills for the Axiom observability platform. Run hypothesis-driven SRE investigations, query logs and metrics with APL, build dashboards, manage monitors and alerts, translate Splunk SPL queries, and analyze and optimize costs.",
+  "author": {
+    "name": "Axiom",
+    "url": "https://axiom.co"
+  },
+  "homepage": "https://github.com/axiomhq/skills",
+  "repository": "https://github.com/axiomhq/skills",
+  "license": "MIT",
+  "keywords": ["axiom", "observability", "apl", "sre", "monitoring"]
+}
