@@ -20,6 +20,10 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 - **curl** - HTTP client (usually pre-installed)
 - **bc** - Calculator, needed by controlling-costs (`brew install bc` or `apt install bc`)
 
+## MCP Server
+
+`.mcp.json` configures the hosted [Axiom MCP Server](https://github.com/axiomhq/mcp) at `https://mcp.axiom.co/mcp` for agent clients that install plugins from a manifest. See the [MCP setup docs](https://axiom.co/docs/console/intelligence/mcp-server).
+
 ## Installation
 
 ```bash

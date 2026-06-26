@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "axiom": {
+      "type": "http",
+      "url": "https://mcp.axiom.co/mcp",
+      "note": "Official Axiom hosted MCP server. Uses OAuth — on first connection the agent is prompted to authorize via browser. Tools: queryApl, listDatasets, listDashboards, createMonitor, and more. Server source: https://github.com/axiomhq/mcp"
+    }
+  }
+}
