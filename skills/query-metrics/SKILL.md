@@ -35,7 +35,7 @@ Rules per type (consult `metrics-spec` for exact operator names — they evolve)
 - **CounterMonotonic + Cumulative** — running total (resets aside). The raw values are rarely what you want. Convert to a per-second rate first, **then** align/aggregate.
 - **CounterMonotonic + Delta** — already per-interval. Sum/align without a rate step.
 - **CounterNonMonotonic** — can go up or down (queue depth, balance). Intent is ambiguous: rate, delta, or current value all make sense for different questions. **Ask the user** before picking one.
-- **Histogram** — not a scalar. `align using avg` produces nonsense. Use the bucket/quantile operators from `metrics-spec`.
+- **Histogram** — not a scalar. `align using avg` produces nonsense. Use `bucket … using` with the histogram functions from `metrics-spec`; quantiles are float specs to those functions, and `temporality` selects the variant (`Cumulative` vs `Delta` interpolation). Consult `metrics-spec` for the exact signatures.
 - **`temporality: null`** — "not applicable for this instrument type" (the norm for Gauges), not "missing data".
 
 When surfacing numbers, attach the `unit` (treat `null` as unitless). If you combine metrics with mismatched units in arithmetic, warn rather than silently producing a meaningless number.
@@ -51,6 +51,10 @@ scripts/metrics-query <deploy> '<MPL>' <start> <end>
 | `deploy` | Name from `~/.axiom.toml` (e.g. `prod`). |
 | `MPL` | Pipeline string. Dataset is parsed from the MPL itself. |
 | `start` / `end` | RFC3339 (`2025-01-01T00:00:00Z`) or relative (`now-1h`, `now`). |
+
+**Always single-quote the MPL string in the shell.** MPL is full of backticks; inside double quotes the shell executes them as command substitution, silently mangling the query (or running whatever the identifier names).
+
+**Bound the output before grouping.** `group by <tag>` returns one series per tag value with no cap — on a high-cardinality tag this floods the output. Check cardinality first (`describe`, or `tags <tag> values`) and prefer plain `group using <agg>` while exploring.
 
 Examples:
 
@@ -96,7 +100,7 @@ Literal syntax per type lives in `metrics-spec`.
 
 ## Discovery (`metrics-info`)
 
-Time range defaults to the last 24h; override with `--start` / `--end`.
+Time range defaults to the last 24h; override with `--start` / `--end`. Both accept RFC3339 (offsets allowed) or relative `now` / `now-<N><unit>` with `<unit>` in `s m h d w`, resolved to RFC3339 UTC client-side. This is **narrower** than `metrics-query`, which forwards times to the server unparsed and so also accepts forms like `now-1y`; in `metrics-info` anything outside `now` / `now-<N>[smhdw]` must already be RFC3339 or the request 400s.
 
 | Command | Returns |
 |---|---|
@@ -114,11 +118,13 @@ Time range defaults to the last 24h; override with `--start` / `--end`.
 
 ## Error Handling
 
-HTTP errors return JSON with `message`, `code`, and optional `detail`:
+HTTP errors return JSON with `code` and `message`; some include a `detail` object:
 
 ```json
-{"message": "...", "code": 400, "detail": {"errorType": 1, "message": "raw error"}}
+{"code": 400, "message": "MPL syntax error: …"}
 ```
+
+Syntax errors (400) include an annotated source pointer listing the valid operators at the failure position — read it, it usually names the fix.
 
 | Code | Cause |
 |---|---|
@@ -126,8 +132,10 @@ HTTP errors return JSON with `message`, `code`, and optional `detail`:
 | 401 | Missing/invalid auth |
 | 403 | No permission |
 | 404 | Dataset not found |
-| 429 | Rate limited |
+| 429 | Rate limited — back off and retry; don't tight-loop |
 | 500 | Internal error |
+
+Requests time out client-side after 120s (`AXIOM_MAX_TIME` to override; `AXIOM_CONNECT_TIMEOUT` for the 10s connect timeout).
 
 On 500, re-run with `curl -v` to capture the `traceparent` / `x-axiom-trace-id` header and report it — the trace ID is what the backend team needs to debug.
 
