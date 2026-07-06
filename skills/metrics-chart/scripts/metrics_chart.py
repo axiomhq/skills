@@ -420,6 +420,11 @@ def gnuplot_available() -> bool:
 
 def _tz_offset_seconds(tz: Optional[tzinfo], sample_ts: int) -> int:
     dt = datetime.fromtimestamp(sample_ts, tz)
+    if dt.tzinfo is None:
+        # tz=None yields a naive local datetime whose utcoffset() is None;
+        # attach the local zone so the offset reflects local wall-clock time
+        # instead of collapsing to 0 (which would mislabel the axis as UTC).
+        dt = dt.astimezone()
     off = dt.utcoffset()
     return int(off.total_seconds()) if off else 0
 
@@ -428,10 +433,10 @@ def _gnuplot_script(series: list, meta: Metadata, tz: Optional[tzinfo],
                     term: str, width_px: int, height_px: int,
                     title: Optional[str], output: Optional[str],
                     font_size: Optional[int] = None) -> str:
-    # gnuplot time axis is UTC; pre-shift epochs by the local offset so the
-    # printed tick labels read as local wall-clock time.
-    sample = series[0].start if series else 0
-    off = _tz_offset_seconds(tz, sample)
+    # gnuplot's time axis is UTC-only; pre-shift each epoch by the tz offset at
+    # that instant (see the emission loop below) so tick labels read as
+    # wall-clock time. Per-point offsets keep labels correct even when the
+    # range crosses a DST transition, where one offset would be wrong.
     multiday = False
     if series:
         spans = [point_timestamps(s) for s in series if s.values]
@@ -470,7 +475,7 @@ def _gnuplot_script(series: list, meta: Metadata, tz: Optional[tzinfo],
 
     for s in series:
         for t, v in zip(point_timestamps(s), s.values):
-            out.append(f"{t + off} {'NaN' if v is None else v}")
+            out.append(f"{t + _tz_offset_seconds(tz, t)} {'NaN' if v is None else v}")
         out.append("e")
     return "\n".join(out) + "\n"
 

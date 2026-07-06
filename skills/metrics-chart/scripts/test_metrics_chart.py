@@ -287,6 +287,60 @@ class GnuplotScriptTests(unittest.TestCase):
         self.assertIn("NaN", script)
 
 
+class GnuplotTimezoneTests(unittest.TestCase):
+    # gnuplot's time axis is UTC-only, so epochs are pre-shifted by the tz
+    # offset. These pin the offset so PNG/SVG/sixel x-axes match the local
+    # wall-clock labels that render_ascii prints.
+    TS = 1750753164
+
+    def test_offset_is_zero_for_utc(self):
+        self.assertEqual(mc._tz_offset_seconds(mc.timezone.utc, self.TS), 0)
+
+    def test_offset_matches_local_for_naive_tz(self):
+        # tz=None means local wall-clock; a naive datetime's utcoffset() is
+        # None, so the offset must be recovered from the local zone, not 0.
+        expected = int(mc.datetime.fromtimestamp(self.TS)
+                       .astimezone().utcoffset().total_seconds())
+        self.assertEqual(mc._tz_offset_seconds(None, self.TS), expected)
+
+    def test_shifted_epoch_reads_as_local_wall_clock(self):
+        # The epoch emitted to gnuplot, formatted as UTC, must equal the ASCII
+        # local label so the two renderers agree on the x-axis.
+        off = mc._tz_offset_seconds(None, self.TS)
+        shifted = mc.datetime.fromtimestamp(self.TS + off, mc.timezone.utc)
+        local = mc.datetime.fromtimestamp(self.TS)  # naive local
+        self.assertEqual(shifted.strftime("%H:%M"), local.strftime("%H:%M"))
+
+    def test_offset_is_per_instant_across_dst(self):
+        try:
+            from zoneinfo import ZoneInfo
+        except ImportError:
+            self.skipTest("zoneinfo unavailable")
+        tz = ZoneInfo("America/New_York")
+        # Spring-forward transition is 2021-03-14 07:00 UTC (2am EST -> 3am EDT).
+        before = 1615701600  # one hour before, still EST (-5h)
+        after = 1615708800   # one hour after, now EDT (-4h)
+        self.assertEqual(mc._tz_offset_seconds(tz, before), -5 * 3600)
+        self.assertEqual(mc._tz_offset_seconds(tz, after), -4 * 3600)
+
+    def test_gnuplot_data_uses_per_point_offset_across_dst(self):
+        try:
+            from zoneinfo import ZoneInfo
+        except ImportError:
+            self.skipTest("zoneinfo unavailable")
+        tz = ZoneInfo("America/New_York")
+        # Two points straddling spring-forward: each must shift by its own
+        # offset, not a single offset taken from the first sample.
+        doc = {"series": [{"metric": "m", "tags": {}, "start": 1615701600,
+                           "resolution": 7200, "data": [1.0, 2.0]}]}
+        meta, series = mc.parse(doc)
+        script = mc._gnuplot_script(series, meta, tz=tz, term="pngcairo",
+                                    width_px=100, height_px=100,
+                                    title=None, output=None)
+        self.assertIn(f"{1615701600 - 5 * 3600} 1.0", script)  # EST point
+        self.assertIn(f"{1615708800 - 4 * 3600} 2.0", script)  # EDT point
+
+
 class DisplayInstructionTests(unittest.TestCase):
     def test_instruction_names_the_path_and_tells_agent_to_display(self):
         msg = mc._display_instruction("/tmp/chart.png")
