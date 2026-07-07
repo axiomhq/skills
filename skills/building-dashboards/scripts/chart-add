@@ -195,13 +195,21 @@ unit_fields_other() {
     fi
 }
 
+# Newline before each pipeline `|` so stored queries read one stage per line.
+# Quote-aware: the alternation consumes whole '...'/"..." literals first, so a
+# `|` inside a string is left untouched.
+format_pipeline() {
+    jq -rn --arg apl "$1" \
+        '$apl | gsub("(?<s>\"[^\"]*\"|'\''[^'\'']*'\'')|(?<p> \\| )"; if .s then .s else "\n| " end)'
+}
+
 # Build the query object. Both APL and MPL land in `query.apl` (shared API
 # field); MPL also gets `query.metricsDataset`.
 build_query() {
     if [[ -n "$MPL" ]]; then
-        jq -n --arg apl "$MPL" --arg ds "$DATASET" '{apl: $apl, metricsDataset: $ds}'
+        jq -n --arg apl "$(format_pipeline "$MPL")" --arg ds "$DATASET" '{apl: $apl, metricsDataset: $ds}'
     else
-        jq -n --arg apl "$APL" '{apl: $apl}'
+        jq -n --arg apl "$(format_pipeline "$APL")" '{apl: $apl}'
     fi
 }
 

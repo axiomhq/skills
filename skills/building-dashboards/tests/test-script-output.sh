@@ -125,6 +125,22 @@ else
     fail "dashboard-chart-patch outputs valid JSON only" "got: $patch_out"
 fi
 
+apl_fmt=$("$SCRIPTS_DIR/chart-add" --type Statistic --id t --name T \
+    --apl "['logs'] | where a=='x' | summarize c=count()" | jq -r '.query.apl')
+if [[ "$(printf '%s' "$apl_fmt" | grep -c '^| ')" == "2" && "$apl_fmt" != *" | "* ]]; then
+    ok "chart-add breaks each pipeline stage onto its own line"
+else
+    fail "chart-add breaks each pipeline stage onto its own line" "got: $apl_fmt"
+fi
+
+apl_str=$("$SCRIPTS_DIR/chart-add" --type Statistic --id t --name T \
+    --apl "['logs'] | where msg=='a | b'" | jq -r '.query.apl')
+if [[ "$apl_str" == *"msg=='a | b'"* ]]; then
+    ok "chart-add leaves a pipe inside a string literal untouched"
+else
+    fail "chart-add leaves a pipe inside a string literal untouched" "got: $apl_str"
+fi
+
 echo ""
 echo "======================"
 echo "Passed: $passed | Failed: $failed"
