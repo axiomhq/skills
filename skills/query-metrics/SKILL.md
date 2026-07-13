@@ -43,7 +43,7 @@ When surfacing numbers, attach the `unit` (treat `null` as unitless). If you com
 ## Query Metrics
 
 ```bash
-scripts/metrics-query <deploy> '<MPL>' <start> <end>
+scripts/metrics-query [-w pixels] [--pixel-per-point n] <deploy> '<MPL>' <start> <end>
 ```
 
 | Parameter | Notes |
@@ -51,6 +51,8 @@ scripts/metrics-query <deploy> '<MPL>' <start> <end>
 | `deploy` | Name from `~/.axiom.toml` (e.g. `prod`). |
 | `MPL` | Pipeline string. Dataset is parsed from the MPL itself. |
 | `start` / `end` | RFC3339 (`2025-01-01T00:00:00Z`) or relative (`now-1h`, `now`). |
+| `-w` / `--chart-width <px>` | Optional. Target chart width in pixels; lets the server resolve `$__interval`. |
+| `--pixel-per-point <n>` | Optional. Pixels per point (server default 10); with `-w` sets the bucket count. |
 
 **Always single-quote the MPL string in the shell.** MPL is full of backticks; inside double quotes the shell executes them as command substitution, silently mangling the query (or running whatever the identifier names).
 
@@ -59,17 +61,46 @@ scripts/metrics-query <deploy> '<MPL>' <start> <end>
 Examples:
 
 ```bash
-scripts/metrics-query prod \
-  '`my-dataset`:`http.server.duration` | align to 5m using avg' \
+scripts/metrics-query prod -w 1200 \
+  '`my-dataset`:`http.server.duration` | align to $__interval using avg' \
   now-1h now
 
-scripts/metrics-query prod \
+scripts/metrics-query prod -w 1200 \
   '`my-dataset`:`http.server.duration`
    | where `service.name` == "frontend" and method == "GET"
-   | align to 5m using avg
+   | align to $__interval using avg
    | group by status_code using sum' \
   now-1d now
 ```
+
+### Adaptive resolution (`$__interval`)
+
+Hardcoding a step (`align to 5m`) makes charts look wrong at other zoom
+levels — too sparse zoomed in, too dense zoomed out. Prefer the system
+parameter `$__interval` wherever a `Duration` is expected, and pass the chart
+width so the server picks the step:
+
+```bash
+scripts/metrics-query prod -w 1200 \
+  '`my-dataset`:`http.server.duration` | align to $__interval using avg' \
+  now-7d now
+```
+
+The metrics service computes `$__interval` from the query's time range and the
+target chart width, then snaps it **up** to a nice resolution from the ladder
+`1s, 5s, 10s, 15s, 30s, 1m, 5m, 10m, 15m, 30m, 1h, 12h, 1d, 1w, 1M, 1Y`. It
+never drops below a metric's stored resolution.
+
+- **No declaration needed** — the server auto-registers `$__interval`; do *not*
+  add `param $__interval: Duration;` (the edge forwards the query verbatim and
+  the metrics service injects the parameter).
+- **Bucket count** ≈ `chart-width / pixel-per-point` (`pixel-per-point` default
+  10). Omit `-w` and the server targets ~500 buckets.
+- Works anywhere a `Duration` is valid, e.g. `bucket to $__interval using
+  histogram(0.5, 0.95)`.
+- Set `-w` to your render width (e.g. the `metrics-chart` skill's plot width)
+  so one bucket ≈ one pixel column. The value is forwarded under the request
+  body's `queryOptions` (`chart-width`, `pixel-per-point`).
 
 ### Parameters
 
@@ -146,7 +177,7 @@ On 500, re-run with `curl -v` to capture the `traceparent` / `x-axiom-trace-id` 
 | `scripts/setup` | Check requirements and config. |
 | `scripts/datasets <deploy> [--kind <kind>]` | List datasets with edge deployment. |
 | `scripts/metrics-spec` | Fetch the MPL query spec. |
-| `scripts/metrics-query <deploy> <mpl> <start> <end>` | Execute a query. |
+| `scripts/metrics-query [-w px] [--pixel-per-point n] <deploy> <mpl> <start> <end>` | Execute a query; use `$__interval` + `-w` for adaptive resolution. |
 | `scripts/metrics-info <deploy> <dataset> ...` | Discover metrics, tags, values. |
 | `scripts/axiom-api <deploy> <method> <path> [body]` | Low-level API calls. |
 | `scripts/resolve-url <deploy> <dataset>` | Resolve to the edge deployment URL. |
