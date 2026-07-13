@@ -141,6 +141,23 @@ else
     fail "chart-add leaves a pipe inside a string literal untouched" "got: $apl_str"
 fi
 
+# Constructs whose string boundaries the split cannot follow must round-trip
+# byte-for-byte rather than risk a newline landing inside a literal.
+check_verbatim() {
+    local label="$1" input="$2" got
+    got=$("$SCRIPTS_DIR/chart-add" --type Statistic --id t --name T --apl "$input" | jq -r '.query.apl')
+    if [[ "$got" == "$input" ]]; then
+        ok "chart-add stores $label untouched"
+    else
+        fail "chart-add stores $label untouched" "got: $got"
+    fi
+}
+
+check_verbatim "a backslash-escaped quote" '["logs"] | where msg == "a \" b | c" | project msg'
+check_verbatim "an @-verbatim literal" '["logs"] | where p == @"c:\x | y" | project p'
+check_verbatim "a // comment" '["logs"] // note | here
+| count'
+
 echo ""
 echo "======================"
 echo "Passed: $passed | Failed: $failed"
