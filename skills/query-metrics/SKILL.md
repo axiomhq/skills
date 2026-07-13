@@ -12,7 +12,7 @@ Setup, prerequisites, and `~/.axiom.toml` configuration: see `README.md`. Edge-d
 ## Workflow
 
 1. `scripts/datasets <deploy> --kind otel:metrics:v1` — list metrics datasets.
-2. `scripts/metrics-spec <deploy> <dataset>` — **required** before composing any query. MPL evolves; the spec is the source of truth.
+2. `scripts/metrics-spec` — **required** before composing any query. MPL evolves; the spec is the source of truth. Also use it to answer general MPL/metrics questions.
 3. `scripts/metrics-info <deploy> <dataset> metrics` — list metrics with `{type, temporality, unit}` metadata. Read this before writing the query (see [Choosing a Query Shape](#choosing-a-query-shape)).
 4. `scripts/metrics-info <deploy> <dataset> tags [<tag> values]` — explore filter dimensions.
 5. `scripts/metrics-query <deploy> '<MPL>' <start> <end>` — execute. Iterate.
@@ -145,7 +145,7 @@ On 500, re-run with `curl -v` to capture the `traceparent` / `x-axiom-trace-id` 
 |---|---|
 | `scripts/setup` | Check requirements and config. |
 | `scripts/datasets <deploy> [--kind <kind>]` | List datasets with edge deployment. |
-| `scripts/metrics-spec <deploy> <dataset>` | Fetch the MPL query spec. |
+| `scripts/metrics-spec` | Fetch the MPL query spec. |
 | `scripts/metrics-query <deploy> <mpl> <start> <end>` | Execute a query. |
 | `scripts/metrics-info <deploy> <dataset> ...` | Discover metrics, tags, values. |
 | `scripts/axiom-api <deploy> <method> <path> [body]` | Low-level API calls. |
