@@ -10,4 +10,9 @@ set -euo pipefail
 
 SPEC_URL="https://us-east-1.aws.edge.axiom.co/v1/query/_mpl"
 
-curl -sS -X OPTIONS -H "Accept: text/markdown" "$SPEC_URL"
+# Match the timeout convention used by axiom-api so a stalled edge can't hang
+# the caller indefinitely. Override via AXIOM_CONNECT_TIMEOUT / AXIOM_MAX_TIME.
+curl -sS -X OPTIONS -H "Accept: text/markdown" \
+    --connect-timeout "${AXIOM_CONNECT_TIMEOUT:-10}" \
+    --max-time "${AXIOM_MAX_TIME:-120}" \
+    "$SPEC_URL"
