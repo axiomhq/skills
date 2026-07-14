@@ -12,6 +12,7 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 | [axiom-alerting](skills/axiom-alerting/) | Unified monitor + notifier management for Axiom alerting via the v2 API |
 | [controlling-costs](skills/controlling-costs/) | Analyze query patterns to find unused data and optimize Axiom costs |
 | [query-metrics](skills/query-metrics/) | Run metrics queries against Axiom MetricsDB and discover available metrics, tags, and values |
+| [metrics-chart](skills/metrics-chart/) | Render metrics query results (`application/vnd.metrics.v3+json`) as line charts; zero-dependency ASCII by default, optional gnuplot PNG/SVG/sixel (pairs with [query-metrics](skills/query-metrics/)) |
 | [writing-evals](skills/writing-evals/) | Scaffold evaluation suites for the Axiom AI SDK |
 
 ## Requirements
