@@ -1,0 +1,10 @@
+{
+  "name": "axiom",
+  "version": "1.0.1",
+  "description": "Axiom MCP server and skills. Query logs with APL and metrics with MPL, investigate incidents, build dashboards, manage monitors and alerts, translate Splunk SPL, and optimize costs.",
+  "mcpServers": {
+    "axiom": {
+      "httpUrl": "https://mcp.axiom.co/mcp"
+    }
+  }
+}

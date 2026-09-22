@@ -63,6 +63,16 @@ If that directory already exists, update its checkout instead of cloning over it
 
 The plugin uses the shared skills and explicitly loads `.mcp.json`. Authorize the Axiom connection when prompted; skill scripts use their separate configuration below. These are direct-install routes; public marketplace availability depends on review. See [Cursor's plugin guide](https://cursor.com/docs/plugins).
 
+### Gemini CLI
+
+```bash
+gemini extensions install https://github.com/axiomhq/skills
+```
+
+Restart Gemini CLI after installation. The extension discovers the shared `skills/` directory and connects to the hosted MCP server over Streamable HTTP. Use `/mcp auth axiom` to complete browser authorization when required. Skill scripts still use their documented dependencies and configuration below.
+
+Update with `gemini extensions update axiom`. See the [Gemini extension reference](https://geminicli.com/docs/extensions/reference/) and [MCP authentication guide](https://geminicli.com/docs/tools/mcp-server/).
+
 ### Skills installer
 
 ```bash
