@@ -22,7 +22,7 @@ npx skills add axiomhq/skills
 - Access to `axiom-audit` and `axiom-history` datasets
 - Tools: `jq`, `bc`
 
-The install command above includes all skill dependencies.
+The install command above includes both skills. Scripts find them automatically.
 
 ## Configuration
 
@@ -49,8 +49,8 @@ scripts/analyze-query-coverage <deployment> <dataset>
 # Find unqueried values for a specific field
 scripts/analyze-query-coverage <deployment> <dataset> <field>
 
-# Deploy cost control dashboard
-scripts/deploy-dashboard <deployment>
+# Deploy a shared cost control dashboard
+scripts/deploy-dashboard -d <deployment> -a <audit-dataset>
 
 # List available notifiers
 scripts/list-notifiers -d <deployment>
