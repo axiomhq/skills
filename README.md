@@ -59,6 +59,18 @@ Restart Claude Code, then use `/mcp` to authorize Axiom.
 
 To update, run `claude plugin marketplace update axiom`, then `claude plugin update axiom@axiom`. Restart Claude Code to load it.
 
+### Cursor
+
+On Teams or Enterprise, an admin must enable **Allow Local Plugin Imports**. Then clone into Cursor's local plugin directory:
+
+```bash
+git clone https://github.com/axiomhq/skills.git ~/.cursor/plugins/local/axiom
+```
+
+Reload Cursor and authorize Axiom when prompted. To update an existing install, run `git -C ~/.cursor/plugins/local/axiom pull --ff-only`, then reload Cursor.
+
+Teams and Enterprise admins can also import `axiomhq/skills` through **Plugins & MCPs → Add Marketplace → Import from Repo** in the Cursor dashboard. See [Cursor's plugin guide](https://cursor.com/docs/plugins).
+
 ### Skills installer
 
 ```bash
