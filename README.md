@@ -8,11 +8,10 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 | ---------------------------------------------- | ---------------------------------------------- |
 | [sre](skills/sre/)                             | Hypothesis-driven SRE investigation with Axiom |
 | [spl-to-apl](skills/spl-to-apl/)               | Translate Splunk SPL queries to Axiom APL      |
-| [building-dashboards](skills/building-dashboards/) | Design and build Axiom dashboards from intent, templates, Splunk migrations, and metrics/MPL chart payloads (works with [query-metrics](skills/query-metrics/)) |
+| [building-dashboards](skills/building-dashboards/) | Design and build Axiom dashboards from intent, templates, Splunk migrations, and metrics/MPL chart payloads |
 | [axiom-alerting](skills/axiom-alerting/) | Unified monitor + notifier management for Axiom alerting via the v2 API |
 | [controlling-costs](skills/controlling-costs/) | Analyze query patterns to find unused data and optimize Axiom costs |
-| [query-metrics](skills/query-metrics/) | Run metrics queries against Axiom MetricsDB and discover available metrics, tags, and values |
-| [metrics-chart](skills/metrics-chart/) | Render metrics query results (`application/vnd.metrics.v3+json`) as line charts; zero-dependency ASCII by default, optional gnuplot PNG/SVG/sixel (pairs with [query-metrics](skills/query-metrics/)) |
+| [metrics-chart](skills/metrics-chart/) | Render saved metrics v2/v3 JSON as line charts; zero-dependency ASCII by default, optional gnuplot PNG/SVG/sixel |
 | [writing-evals](skills/writing-evals/) | Scaffold evaluation suites for the Axiom AI SDK |
 
 ## Requirements
@@ -22,6 +21,8 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 - **bc** - Calculator, needed by controlling-costs (`brew install bc` or `apt install bc`)
 
 ## MCP Server
+
+Metrics discovery and querying are provided by MCP. Use `getMetricsSpec` for current MPL syntax and `queryMetrics` with `truncate: false` when saving complete results for `metrics-chart`.
 
 `.mcp.json` configures the hosted [Axiom MCP Server](https://github.com/axiomhq/mcp) at `https://mcp.axiom.co/mcp` for agent clients that install plugins from a manifest. See the [MCP setup docs](https://axiom.co/docs/console/intelligence/mcp-server).
 

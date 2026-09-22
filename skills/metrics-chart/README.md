@@ -1,6 +1,6 @@
 # metrics-chart
 
-Renders Axiom metrics query results (`application/vnd.metrics.v3+json`) as
+Renders saved Axiom metrics query results (v2 or v3 JSON) as
 multi-series line charts — directly in your terminal or agent transcript.
 
 ## What It Does
@@ -31,11 +31,9 @@ response you already have.
 
 ## Input
 
-The body the Axiom metrics query service returns for
-`application/vnd.metrics.v3+json`: a regularly-sampled, multi-series time
-series. The v2 form (`application/json+metrics.v2`) that the
-[`query-metrics`](../query-metrics/) skill's `metrics-query` emits is also
-accepted (v2 and v3 differ only by a per-series `summary`, which is ignored).
+Use the complete `{metadata, series}` JSON from Axiom MCP's `queryMetrics` with `truncate: false`. Save its `structuredContent` field as `response.json`; do not save the MCP envelope or reconstruct samples from the default CSV preview. The text response can include a query-budget footer.
+
+The renderer also accepts saved API responses in v2 (`application/json+metrics.v2`) or v3 (`application/vnd.metrics.v3+json`) form. A per-series `summary` is ignored. Rendering an existing file needs no MCP connection.
 
 ## Usage
 
@@ -43,8 +41,8 @@ accepted (v2 and v3 differ only by a per-series `summary`, which is ignored).
 # Render a saved response (auto-picks an inline image or ASCII for your terminal)
 scripts/metrics_chart.py response.json
 
-# Straight from a pipe (e.g. the query-metrics skill's metrics-query output)
-... metrics-query prod '<mpl>' <start> <end> | scripts/metrics_chart.py
+# Read a saved response from stdin
+scripts/metrics_chart.py < response.json
 
 # Force a zero-dependency ASCII chart anywhere
 scripts/metrics_chart.py --format ascii response.json
@@ -66,5 +64,4 @@ full reference and input schema.
 
 ## Related Skills
 
-- [`query-metrics`](../query-metrics/) - produces the metrics query responses this skill charts
 - [`building-dashboards`](../building-dashboards/) - for persistent dashboards instead of ad-hoc terminal charts

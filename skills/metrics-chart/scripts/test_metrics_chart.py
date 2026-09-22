@@ -68,10 +68,22 @@ class ParseTests(unittest.TestCase):
         # No group_keys -> show distinguishing tags as k=v, stable order.
         self.assertEqual(series[0].label, "a=1, b=x")
 
-    def test_v2_summary_field_is_ignored(self):
-        meta, series = mc.parse(V2_DOC)
-        self.assertEqual(meta.group_keys, [])
-        self.assertEqual(series[0].values, [420.0, 42.0, 30.0, 9.0, 15.0, 18.0])
+    def test_parses_mcp_v2_export_with_samples_and_unit_precedence(self):
+        samples = [0.003, None, 1234.567891, 0]
+        metadata_cases = [
+            ({"unit": "s"}, "s"),
+            ({"unit": "s", "ignore_unit": True}, ""),
+            ({"unit": "s", "ignore_unit": True, "custom_unit": "ratio"}, "ratio"),
+            ({"unit": "s", "custom_unit": ""}, ""),
+        ]
+        for metadata, label in metadata_cases:
+            with self.subTest(metadata=metadata):
+                doc = {"metadata": metadata, "series": [{**V2_DOC["series"][0], "data": samples}]}
+                meta, series = mc.parse(doc)
+                self.assertEqual(meta.y_label(), label)
+                self.assertEqual(series[0].values, samples)
+                self.assertEqual(series[0].start, 1750753164)
+                self.assertEqual(series[0].resolution, 60)
 
     def test_null_points_become_gaps(self):
         doc = {

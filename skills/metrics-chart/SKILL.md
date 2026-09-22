@@ -1,16 +1,15 @@
 ---
 name: metrics-chart
-description: Render Axiom metrics query results (application/vnd.metrics.v3+json) as line charts. Zero-dependency Unicode/ASCII by default; upgrades to inline PNG/SVG/sixel via gnuplot when present. Use when you have a metrics v3 query response and want to see the series as a chart in the terminal or transcript.
+description: Render saved Axiom metrics v2 or v3 JSON as line charts in a terminal or transcript. Uses Unicode/ASCII by default and supports PNG/SVG/sixel with gnuplot. Use when plotting metrics results; discovery and querying are provided by Axiom MCP.
 ---
 
 # metrics-chart
 
 Turns a metrics query response into a **multi-series line chart**.
 
-Input is exactly the body the Axiom metrics query service returns for
-`application/vnd.metrics.v3+json` — defined in the metrics query service
-(`service/query`, `JsonV3QueryResponse` in `src/server.rs`). It is a
-regularly-sampled, multi-series time series; this skill draws it.
+Input is a saved `{metadata, series}` response from Axiom MCP or the metrics API. If the user already supplied one, render it directly. To obtain data through MCP, use `queryMetrics` with `truncate: false` and save `structuredContent` as the input JSON. Preserve metadata and null samples; do not reconstruct data from CSV or include the MCP envelope or query-budget text footer. The default MCP preview can omit series and samples.
+
+Use `getMetricsSpec` for current MPL syntax when composing a query. Query discovery and execution belong to MCP; this skill handles rendering. An existing v2/v3 API response also works without a connection.
 
 ## TL;DR
 
@@ -18,8 +17,8 @@ regularly-sampled, multi-series time series; this skill draws it.
 # From a file, stdout picks the best renderer for your terminal:
 python3 scripts/metrics_chart.py response.json
 
-# From a pipe (e.g. straight off the query API):
-curl ... -H 'Accept: application/vnd.metrics.v3+json' | python3 scripts/metrics_chart.py
+# Read the same saved response from stdin:
+python3 scripts/metrics_chart.py < response.json
 
 # Force a zero-dependency ASCII chart (always works, anywhere):
 python3 scripts/metrics_chart.py --format ascii response.json
@@ -31,7 +30,7 @@ python3 scripts/metrics_chart.py --format ascii response.json
 > reduction (below) is a safety net for high-cardinality results, **not** a
 > substitute for aggregating in the query.
 
-## Input format (vnd.metrics.v3+json)
+## Input format (metrics v2/v3)
 
 ```json
 {
@@ -57,8 +56,9 @@ python3 scripts/metrics_chart.py --format ascii response.json
 | --------------------- | ----------------------------------------------------------------------- |
 | `metadata.group_keys` | Tags the query grouped on → used to build legend labels.                |
 | `metadata.warnings`   | Shown as `⚠` captions under the chart.                                  |
-| `metadata.unit`       | Canonical y-axis unit (`ms`, `bytes`, …).                               |
-| `metadata.custom_unit`| Human y-axis label; preferred over `unit` when present.                 |
+| `metadata.unit`       | Canonical y-axis unit (`ms`, `bytes`, …), unless `ignore_unit` is true. |
+| `metadata.custom_unit`| Human y-axis label; overrides `unit` when supplied. |
+| `metadata.ignore_unit` | Discard `unit`; only an explicitly supplied `custom_unit` applies. |
 | `series[].start`      | Unix **seconds** (UTC) of `data[0]`.                                    |
 | `series[].resolution` | **Seconds** per point; `x[i] = start + resolution*i` (uniform spacing). |
 | `series[].data`       | Y values; **`null` = gap** (the line breaks, it is not drawn as 0).     |
