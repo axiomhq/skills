@@ -39,8 +39,8 @@ description: Designs and builds Axiom dashboards via API. Covers chart types, AP
    - Service, environment, region, cluster, endpoint?
    - Single service or cross-service view?
 
-3. **Dataset kind.** Run `scripts/metrics/datasets <deploy>` and check `kind`.
-   - `otel:metrics:v1` → metrics dataset, follow the **Metrics path**.
+3. **Dataset kind.** Use MCP `listDatasets` and check `kind`. For a separately configured deployment, use `scripts/metrics/datasets <deploy>`.
+   - `otel:metrics:v1` / `otel-metrics-v1` → metrics dataset, follow the **Metrics path**.
    - anything else → events/logs dataset, follow the **APL path**.
 
    > **Never run `getschema` on a metrics dataset.** It returns 0 rows without error.
@@ -48,10 +48,12 @@ description: Designs and builds Axiom dashboards via API. Covers chart types, AP
    **APL path:** discover fields with `['dataset'] | where _time between (ago(1h) .. now()) | getschema`. Continue to steps 4–5.
 
    **Metrics path:**
-   - `scripts/metrics/metrics-spec <deploy> <dataset>` — required before any MPL query.
-   - `scripts/metrics/metrics-info <deploy> <dataset> metrics | tags | tags <tag> values` for discovery.
-   - If discovery is empty, retry with `--start` 7 days ago (sparse metrics).
-   - `find-metrics <value>` searches tag *values*, not metric names — use it only with a known entity name.
+   - Read MCP `getMetricsSpec` for the dataset before composing MPL; reuse the live specification during the task.
+   - Discover metric names, types, temporality, and units with `listMetrics`; use metric-scoped `listMetricTags` and `getMetricTagValues` for filters.
+   - Discovery can lag ingestion by two hours. Widen an empty discovery window for sparse metrics before interpreting it as absence.
+   - `searchMetrics` searches tag *values*, not metric names — use it with a known entity name.
+   - Use `queryMetrics` for ordinary queries; `truncate: false` returns complete v2 JSON for charting or export. Inspect warnings and units before interpreting values.
+   - Keep `scripts/metrics/mpl-validate-chart` for chart validation with external `$__interval` values. The bundled helpers also support separately configured deployments; confirm they target the intended organization.
    - Skip to the **Metrics/MPL Blueprint**.
 
 4. **Golden signals** (APL path)
@@ -270,10 +272,12 @@ Tools, prerequisites, and `~/.axiom.toml` configuration: see `README.md`. Verify
 | `scripts/axiom-api <deploy> <method> <path>` | **Dashboard/app API only** (rewrites to `app.*`). For data/metrics endpoints use `scripts/metrics/axiom-api` |
 | `scripts/metrics/axiom-api <deploy> <method> <path>` | **Data/metrics API** (supports `AXIOM_URL_OVERRIDE` for edge routing) |
 | `scripts/metrics/datasets <deploy>` | List datasets with `kind` and edge deployment |
-| `scripts/metrics/metrics-spec <deploy> <dataset>` | Fetch MPL query specification |
+| `scripts/metrics/metrics-spec` | Fetch MPL query specification |
 | `scripts/metrics/metrics-info <deploy> <dataset> ...` | Discover metrics, tags, and values |
 | `scripts/metrics/metrics-query <deploy> <mpl> <start> <end>` | Execute a metrics query (raw — no `$__interval` injection) |
 | `scripts/metrics/mpl-validate-chart <deploy> '<MPL>' [start] [end] [--interval D]` | **Validate a chart MPL pipeline.** Auto-injects `param $__interval: Duration;` and `-p __interval=…`; rejects inline time ranges. Use this in place of raw `metrics-query` when authoring chart queries. |
+
+The helpers under `scripts/metrics/` belong to this dashboard skill. `mpl-validate-chart` needs their external-parameter support; no sibling query skill is required.
 
 > The two `axiom-api` scripts are not interchangeable. `scripts/axiom-api` is for the dashboard app API; `scripts/metrics/axiom-api` is for data/metrics endpoints and edge routing. Wrong one → 404.
 
@@ -313,7 +317,6 @@ Use `--version <version>` for optimistic concurrency after fetching the dashboar
 
 - **spl-to-apl** — Splunk SPL → APL (`timechart` → TimeSeries, `stats` → Statistic/Table). See `reference/splunk-migration.md`.
 - **axiom-sre** — schema discovery via `getschema`, baseline exploration.
-- **query-metrics** — metrics dataset/tag/value discovery; same scripts vendored under `scripts/metrics/`.
 
 ---
 

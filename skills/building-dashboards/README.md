@@ -19,10 +19,10 @@ npx skills add axiomhq/skills
 ## Prerequisites
 
 - `axiom-sre` skill (for API access and schema discovery)
-- `query-metrics` skill (for metrics dataset/metric/tag discovery; also vendored locally in `scripts/metrics/`)
+- Axiom MCP for metrics discovery and queries; deployment-specific chart validation uses the bundled `scripts/metrics/` helpers.
 - Tools: `jq`, `curl`
 
-The install command above includes all skill dependencies.
+The install command above includes all skill dependencies. The metrics helpers belong to this skill and need no separate query skill. `mpl-validate-chart` supplies the dashboard’s external `$__interval` parameter, which MCP does not currently accept.
 
 ## Configuration
 
@@ -87,5 +87,4 @@ Pre-built templates in `reference/templates/`:
 ## Related Skills
 
 - `axiom-sre` - Schema discovery and query exploration
-- `query-metrics` - Discover metric names, tags, and tag values for MPL queries
 - `spl-to-apl` - Translate Splunk dashboards to Axiom

@@ -23,15 +23,15 @@ Reference for metrics-backed chart queries. Authoring through `chart-add --mpl '
 
 ## Authoring Checklist
 
-1. Confirm dataset kind is `otel:metrics:v1`: `scripts/metrics/datasets <deploy>`.
-2. Run `scripts/metrics/metrics-spec <deploy> <dataset>` — required before composing any MPL query.
-3. Discover metrics and tags: `scripts/metrics/metrics-info`. Empty results → retry with `--start` 7 days ago.
-4. Read each metric's `{type, temporality, unit}` via `metrics-info … metrics <m> info`. Drives query shape (below) and unit configuration.
+1. Confirm the metrics dataset with MCP `listDatasets` (`otel:metrics:v1` or `otel-metrics-v1`). Use `scripts/metrics/datasets <deploy>` for a separately configured deployment.
+2. Read MCP `getMetricsSpec` for the dataset before composing MPL. The bundled `scripts/metrics/metrics-spec` is a deployment-independent fallback.
+3. Discover metrics and filters with MCP `listMetrics`, `listMetricTags`, and `getMetricTagValues`; the bundled `scripts/metrics/metrics-info` supports configured deployments. Widen empty discovery windows for lag or sparse metrics.
+4. Read each metric’s `{type, temporality, unit}` from `listMetrics` or `metrics-info … metrics <m> info`. This drives query shape (below) and unit configuration.
 5. Use `align to $__interval using …`, never a fixed window. The runtime injects `param $__interval: Duration;`; don't add it to the chart string.
 6. Validate the pipeline with `scripts/metrics/mpl-validate-chart` (auto-injects the param for the validator only; rejects inline time ranges).
 7. Pass to `chart-add --mpl '<query>' --dataset <name>`.
 
-`find-metrics <value>` searches tag *values*, not metric names — only useful with a known entity name.
+MCP `searchMetrics` and the bundled `find-metrics <value>` search tag *values*, not metric names — only useful with a known entity name.
 
 ## Choosing a Query Shape
 
@@ -42,7 +42,7 @@ The `{type, temporality, unit}` block from `metrics-info` drives the pipeline:
 | `Gauge` | `null` | Align directly with `avg`/`min`/`max`/`sum`. No rate. |
 | `CounterMonotonic` | `Cumulative` | Convert to per-second rate (`align using prom::rate`), then aggregate. |
 | `CounterMonotonic` | `Delta` | Already per-interval. Sum/align directly. |
-| `CounterNonMonotonic` | either | Ambiguous (rate? delta? current value?). Ask the user. |
+| `CounterNonMonotonic` | either | Choose rate, delta, or current value from the question; ask only if the intent is unclear. |
 | `Histogram` | either | Use `bucket … using interpolate_cumulative_histogram` (cumulative) or `interpolate_delta_histogram` (delta). Plain `align using avg` produces nonsense. |
 
 `temporality: null` means "not applicable" (the norm for Gauges), not "missing data".
