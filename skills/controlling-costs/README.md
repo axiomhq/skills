@@ -22,7 +22,7 @@ npx skills add axiomhq/skills
 - Access to `axiom-audit` and `axiom-history` datasets
 - Tools: `jq`, `bc`
 
-The install command above includes all skill dependencies.
+The install command above includes both skills. Scripts find them automatically.
 
 ## Configuration
 
@@ -68,5 +68,3 @@ scripts/create-monitors -d <deployment> -a <audit-dataset> -c <contract> [-n <no
 | `list-notifiers` | List available notifiers for alerts |
 | `create-monitors` | Create 3 cost control monitors |
 | `baseline-stats` | Get 30-day usage statistics |
-
-Scripts find their dependencies in sibling `sre` (or `axiom-sre`) and `building-dashboards` skill directories, then fall back to `~/.config/agents/skills`. Explicit `AXIOM_QUERY`, `AXIOM_API`, `GET_USER_ID`, and `DASHBOARD_CREATE` paths take precedence. Paths containing spaces are supported.
