@@ -71,6 +71,16 @@ Reload Cursor and authorize Axiom when prompted. To update an existing install, 
 
 Teams and Enterprise admins can also import `axiomhq/skills` through **Plugins & MCPs → Add Marketplace → Import from Repo** in the Cursor dashboard. See [Cursor's plugin guide](https://cursor.com/docs/plugins).
 
+### Gemini CLI
+
+```bash
+gemini extensions install https://github.com/axiomhq/skills
+```
+
+Restart Gemini CLI, then use `/mcp auth axiom` to authorize Axiom.
+
+To update, run `gemini extensions update axiom`, then restart Gemini CLI. See the [Gemini extension reference](https://geminicli.com/docs/extensions/reference/).
+
 ### Skills installer
 
 ```bash
