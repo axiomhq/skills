@@ -121,6 +121,16 @@ org_id = "your-staging-org-id"
 
 The deployment name (e.g., `prod`, `staging`) is passed to scripts: `scripts/axiom-query prod "..."`
 
+## Releases
+
+Release Please opens a PR that updates the shared version in all five client manifests and writes `CHANGELOG.md`. Merge it to create the GitHub release. The first automated release is 1.1.0.
+
+Use conventional commit titles: `feat:` for features, `fix:` for fixes, and `docs:` for documentation. SRE sync commits also trigger patch releases. The daily run catches bot commits that do not trigger a push workflow.
+
+Enable **Allow GitHub Actions to create and approve pull requests** in the repository's Actions settings. Release PR checks may need a maintainer's approval to run.
+
+Clients install from the repository and update through the commands above. A release tag records a version; it does not force installed clients to update. Public marketplace listings require a separate submission.
+
 ## License
 
 MIT License - see [LICENSE](LICENSE)
