@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 
 # Keep explicit overrides, then prefer bundled siblings over legacy installs.
-# The optional fourth argument selects the legacy skills directory.
 resolve_skill_script() {
     local skill="$1" script="$2" override="${3:-}"
-    local legacy_dir="${4:-$HOME/.config/agents/skills}"
+    local legacy_dir="$HOME/.config/agents/skills"
     if [[ -n "$override" ]]; then
         printf '%s\n' "$override"
         return
