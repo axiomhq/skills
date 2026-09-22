@@ -1,0 +1,10 @@
+{
+  "name": "axiom",
+  "version": "1.0.0",
+  "description": "Use Axiom in your coding agent to search logs, query metrics, and follow traces. Dig into production errors and slow requests, build dashboards, set up alerts, and find ways to cut ingestion costs. Includes the Axiom MCP connection and skills for incident response, monitoring, and translating Splunk queries.",
+  "mcpServers": {
+    "axiom": {
+      "httpUrl": "https://mcp.axiom.co/mcp"
+    }
+  }
+}

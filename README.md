@@ -24,9 +24,64 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 
 ## MCP Server
 
-`.mcp.json` configures the hosted [Axiom MCP Server](https://github.com/axiomhq/mcp) at `https://mcp.axiom.co/mcp` for agent clients that install plugins from a manifest. See the [MCP setup docs](https://axiom.co/docs/console/intelligence/mcp-server).
+`.mcp.json` configures the hosted [Axiom MCP Server](https://github.com/axiomhq/mcp) at `https://mcp.axiom.co/mcp` for agent clients that install plugins from a manifest. APL queries use `queryDataset`; metrics queries use `queryMetrics` with MPL. See the [MCP setup docs](https://axiom.co/docs/console/intelligence/mcp-server).
 
 ## Installation
+
+### Codex
+
+Register Axiom's marketplace so Codex can find its plugins:
+
+```bash
+codex plugin marketplace add axiomhq/skills
+```
+
+Install the Axiom plugin, which includes all skills in this repository and the hosted MCP server connection:
+
+```bash
+codex plugin add axiom@axiom
+```
+
+In `axiom@axiom`, the first name is the plugin and the second is the marketplace.
+
+Authorize Axiom in your browser when prompted. If you already added Axiom MCP manually, keep one connection to avoid duplicate tools.
+
+To update, run `codex plugin marketplace upgrade axiom`, then `codex plugin add axiom@axiom`. Start a new session to use the update.
+
+### Claude Code
+
+```bash
+claude plugin marketplace add axiomhq/skills
+claude plugin install axiom@axiom
+```
+
+Restart Claude Code, then use `/mcp` to authorize Axiom.
+
+To update, run `claude plugin marketplace update axiom`, then `claude plugin update axiom@axiom`. Restart Claude Code to load it.
+
+### Cursor
+
+On Teams or Enterprise, an admin must enable **Allow Local Plugin Imports**. Then clone into Cursor's local plugin directory:
+
+```bash
+git clone https://github.com/axiomhq/skills.git ~/.cursor/plugins/local/axiom
+```
+
+Reload Cursor and authorize Axiom when prompted. To update an existing install, run `git -C ~/.cursor/plugins/local/axiom pull --ff-only`, then reload Cursor.
+
+Teams and Enterprise admins can also import `axiomhq/skills` through **Plugins & MCPs → Add Marketplace → Import from Repo** in the Cursor dashboard. See [Cursor's plugin guide](https://cursor.com/docs/plugins).
+
+### Gemini CLI
+
+```bash
+gemini extensions install https://github.com/axiomhq/skills
+```
+
+Restart Gemini CLI, then use `/mcp auth axiom` to authorize Axiom.
+
+To update, run `gemini extensions update axiom`, then restart Gemini CLI. See the [Gemini extension reference](https://geminicli.com/docs/extensions/reference/).
+
+### Skills installer
 
 ```bash
 npx skills add axiomhq/skills
@@ -65,6 +120,16 @@ org_id = "your-staging-org-id"
 - **`token`** - Use an advanced API token with minimal privileges.
 
 The deployment name (e.g., `prod`, `staging`) is passed to scripts: `scripts/axiom-query prod "..."`
+
+## Releases
+
+Release Please opens a PR that updates the shared version in all five client manifests and writes `CHANGELOG.md`. Merge it to create the GitHub release. The first automated release is 1.1.0.
+
+Use conventional commit titles: `feat:` for features, `fix:` for fixes, and `docs:` for documentation. SRE sync commits also trigger patch releases. The daily run catches bot commits that do not trigger a push workflow.
+
+Enable **Allow GitHub Actions to create and approve pull requests** in the repository's Actions settings. Release PR checks may need a maintainer's approval to run.
+
+Clients install from the repository and update through the commands above. A release tag records a version; it does not force installed clients to update. Public marketplace listings require a separate submission.
 
 ## License
 

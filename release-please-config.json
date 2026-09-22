@@ -1,0 +1,56 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "simple",
+  "include-component-in-tag": false,
+  "bootstrap-sha": "de9586f2ae12173b26d605034417a85bab435943",
+  "initial-version": "1.1.0",
+  "changelog-sections": [
+    {
+      "type": "feat",
+      "section": "Features"
+    },
+    {
+      "type": "fix",
+      "section": "Fixes"
+    },
+    {
+      "type": "docs",
+      "section": "Documentation"
+    },
+    {
+      "type": "sre",
+      "section": "SRE skill"
+    }
+  ],
+  "packages": {
+    ".": {
+      "extra-files": [
+        {
+          "type": "json",
+          "path": ".grok-plugin/plugin.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": ".codex-plugin/plugin.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": ".claude-plugin/plugin.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": ".cursor-plugin/plugin.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "gemini-extension.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    }
+  }
+}

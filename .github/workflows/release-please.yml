@@ -1,0 +1,26 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '37 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'axiomhq/skills' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          target-branch: main
