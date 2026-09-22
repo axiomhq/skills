@@ -74,20 +74,10 @@ echo "Audit dataset: $AUDIT_DATASET"
 echo "Dashboard: $DASHBOARD_NAME"
 echo ""
 
-# Get current user ID for owner field
-GET_USER_ID="$(resolve_skill_script building-dashboards get-user-id "${GET_USER_ID:-}")"
-if [[ -x "$GET_USER_ID" ]]; then
-    OWNER_ID=$("$GET_USER_ID" "$DEPLOYMENT")
-else
-    echo "Error: building-dashboards skill not found. Install it first:"
-    echo "  amp skill install building-dashboards"
-    exit 1
-fi
-
-# Update the dashboard name, owner, and audit dataset
+# API tokens create shared dashboards.
 DASHBOARD_JSON=$(cat "$TEMPLATE" | \
     sed "s/axiom-audit/$AUDIT_DATASET/g" | \
-    jq --arg name "$DASHBOARD_NAME" --arg owner "$OWNER_ID" '.name = $name | .owner = $owner')
+    jq --arg name "$DASHBOARD_NAME" '.name = $name | .owner = "X-AXIOM-EVERYONE"')
 
 # Create the dashboard using building-dashboards skill
 DASHBOARD_CREATE="$(resolve_skill_script building-dashboards dashboard-create "${DASHBOARD_CREATE:-}")"
@@ -96,7 +86,7 @@ if [[ -x "$DASHBOARD_CREATE" ]]; then
     # Write temp file for dashboard-create
     TMPFILE=$(mktemp)
     echo "$DASHBOARD_JSON" > "$TMPFILE"
-    RESULT=$("$DASHBOARD_CREATE" "$DEPLOYMENT" "$TMPFILE" 2>&1)
+    RESULT=$("$DASHBOARD_CREATE" "$DEPLOYMENT" "$TMPFILE")
     rm -f "$TMPFILE"
 else
     echo "Error: building-dashboards skill not found. Install it first:"

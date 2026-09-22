@@ -49,8 +49,8 @@ scripts/analyze-query-coverage <deployment> <dataset>
 # Find unqueried values for a specific field
 scripts/analyze-query-coverage <deployment> <dataset> <field>
 
-# Deploy cost control dashboard
-scripts/deploy-dashboard <deployment>
+# Deploy a shared cost control dashboard
+scripts/deploy-dashboard -d <deployment> -a <audit-dataset>
 
 # List available notifiers
 scripts/list-notifiers -d <deployment>
