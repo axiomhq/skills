@@ -27,6 +27,23 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 
 ## Installation
 
+### Codex
+
+Add the Axiom marketplace:
+
+```bash
+codex plugin marketplace add axiomhq/skills
+codex plugin add axiom@axiom
+```
+
+In Codex Desktop, you can also install **Axiom** from that marketplace in the plugin directory. The plugin includes the same shared skills as the Grok plugin, including SRE, and registers the hosted MCP server. It can be used in Codex Desktop and CLI versions that support plugins.
+
+Authorize the MCP connection in your browser when prompted. APL queries use `queryDataset`; metrics queries use `queryMetrics` with MPL. If you already configured the Axiom MCP server manually, use one connection to avoid duplicate tool registrations.
+
+The scripts included in some skills still use their documented dependencies and Axiom configuration below. MCP OAuth does not configure those script credentials.
+
+### Skills installer
+
 ```bash
 npx skills add axiomhq/skills
 ```
