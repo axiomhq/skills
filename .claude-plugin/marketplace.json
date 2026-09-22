@@ -1,0 +1,16 @@
+{
+  "name": "axiom",
+  "owner": {
+    "name": "Axiom",
+    "url": "https://axiom.co"
+  },
+  "metadata": {
+    "description": "Axiom skills and MCP."
+  },
+  "plugins": [
+    {
+      "name": "axiom",
+      "source": "./"
+    }
+  ]
+}

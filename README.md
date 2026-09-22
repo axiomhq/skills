@@ -48,6 +48,17 @@ Authorize Axiom in your browser when prompted. If you already added Axiom MCP ma
 
 To update, run `codex plugin marketplace upgrade axiom`, then `codex plugin add axiom@axiom`. Start a new session to use the update.
 
+### Claude Code
+
+```bash
+claude plugin marketplace add axiomhq/skills
+claude plugin install axiom@axiom
+```
+
+Restart Claude Code, then use `/mcp` to authorize Axiom.
+
+To update, run `claude plugin marketplace update axiom`, then `claude plugin update axiom@axiom`. Restart Claude Code to load it.
+
 ### Skills installer
 
 ```bash
