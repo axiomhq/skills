@@ -1,0 +1,13 @@
+{
+  "name": "axiom",
+  "owner": {
+    "name": "Axiom",
+    "url": "https://axiom.co"
+  },
+  "plugins": [
+    {
+      "name": "axiom",
+      "source": "./"
+    }
+  ]
+}

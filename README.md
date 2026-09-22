@@ -51,6 +51,18 @@ claude plugin install axiom@axiom
 
 The plugin loads the shared skills and `.mcp.json`, as the Grok plugin does. Restart Claude Code after installation and use `/mcp` to authorize **axiom** when prompted. Skill scripts still require their documented dependencies and configuration below.
 
+### Cursor
+
+For a local install, clone this repository into Cursor's local plugin directory, then reload Cursor:
+
+```bash
+git clone https://github.com/axiomhq/skills.git ~/.cursor/plugins/local/axiom
+```
+
+If that directory already exists, update its checkout instead of cloning over it. Teams and Enterprise administrators can also import `axiomhq/skills` through **Plugins & MCPs → Add Marketplace → Import from Repo** in the Cursor dashboard.
+
+The plugin uses the shared skills and explicitly loads `.mcp.json`. Authorize the Axiom connection when prompted; skill scripts use their separate configuration below. These are direct-install routes; public marketplace availability depends on review. See [Cursor's plugin guide](https://cursor.com/docs/plugins).
+
 ### Skills installer
 
 ```bash
