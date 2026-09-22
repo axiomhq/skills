@@ -20,6 +20,7 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 - **jq** - JSON processor (`brew install jq` or `apt install jq`)
 - **curl** - HTTP client (usually pre-installed)
 - **bc** - Calculator, needed by controlling-costs (`brew install bc` or `apt install bc`)
+- **timeout** or **gtimeout** - Required by SRE scripts (`brew install coreutils` on macOS)
 
 ## MCP Server
 
@@ -33,15 +34,19 @@ npx skills add axiomhq/skills
 
 This installs all skills. Skills have dependencies on each other (e.g., `controlling-costs` depends on `sre` and `building-dashboards`), so installing all is recommended.
 
-After installing, run the setup script to configure Axiom access:
+For SRE, run `scripts/init` from the installed skill directory; its location depends on your agent or plugin installer. From a checkout of this repository:
 
 ```bash
-~/.config/agents/skills/sre/scripts/setup
+./skills/sre/scripts/init
 ```
+
+This initializes SRE configuration and memory under `~/.config/axiom-sre/`. Edit the generated `config.toml` to add your deployments, then run the initializer again. See [SRE setup](skills/sre/README.md#setup) for configuration and migration from `~/.axiom.toml`.
 
 ## Configuration
 
-Most skills require access to Axiom. Create `~/.axiom.toml` with your deployment(s):
+SRE uses `~/.config/axiom-sre/config.toml` with `[axiom.deployments.<name>]` sections. Dashboard, alerting, and metrics scripts use the separate `~/.axiom.toml` format below. Cost-control workflows use SRE for queries and dashboard scripts for deployment, so configure both when using those workflows. MCP OAuth does not configure these script credentials.
+
+For scripts that use `~/.axiom.toml`, add your deployment(s):
 
 ```toml
 [deployments.prod]

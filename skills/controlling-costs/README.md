@@ -26,7 +26,9 @@ The install command above includes all skill dependencies.
 
 ## Configuration
 
-Create `~/.axiom.toml` with your Axiom deployment(s):
+Configure SRE for query/API access using its [setup instructions](../sre/README.md#setup). SRE uses `~/.config/axiom-sre/config.toml`.
+
+Dashboard helpers and the cost-control setup check also use `~/.axiom.toml`; add the same deployment name there:
 
 ```toml
 [deployments.prod]
@@ -38,7 +40,7 @@ org_id = "your-org-id"
 - **`org_id`** - The organization ID. Get it from Settings → Organization.
 - **`token`** - Use an advanced API token with minimal privileges.
 
-**Tip:** Run `scripts/setup` from the `axiom-sre` skill for interactive configuration.
+To import an existing `~/.axiom.toml` during SRE's first initialization, run `scripts/init --migrate` from the SRE skill directory. Keep `~/.axiom.toml` for the dashboard helpers.
 
 ## Usage
 
