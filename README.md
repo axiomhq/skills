@@ -24,9 +24,31 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 
 ## MCP Server
 
-`.mcp.json` configures the hosted [Axiom MCP Server](https://github.com/axiomhq/mcp) at `https://mcp.axiom.co/mcp` for agent clients that install plugins from a manifest. See the [MCP setup docs](https://axiom.co/docs/console/intelligence/mcp-server).
+`.mcp.json` configures the hosted [Axiom MCP Server](https://github.com/axiomhq/mcp) at `https://mcp.axiom.co/mcp` for agent clients that install plugins from a manifest. APL queries use `queryDataset`; metrics queries use `queryMetrics` with MPL. See the [MCP setup docs](https://axiom.co/docs/console/intelligence/mcp-server).
 
 ## Installation
+
+### Codex
+
+Register Axiom's marketplace so Codex can find its plugins:
+
+```bash
+codex plugin marketplace add axiomhq/skills
+```
+
+Install the Axiom plugin, which includes all skills in this repository and the hosted MCP server connection:
+
+```bash
+codex plugin add axiom@axiom
+```
+
+In `axiom@axiom`, the first name is the plugin and the second is the marketplace.
+
+Authorize Axiom in your browser when prompted. If you already added Axiom MCP manually, keep one connection to avoid duplicate tools.
+
+To update, run `codex plugin marketplace upgrade axiom`, then `codex plugin add axiom@axiom`. Start a new session to use the update.
+
+### Skills installer
 
 ```bash
 npx skills add axiomhq/skills

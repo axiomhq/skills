@@ -1,7 +1,7 @@
 {
   "name": "axiom",
   "version": "1.0.0",
-  "description": "Official Axiom plugin for Grok (MCP Server + Skills). Query logs and metrics with APL, run SRE investigations, build dashboards, manage monitors and alerts, translate Splunk SPL, and optimize costs.",
+  "description": "Use Axiom in your coding agent to search logs, query metrics, and follow traces. Dig into production errors and slow requests, build dashboards, set up alerts, and find ways to cut ingestion costs. Includes the Axiom MCP connection and skills for incident response, monitoring, and translating Splunk queries.",
   "author": {
     "name": "Axiom",
     "url": "https://axiom.co"
@@ -9,6 +9,16 @@
   "homepage": "https://axiom.co/docs/console/intelligence/mcp-server",
   "repository": "https://github.com/axiomhq/skills",
   "license": "MIT",
-  "keywords": ["axiom", "observability", "apl", "mcp"],
+  "keywords": [
+    "axiom",
+    "observability",
+    "monitoring",
+    "logs",
+    "metrics",
+    "traces",
+    "incident-response",
+    "dashboards",
+    "alerts"
+  ],
   "skills": "./skills/"
 }
