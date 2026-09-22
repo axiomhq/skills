@@ -42,6 +42,15 @@ Authorize the MCP connection in your browser when prompted. APL queries use `que
 
 The scripts included in some skills still use their documented dependencies and Axiom configuration below. MCP OAuth does not configure those script credentials.
 
+### Claude Code
+
+```bash
+claude plugin marketplace add axiomhq/skills
+claude plugin install axiom@axiom
+```
+
+The plugin loads the shared skills and `.mcp.json`, as the Grok plugin does. Restart Claude Code after installation and use `/mcp` to authorize **axiom** when prompted. Skill scripts still require their documented dependencies and configuration below.
+
 ### Skills installer
 
 ```bash
