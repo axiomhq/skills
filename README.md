@@ -123,13 +123,15 @@ The deployment name (e.g., `prod`, `staging`) is passed to scripts: `scripts/axi
 
 ## Releases
 
-Release Please opens a PR that updates the shared version in all five client manifests and writes `CHANGELOG.md`. Merge it to create the GitHub release. The first automated release is 1.1.0.
+Release Please opens a PR that updates the shared version in all five client manifests and writes `CHANGELOG.md`. Merge it to create the GitHub release and attach `axiom-plugin.zip` from the release commit. The first automated release is 1.1.0.
 
 Use conventional commit titles: `feat:` for features, `fix:` for fixes, and `docs:` for documentation. SRE sync commits also trigger patch releases. The daily run catches bot commits that do not trigger a push workflow.
 
 Enable **Allow GitHub Actions to create and approve pull requests** in the repository's Actions settings. Release PR checks may need a maintainer's approval to run.
 
-Clients install from the repository and update through the commands above. A release tag records a version; it does not force installed clients to update. Public marketplace listings require a separate submission.
+Clients update through the commands above. A release tag records a version; it does not force installed clients to update. Public marketplace listings have separate submission and update steps. See [marketplace maintenance](docs/marketplaces.md) for each provider, release checks, and ZIP recovery.
+
+xAI's daily bot proposes Grok marketplace updates when our version changes. The Release workflow checks the published pin after releases and daily, and flags updates still missing after 48 hours.
 
 ## License
 

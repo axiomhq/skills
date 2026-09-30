@@ -20,7 +20,47 @@ jobs:
   release:
     if: github.repository == 'axiomhq/skills' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           target-branch: main
+
+      - uses: actions/checkout@v4
+        if: steps.release.outputs.release_created == 'true'
+        with:
+          ref: ${{ steps.release.outputs.sha }}
+          persist-credentials: false
+
+      - name: Package plugin
+        if: steps.release.outputs.release_created == 'true'
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          test "$(cat version.txt)" = "$RELEASE_VERSION"
+          bash scripts/package-plugin "$RUNNER_TEMP/axiom-plugin.zip"
+
+      - name: Attach plugin to release
+        if: steps.release.outputs.release_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+        run: gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/axiom-plugin.zip"
+
+  grok-marketplace:
+    needs: release
+    if: github.event_name != 'push' || needs.release.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check Grok publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/check-grok-marketplace.py

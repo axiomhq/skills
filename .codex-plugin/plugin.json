@@ -9,7 +9,7 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Axiom",
-    "shortDescription": "Debug production with logs, metrics, and traces.",
+    "shortDescription": "Logs, metrics, and traces",
     "longDescription": "Use Axiom in your coding agent to search logs, query metrics, and follow traces. Dig into production errors and slow requests, build dashboards, set up alerts, and find ways to cut ingestion costs. Includes the Axiom MCP connection and skills for incident response, monitoring, and translating Splunk queries.",
     "developerName": "Axiom",
     "category": "Developer Tools",
@@ -18,6 +18,10 @@
       "Write"
     ],
     "websiteURL": "https://axiom.co",
+    "privacyPolicyURL": "https://axiom.co/docs/legal/privacy",
+    "termsOfServiceURL": "https://axiom.co/docs/legal/terms-of-service",
+    "logo": "./assets/axiom.png",
+    "composerIcon": "./assets/axiom.png",
     "defaultPrompt": [
       "My service is throwing errors. Help me track down what’s causing them.",
       "Build me an on-call dashboard for this service. Show me what’s broken and where to look.",
