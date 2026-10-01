@@ -13,7 +13,6 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 | [controlling-costs](skills/controlling-costs/) | Analyze query patterns to find unused data and optimize Axiom costs |
 | [query-metrics](skills/query-metrics/) | Run metrics queries against Axiom MetricsDB and discover available metrics, tags, and values |
 | [metrics-chart](skills/metrics-chart/) | Render metrics query results (`application/vnd.metrics.v3+json`) as line charts; zero-dependency ASCII by default, optional gnuplot PNG/SVG/sixel (pairs with [query-metrics](skills/query-metrics/)) |
-| [writing-evals](skills/writing-evals/) | Scaffold evaluation suites for the Axiom AI SDK |
 
 ## Requirements
 
@@ -99,7 +98,7 @@ This initializes SRE configuration and memory under `~/.config/axiom-sre/`. Edit
 
 ## Configuration
 
-Skills use your configured credentials to query Axiom and optional Grafana, Pyroscope, Sentry, Slack, and Kubernetes connections. They can update dashboards and alerts, run evals against your configured model providers, and send eval results to Axiom. SRE stores investigation memory locally and can sync it to a Git repository you configure.
+Skills use your configured credentials to query Axiom and optional Grafana, Pyroscope, Sentry, Slack, and Kubernetes connections. They can update dashboards and alerts. SRE stores investigation memory locally and can sync it to a Git repository you configure.
 
 SRE uses `~/.config/axiom-sre/config.toml` with `[axiom.deployments.<name>]` sections. Dashboard, alerting, and metrics scripts use the separate `~/.axiom.toml` format below. Cost-control workflows use SRE for queries and dashboard scripts for deployment, so configure both when using those workflows. MCP OAuth does not configure these script credentials.
 
