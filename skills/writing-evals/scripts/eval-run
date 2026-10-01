@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Run Axiom evaluations
 # Usage: eval-run [target] [options]
+# Run from the project root with the Axiom SDK installed.
 #
 # Arguments:
 #   target    File, directory, glob, or eval name (default: current directory)
@@ -20,4 +21,4 @@
 
 set -euo pipefail
 
-npx axiom eval "$@"
+./node_modules/.bin/axiom eval "$@"

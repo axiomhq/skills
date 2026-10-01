@@ -158,16 +158,16 @@ Override flags from the command line using dot notation:
 
 ```bash
 # Override model
-npx axiom eval --flag.supportAgent.categorizeMessage.model=gpt-4o-mini-2024-07-18
+./node_modules/.bin/axiom eval --flag.supportAgent.categorizeMessage.model=gpt-4o-mini-2024-07-18
 
 # Override numeric value
-npx axiom eval --flag.myCapability.temperature=0.5
+./node_modules/.bin/axiom eval --flag.myCapability.temperature=0.5
 
 # Override boolean
-npx axiom eval --flag.myCapability.beThorough=true
+./node_modules/.bin/axiom eval --flag.myCapability.beThorough=true
 
 # Multiple overrides
-npx axiom eval \
+./node_modules/.bin/axiom eval \
   --flag.supportAgent.categorizeMessage.model=gpt-4o-mini-2024-07-18 \
   --flag.supportAgent.retrieveFromKnowledgeBase.maxDocuments=3
 ```

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # List eval cases without running them
 # Usage: eval-list [target]
+# Run from the project root with the Axiom SDK installed.
 #
 # Arguments:
 #   target    File, directory, glob, or eval name (default: current directory)
@@ -11,4 +12,4 @@
 
 set -euo pipefail
 
-npx axiom eval "${1:-.}" --list
+./node_modules/.bin/axiom eval "${1:-.}" --list

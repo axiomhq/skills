@@ -11,6 +11,8 @@ You write evaluations that prove AI capabilities work. Evals are the test suite 
 
 - Complete the [Axiom AI SDK Quickstart](https://axiom.co/docs/ai-engineering/quickstart) (instrumentation + authentication)
 
+Run commands from the project root. They use the Axiom CLI installed with your project’s SDK.
+
 Verify the SDK is installed:
 
 ```bash
@@ -204,15 +206,15 @@ AXIOM_ORG_ID="ORGANIZATION_ID"
 
 | Command | Purpose |
 |---------|---------|
-| `npx axiom eval` | Run all evals in current directory |
-| `npx axiom eval path/to/file.eval.ts` | Run specific eval file |
-| `npx axiom eval "eval-name"` | Run eval by name (regex match) |
-| `npx axiom eval -w` | Watch mode |
-| `npx axiom eval --debug` | Local mode, no network |
-| `npx axiom eval --list` | List cases without running |
-| `npx axiom eval -b BASELINE_ID` | Compare against baseline |
-| `npx axiom eval --flag.myCapability.model=gpt-4o-mini` | Override flag |
-| `npx axiom eval --flags-config=experiments/config.json` | Load flag overrides from JSON file |
+| `./node_modules/.bin/axiom eval` | Run all evals in current directory |
+| `./node_modules/.bin/axiom eval path/to/file.eval.ts` | Run specific eval file |
+| `./node_modules/.bin/axiom eval "eval-name"` | Run eval by name (regex match) |
+| `./node_modules/.bin/axiom eval -w` | Watch mode |
+| `./node_modules/.bin/axiom eval --debug` | Local mode, no network |
+| `./node_modules/.bin/axiom eval --list` | List cases without running |
+| `./node_modules/.bin/axiom eval -b BASELINE_ID` | Compare against baseline |
+| `./node_modules/.bin/axiom eval --flag.myCapability.model=gpt-4o-mini` | Override flag |
+| `./node_modules/.bin/axiom eval --flags-config=experiments/config.json` | Load flag overrides from JSON file |
 
 ---
 
@@ -264,7 +266,7 @@ Always add `metadata: { purpose: '...' }` to each test case for categorization.
 | `scripts/eval-scaffold <type> <cap> [step] [out]` | `eval-scaffold classification support-agent categorize` | Generate eval file from template |
 | `scripts/eval-validate <file>` | `eval-validate src/my.eval.ts` | Check eval file structure |
 | `scripts/eval-add-cases <file>` | `eval-add-cases src/my.eval.ts` | Analyze test case coverage gaps |
-| `scripts/eval-run [args]` | `eval-run --debug` | Run evals (passes through to `npx axiom eval`) |
+| `scripts/eval-run [args]` | `eval-run --debug` | Run evals (passes through to `./node_modules/.bin/axiom eval`) |
 | `scripts/eval-list [target]` | `eval-list` | List cases without running |
 | `scripts/eval-results <deploy> [opts]` | `eval-results prod -c my-cap` | Query eval results from Axiom |
 
@@ -287,8 +289,8 @@ Always add `metadata: { purpose: '...' }` to each test case for categorization.
 3. Customize: replace TODO placeholders with real data and function
 4. Validate: `scripts/eval-validate <file>` to check structure
 5. Coverage: `scripts/eval-add-cases <file>` to find gaps
-6. Test: `npx axiom eval --debug` for local run
-7. Deploy: `npx axiom eval` to send results to Axiom
+6. Test: `./node_modules/.bin/axiom eval --debug` for local run
+7. Deploy: `./node_modules/.bin/axiom eval` to send results to Axiom
 8. Review: `scripts/eval-results <deployment>` to query results from Axiom
 
 ---

@@ -57,27 +57,29 @@ export default defineConfig({
 
 ## Usage
 
+Run commands from the project root. They use the Axiom CLI installed with your project’s SDK.
+
 ```bash
 # Run all evals
-npx axiom eval
+./node_modules/.bin/axiom eval
 
 # Run specific file
-npx axiom eval src/my-feature.eval.ts
+./node_modules/.bin/axiom eval src/my-feature.eval.ts
 
 # Watch mode
-npx axiom eval -w
+./node_modules/.bin/axiom eval -w
 
 # Local/debug mode (no network)
-npx axiom eval --debug
+./node_modules/.bin/axiom eval --debug
 
 # List cases without running
-npx axiom eval --list
+./node_modules/.bin/axiom eval --list
 
 # Override flags from CLI
-npx axiom eval --flag.myCapability.model=gpt-4o-mini
+./node_modules/.bin/axiom eval --flag.myCapability.model=gpt-4o-mini
 
 # Compare against baseline
-npx axiom eval -b BASELINE_ID
+./node_modules/.bin/axiom eval -b BASELINE_ID
 ```
 
 ## Scripts
@@ -88,7 +90,7 @@ npx axiom eval -b BASELINE_ID
 | `eval-scaffold` | Generate eval file from template |
 | `eval-validate` | Check eval file structure |
 | `eval-add-cases` | Analyze test case coverage gaps |
-| `eval-run` | Run evals (wraps `npx axiom eval`) |
+| `eval-run` | Run evals (wraps `./node_modules/.bin/axiom eval`) |
 | `eval-list` | List cases without running |
 | `eval-results` | Query eval results from Axiom (requires sre skill) |
 

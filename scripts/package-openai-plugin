@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo "Usage: bash scripts/package-openai-plugin /path/to/axiom-openai-plugin.zip" >&2
+  exit 1
+fi
+
+cd "$(dirname "$0")/.."
+
+# Gemini selects a release's only ZIP regardless of its name. Keep its manifest
+# so attaching the OpenAI package does not break Gemini installs.
+version=$(git show HEAD:version.txt)
+for manifest in .codex-plugin/plugin.json gemini-extension.json; do
+  if ! git show "HEAD:$manifest" | jq -e --arg version "$version" '.version == $version' >/dev/null; then
+    echo "$manifest must match version.txt ($version)" >&2
+    exit 1
+  fi
+done
+
+# Package the committed release for upload through OpenAI's submission portal.
+paths=(.codex-plugin/plugin.json .mcp.json skills assets README.md LICENSE
+  version.txt gemini-extension.json)
+if git cat-file -e HEAD:CHANGELOG.md 2>/dev/null; then
+  paths+=(CHANGELOG.md)
+fi
+
+git archive --format=zip --output="$1" HEAD "${paths[@]}"
