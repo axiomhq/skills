@@ -13,7 +13,6 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 | [controlling-costs](skills/controlling-costs/) | Analyze query patterns to find unused data and optimize Axiom costs |
 | [query-metrics](skills/query-metrics/) | Run metrics queries against Axiom MetricsDB and discover available metrics, tags, and values |
 | [metrics-chart](skills/metrics-chart/) | Render metrics query results (`application/vnd.metrics.v3+json`) as line charts; zero-dependency ASCII by default, optional gnuplot PNG/SVG/sixel (pairs with [query-metrics](skills/query-metrics/)) |
-| [writing-evals](skills/writing-evals/) | Scaffold evaluation suites for the Axiom AI SDK |
 
 ## Requirements
 
@@ -99,6 +98,8 @@ This initializes SRE configuration and memory under `~/.config/axiom-sre/`. Edit
 
 ## Configuration
 
+Skills use your configured credentials to query Axiom and optional Grafana, Pyroscope, Sentry, Slack, and Kubernetes connections. They can update dashboards and alerts. SRE stores investigation memory locally and can sync it to a Git repository you configure.
+
 SRE uses `~/.config/axiom-sre/config.toml` with `[axiom.deployments.<name>]` sections. Dashboard, alerting, and metrics scripts use the separate `~/.axiom.toml` format below. Cost-control workflows use SRE for queries and dashboard scripts for deployment, so configure both when using those workflows. MCP OAuth does not configure these script credentials.
 
 For scripts that use `~/.axiom.toml`, add your deployment(s):
@@ -123,13 +124,17 @@ The deployment name (e.g., `prod`, `staging`) is passed to scripts: `scripts/axi
 
 ## Releases
 
-Release Please opens a PR that updates the shared version in all five client manifests and writes `CHANGELOG.md`. Merge it to create the GitHub release. The first automated release is 1.1.0.
+Use conventional commit titles: `feat:`, `fix:`, or `docs:`. Release Please opens a PR to update `version.txt`, all five client manifests, and `CHANGELOG.md`. The daily run also picks up SRE sync commits.
 
-Use conventional commit titles: `feat:` for features, `fix:` for fixes, and `docs:` for documentation. SRE sync commits also trigger patch releases. The daily run catches bot commits that do not trigger a push workflow.
+Merging the release PR automatically creates a GitHub release and attaches `axiom-openai-plugin.zip` from that commit. Download the ZIP and submit it to OpenAI using the docs below.
 
-Enable **Allow GitHub Actions to create and approve pull requests** in the repository's Actions settings. Release PR checks may need a maintainer's approval to run.
+### Marketplace docs
 
-Clients install from the repository and update through the commands above. A release tag records a version; it does not force installed clients to update. Public marketplace listings require a separate submission.
+- [OpenAI / Codex](https://developers.openai.com/plugins/deploy/submission)
+- [Claude plugins](https://claude.com/docs/plugins/submit)
+- [Cursor](https://cursor.com/docs/plugins)
+- [Gemini CLI](https://geminicli.com/docs/extensions/releasing/)
+- [Grok Build](https://github.com/xai-org/plugin-marketplace/blob/main/CONTRIBUTING.md)
 
 ## License
 
