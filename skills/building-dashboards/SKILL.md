@@ -106,7 +106,7 @@ Exception: for sparse metrics where `$__interval` rounds to empty buckets, a fix
 
 #### 1. At-a-Glance (Statistic panels)
 Current values — "what's the state right now?"
-- Use `group using avg` (gauges) or `group using last` (counters).
+- Use `group using avg` (gauges) or `align using last | group using sum` (counters). `last` is an align function only; group accepts min, max, avg, sum, count.
 - Read the metric's `unit` via `metrics-info … metrics <m> info` and pass it to `chart-add --unit`. Ratio metrics (0–1) need `| map * 100` in MPL before `--unit "%"`.
 
 #### 2. Trends (TimeSeries panels)
