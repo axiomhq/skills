@@ -129,4 +129,4 @@ echo "Next steps:" >&2
 echo "  1. Replace TODO placeholders with real test data" >&2
 echo "  2. Update the import to point to your actual function" >&2
 echo "  3. Validate: scripts/eval-validate $OUTPUT" >&2
-echo "  4. Test:     ./node_modules/.bin/axiom eval $OUTPUT --debug" >&2
+echo "  4. Run your eval script with $OUTPUT --debug (npm: npm run eval -- $OUTPUT --debug)" >&2

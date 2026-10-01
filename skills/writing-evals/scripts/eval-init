@@ -191,7 +191,8 @@ if [[ $created -gt 0 ]]; then
     echo "Next steps:"
     echo "  1. Edit $(basename "$APP_SCOPE") — add your capability flags"
     echo "  2. Create an eval:  scripts/eval-scaffold minimal my-capability"
-    echo "  3. Test locally:    ./node_modules/.bin/axiom eval --debug"
+    echo "  3. Reuse your eval script, or add scripts.eval = axiom eval to package.json"
+    echo "  4. Run it with your package manager (npm: npm run eval -- --debug)"
     echo ""
 fi
 

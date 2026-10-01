@@ -154,20 +154,20 @@ overrideFlags({ 'supportAgent.categorizeMessage.model': 'gpt-4o-mini' });
 
 ## CLI Flag Overrides
 
-Override flags from the command line using dot notation:
+These examples use npm and an `eval` script containing `axiom eval`. Use the project’s package manager and eval script, and pass overrides with dot notation:
 
 ```bash
 # Override model
-./node_modules/.bin/axiom eval --flag.supportAgent.categorizeMessage.model=gpt-4o-mini-2024-07-18
+npm run eval -- --flag.supportAgent.categorizeMessage.model=gpt-4o-mini-2024-07-18
 
 # Override numeric value
-./node_modules/.bin/axiom eval --flag.myCapability.temperature=0.5
+npm run eval -- --flag.myCapability.temperature=0.5
 
 # Override boolean
-./node_modules/.bin/axiom eval --flag.myCapability.beThorough=true
+npm run eval -- --flag.myCapability.beThorough=true
 
 # Multiple overrides
-./node_modules/.bin/axiom eval \
+npm run eval -- \
   --flag.supportAgent.categorizeMessage.model=gpt-4o-mini-2024-07-18 \
   --flag.supportAgent.retrieveFromKnowledgeBase.maxDocuments=3
 ```

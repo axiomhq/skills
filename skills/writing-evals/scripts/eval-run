@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Run Axiom evaluations
 # Usage: eval-run [target] [options]
-# Run from the project root with the Axiom SDK installed.
+# npm helper: requires an eval script in the target package ("eval": "axiom eval").
+# For other package managers or script names, run the project command directly.
 #
 # Arguments:
 #   target    File, directory, glob, or eval name (default: current directory)
@@ -21,4 +22,4 @@
 
 set -euo pipefail
 
-./node_modules/.bin/axiom eval "$@"
+exec npm run eval -- "$@"

@@ -57,29 +57,37 @@ export default defineConfig({
 
 ## Usage
 
-Run commands from the project root. They use the Axiom CLI installed with your project’s SDK.
+Use the project's package manager and existing eval script. If it has none, add this to the target package's `package.json`:
+
+```json
+"scripts": {
+  "eval": "axiom eval"
+}
+```
+
+These examples use npm and a script named `eval`. Adapt them to the project's command; pnpm, Yarn, and Bun can use `run eval` too. Run from the target package, with the SDK installed there or available through the workspace.
 
 ```bash
 # Run all evals
-./node_modules/.bin/axiom eval
+npm run eval
 
 # Run specific file
-./node_modules/.bin/axiom eval src/my-feature.eval.ts
+npm run eval -- src/my-feature.eval.ts
 
 # Watch mode
-./node_modules/.bin/axiom eval -w
+npm run eval -- -w
 
 # Local/debug mode (no network)
-./node_modules/.bin/axiom eval --debug
+npm run eval -- --debug
 
 # List cases without running
-./node_modules/.bin/axiom eval --list
+npm run eval -- --list
 
 # Override flags from CLI
-./node_modules/.bin/axiom eval --flag.myCapability.model=gpt-4o-mini
+npm run eval -- --flag.myCapability.model=gpt-4o-mini
 
 # Compare against baseline
-./node_modules/.bin/axiom eval -b BASELINE_ID
+npm run eval -- -b BASELINE_ID
 ```
 
 ## Scripts
@@ -90,8 +98,8 @@ Run commands from the project root. They use the Axiom CLI installed with your p
 | `eval-scaffold` | Generate eval file from template |
 | `eval-validate` | Check eval file structure |
 | `eval-add-cases` | Analyze test case coverage gaps |
-| `eval-run` | Run evals (wraps `./node_modules/.bin/axiom eval`) |
-| `eval-list` | List cases without running |
+| `eval-run` | npm helper: run the project’s `eval` script |
+| `eval-list` | npm helper: run the project’s `eval` script with `--list` |
 | `eval-results` | Query eval results from Axiom (requires sre skill) |
 
 ## Templates

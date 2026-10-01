@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # List eval cases without running them
 # Usage: eval-list [target]
-# Run from the project root with the Axiom SDK installed.
+# npm helper: requires an eval script in the target package ("eval": "axiom eval").
+# For other package managers or script names, run the project command directly.
 #
 # Arguments:
 #   target    File, directory, glob, or eval name (default: current directory)
@@ -12,4 +13,4 @@
 
 set -euo pipefail
 
-./node_modules/.bin/axiom eval "${1:-.}" --list
+exec npm run eval -- "${1:-.}" --list

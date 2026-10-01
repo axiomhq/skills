@@ -11,17 +11,11 @@ You write evaluations that prove AI capabilities work. Evals are the test suite 
 
 - Complete the [Axiom AI SDK Quickstart](https://axiom.co/docs/ai-engineering/quickstart) (instrumentation + authentication)
 
-Run commands from the project root. They use the Axiom CLI installed with your project’s SDK.
+Inspect the target package's `package.json`, the workspace's package manager, and its existing eval command. Reuse that command. If none exists, add `"eval": "axiom eval"` to the target package's `scripts`, preserving its other entries.
 
-Verify the SDK is installed:
+Run through the project's package manager from the target package: for example, `npm run eval -- --debug`, `pnpm run eval --debug`, `yarn run eval --debug`, or `bun run eval --debug`. Adapt the script name to the project. The CLI comes from the project's installed `axiom` SDK; the skill does not bundle it. If missing, install it with the project's package manager.
 
-```bash
-ls node_modules/axiom/dist/
-```
-
-If not installed, install it using the project's package manager (e.g., `pnpm add axiom`).
-
-**Always check `node_modules/axiom/dist/docs/` first** for the correct API signatures, import paths, and patterns for the installed SDK version. The bundled docs are the source of truth — do not rely on the examples in this skill if they conflict.
+**Read the installed SDK's `dist/docs/` first** for API signatures, import paths, and patterns. Locate the package through the project's dependency layout, including hoisted workspace dependencies. These docs take precedence over this skill's examples.
 
 ## Philosophy
 
@@ -204,17 +198,19 @@ AXIOM_ORG_ID="ORGANIZATION_ID"
 
 ## CLI Reference
 
+These examples use npm and an `eval` script containing `axiom eval`. Use the project’s actual package manager and script name. Paths are relative to the target package.
+
 | Command | Purpose |
 |---------|---------|
-| `./node_modules/.bin/axiom eval` | Run all evals in current directory |
-| `./node_modules/.bin/axiom eval path/to/file.eval.ts` | Run specific eval file |
-| `./node_modules/.bin/axiom eval "eval-name"` | Run eval by name (regex match) |
-| `./node_modules/.bin/axiom eval -w` | Watch mode |
-| `./node_modules/.bin/axiom eval --debug` | Local mode, no network |
-| `./node_modules/.bin/axiom eval --list` | List cases without running |
-| `./node_modules/.bin/axiom eval -b BASELINE_ID` | Compare against baseline |
-| `./node_modules/.bin/axiom eval --flag.myCapability.model=gpt-4o-mini` | Override flag |
-| `./node_modules/.bin/axiom eval --flags-config=experiments/config.json` | Load flag overrides from JSON file |
+| `npm run eval` | Run all evals in the target package |
+| `npm run eval -- path/to/file.eval.ts` | Run specific eval file |
+| `npm run eval -- "eval-name"` | Run eval by name (regex match) |
+| `npm run eval -- -w` | Watch mode |
+| `npm run eval -- --debug` | Local mode, no network |
+| `npm run eval -- --list` | List cases without running |
+| `npm run eval -- -b BASELINE_ID` | Compare against baseline |
+| `npm run eval -- --flag.myCapability.model=gpt-4o-mini` | Override flag |
+| `npm run eval -- --flags-config=experiments/config.json` | Load flag overrides from JSON file |
 
 ---
 
@@ -266,8 +262,8 @@ Always add `metadata: { purpose: '...' }` to each test case for categorization.
 | `scripts/eval-scaffold <type> <cap> [step] [out]` | `eval-scaffold classification support-agent categorize` | Generate eval file from template |
 | `scripts/eval-validate <file>` | `eval-validate src/my.eval.ts` | Check eval file structure |
 | `scripts/eval-add-cases <file>` | `eval-add-cases src/my.eval.ts` | Analyze test case coverage gaps |
-| `scripts/eval-run [args]` | `eval-run --debug` | Run evals (passes through to `./node_modules/.bin/axiom eval`) |
-| `scripts/eval-list [target]` | `eval-list` | List cases without running |
+| `scripts/eval-run [args]` | `eval-run --debug` | npm helper: run the project’s `eval` script |
+| `scripts/eval-list [target]` | `eval-list` | npm helper: run the project’s `eval` script with `--list` |
 | `scripts/eval-results <deploy> [opts]` | `eval-results prod -c my-cap` | Query eval results from Axiom |
 
 ### eval-scaffold types
@@ -289,8 +285,8 @@ Always add `metadata: { purpose: '...' }` to each test case for categorization.
 3. Customize: replace TODO placeholders with real data and function
 4. Validate: `scripts/eval-validate <file>` to check structure
 5. Coverage: `scripts/eval-add-cases <file>` to find gaps
-6. Test: `./node_modules/.bin/axiom eval --debug` for local run
-7. Deploy: `./node_modules/.bin/axiom eval` to send results to Axiom
+6. Test: `npm run eval -- --debug` for local run
+7. Deploy: `npm run eval` to send results to Axiom
 8. Review: `scripts/eval-results <deployment>` to query results from Axiom
 
 ---
@@ -339,9 +335,7 @@ Key differences from offline: per-scorer **sampling** (number or async function)
 
 **Before writing online eval code, always read the SDK's bundled docs first** — they match the installed version and contain the latest API, parameters, and patterns:
 
-```bash
-cat node_modules/axiom/dist/docs/evals/online/functions/onlineEval.md
-```
+Read `dist/docs/evals/online/functions/onlineEval.md` inside the installed `axiom` package.
 
 ---
 
@@ -361,15 +355,10 @@ cat node_modules/axiom/dist/docs/evals/online/functions/onlineEval.md
 
 ## API Documentation Lookup
 
-For exact type signatures, check the SDK's bundled docs first (matches the installed version):
+For exact type signatures, read the installed SDK's bundled docs. Paths below are relative to the installed `axiom` package:
 
-```bash
-ls node_modules/axiom/dist/docs/
-```
-
-Key paths:
-- `node_modules/axiom/dist/docs/evals/functions/Eval.md`
-- `node_modules/axiom/dist/docs/scorers/scorers/functions/Scorer.md`
-- `node_modules/axiom/dist/docs/evals/online/functions/onlineEval.md`
-- `node_modules/axiom/dist/docs/scorers/aggregations/README.md`
-- `node_modules/axiom/dist/docs/config/README.md`
+- `dist/docs/evals/functions/Eval.md`
+- `dist/docs/scorers/scorers/functions/Scorer.md`
+- `dist/docs/evals/online/functions/onlineEval.md`
+- `dist/docs/scorers/aggregations/README.md`
+- `dist/docs/config/README.md`
