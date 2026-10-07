@@ -114,10 +114,7 @@ Set in `query.queryOptions.timeSeriesView`:
 Annotations (deployment markers, incidents) are managed via `/v2/annotations`, not via chart JSON:
 
 ```bash
-curl -X POST 'https://api.axiom.co/v2/annotations' \
-  -H 'Authorization: Bearer $AXIOM_TOKEN' \
-  -H 'Content-Type: application/json' \
-  -d '{
+scripts/axiom-api prod POST /annotations '{
     "time": "2024-03-18T08:39:28.382Z",
     "type": "deploy",
     "datasets": ["http-logs"],

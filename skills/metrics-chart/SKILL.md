@@ -18,8 +18,8 @@ regularly-sampled, multi-series time series; this skill draws it.
 # From a file, stdout picks the best renderer for your terminal:
 python3 scripts/metrics_chart.py response.json
 
-# From a pipe (e.g. straight off the query API):
-curl ... -H 'Accept: application/vnd.metrics.v3+json' | python3 scripts/metrics_chart.py
+# Read a saved JSON query response from stdin:
+python3 scripts/metrics_chart.py < response.json
 
 # Force a zero-dependency ASCII chart (always works, anywhere):
 python3 scripts/metrics_chart.py --format ascii response.json
