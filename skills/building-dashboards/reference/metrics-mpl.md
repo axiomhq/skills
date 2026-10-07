@@ -25,10 +25,10 @@ Reference for metrics-backed chart queries. Authoring through `chart-add --mpl '
 
 1. Confirm the metrics dataset with MCP `listDatasets` (`otel:metrics:v1` or `otel-metrics-v1`). Use `scripts/metrics/datasets <deploy>` for a separately configured deployment.
 2. Read MCP `getMetricsSpec` for the dataset before composing MPL. The bundled `scripts/metrics/metrics-spec` is a deployment-independent fallback.
-3. Discover metrics and filters with MCP `listMetrics`, `listMetricTags`, and `getMetricTagValues`; the bundled `scripts/metrics/metrics-info` supports configured deployments. Widen empty discovery windows for lag or sparse metrics.
+3. Discover metrics and filters with MCP `listMetrics`, `listMetricTags`, and `getMetricTagValues`; the bundled `scripts/metrics/metrics-info` supports configured deployments.
 4. Read each metric’s `{type, temporality, unit}` from `listMetrics` or `metrics-info … metrics <m> info`. This drives query shape (below) and unit configuration.
 5. Use `align to $__interval using …`, never a fixed window. The runtime injects `param $__interval: Duration;`; don't add it to the chart string.
-6. Validate the pipeline with `scripts/metrics/mpl-validate-chart` (auto-injects the param for the validator only; rejects inline time ranges).
+6. Validate the pipeline with MCP `queryMetrics` over the intended time range. Use `scripts/metrics/mpl-validate-chart` for separately configured deployments.
 7. Pass to `chart-add --mpl '<query>' --dataset <name>`.
 
 MCP `searchMetrics` and the bundled `find-metrics <value>` search tag *values*, not metric names — only useful with a known entity name.

@@ -22,7 +22,7 @@ npx skills add axiomhq/skills
 - Axiom MCP for metrics discovery and queries; deployment-specific chart validation uses the bundled `scripts/metrics/` helpers.
 - Tools: `jq`, `curl`
 
-The install command above includes all skill dependencies. The metrics helpers belong to this skill and need no separate query skill. `mpl-validate-chart` supplies the dashboard’s external `$__interval` parameter, which MCP does not currently accept.
+The install command above includes all skill dependencies. The bundled metrics helpers support separately configured deployments and local chart validation.
 
 ## Configuration
 
@@ -39,6 +39,11 @@ org_id = "your-org-id"
 - **`token`** - Use an advanced API token with minimal privileges.
 
 **Tip:** This skill uses `~/.axiom.toml`. The SRE skill has a separate [initializer and configuration](../sre/README.md#setup).
+
+Metrics requests, including `AXIOM_URL_OVERRIDE`, must use the configured HTTP(S)
+origin or route between hosted Axiom API/app/regional edge origins. Private
+deployments keep their configured origin. Select another configured deployment
+when using a different service; existing curl configuration remains trusted.
 
 ## Usage
 

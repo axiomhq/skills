@@ -50,10 +50,9 @@ description: Designs and builds Axiom dashboards via API. Covers chart types, AP
    **Metrics path:**
    - Read MCP `getMetricsSpec` for the dataset before composing MPL; reuse the live specification during the task.
    - Discover metric names, types, temporality, and units with `listMetrics`; use metric-scoped `listMetricTags` and `getMetricTagValues` for filters.
-   - Discovery can lag ingestion by two hours. Widen an empty discovery window for sparse metrics before interpreting it as absence.
    - `searchMetrics` searches tag *values*, not metric names — use it with a known entity name.
-   - Use `queryMetrics` for ordinary queries; `truncate: false` returns complete v2 JSON for charting or export. Inspect warnings and units before interpreting values.
-   - Keep `scripts/metrics/mpl-validate-chart` for chart validation with external `$__interval` values. The bundled helpers also support separately configured deployments; confirm they target the intended organization.
+   - Use `queryMetrics` for queries and validation. Optional `params` binds MPL literals; `chartWidth` and `pixelPerPoint` guide adaptive resolution. `truncate: false` returns complete v2 JSON for charting or export.
+   - Use the bundled `scripts/metrics/` helpers for separately configured deployments; confirm they target the intended organization.
    - Skip to the **Metrics/MPL Blueprint**.
 
 4. **Golden signals** (APL path)
@@ -277,7 +276,7 @@ Tools, prerequisites, and `~/.axiom.toml` configuration: see `README.md`. Verify
 | `scripts/metrics/metrics-query <deploy> <mpl> <start> <end>` | Execute a metrics query (raw — no `$__interval` injection) |
 | `scripts/metrics/mpl-validate-chart <deploy> '<MPL>' [start] [end] [--interval D]` | **Validate a chart MPL pipeline.** Auto-injects `param $__interval: Duration;` and `-p __interval=…`; rejects inline time ranges. Use this in place of raw `metrics-query` when authoring chart queries. |
 
-The helpers under `scripts/metrics/` belong to this dashboard skill. `mpl-validate-chart` needs their external-parameter support; no sibling query skill is required.
+The helpers under `scripts/metrics/` belong to this dashboard skill and support separately configured deployments and local chart validation.
 
 > The two `axiom-api` scripts are not interchangeable. `scripts/axiom-api` is for the dashboard app API; `scripts/metrics/axiom-api` is for data/metrics endpoints and edge routing. Wrong one → 404.
 
