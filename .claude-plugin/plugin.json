@@ -9,6 +9,8 @@
   "homepage": "https://axiom.co/docs/console/intelligence/mcp-server",
   "icon": "./assets/axiom.png",
   "privacyPolicyUrl": "https://axiom.co/docs/legal/privacy",
+  "supportUrl": "https://axiom.co/support",
+  "termsOfServiceUrl": "https://axiom.co/docs/legal/terms-of-service",
   "repository": "https://github.com/axiomhq/skills",
   "license": "MIT",
   "keywords": [
