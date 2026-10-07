@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.2](https://github.com/axiomhq/skills/compare/v1.1.1...v1.1.2) (2026-10-07)
+
+
+### Fixes
+
+* add Claude plugin support and terms URLs ([6f8ec0e](https://github.com/axiomhq/skills/commit/6f8ec0e4bc92f45d9d7d850e39150c017c6da390))
+* add Claude plugin support and terms URLs ([5275671](https://github.com/axiomhq/skills/commit/527567108e358ae4e77ebe796b8f293d325d8889))
+* preserve dashboard safeguards when retiring metrics skill ([6c4da82](https://github.com/axiomhq/skills/commit/6c4da82dc42514c5a4b82cc135e53e9e1c565280))
+
+
+### Documentation
+
+* simplify metrics workflows after skill retirement ([ca5168d](https://github.com/axiomhq/skills/commit/ca5168dc160a56a3899fce3b77e9bf04009ebf92))
+
 ## [1.1.1](https://github.com/axiomhq/skills/compare/v1.1.0...v1.1.1) (2026-10-07)
 
 
