@@ -39,20 +39,15 @@ description: Designs and builds Axiom dashboards via API. Covers chart types, AP
    - Service, environment, region, cluster, endpoint?
    - Single service or cross-service view?
 
-3. **Dataset kind.** Run `scripts/metrics/datasets <deploy>` and check `kind`.
-   - `otel:metrics:v1` → metrics dataset, follow the **Metrics path**.
+3. **Dataset kind.** Use MCP `listDatasets` and check `kind`. For a separately configured deployment, use `scripts/metrics/datasets <deploy>`.
+   - `otel:metrics:v1` / `otel-metrics-v1` → metrics dataset, follow the **Metrics path**.
    - anything else → events/logs dataset, follow the **APL path**.
 
    > **Never run `getschema` on a metrics dataset.** It returns 0 rows without error.
 
    **APL path:** discover fields with `['dataset'] | where _time between (ago(1h) .. now()) | getschema`. Continue to steps 4–5.
 
-   **Metrics path:**
-   - `scripts/metrics/metrics-spec <deploy> <dataset>` — required before any MPL query.
-   - `scripts/metrics/metrics-info <deploy> <dataset> metrics | tags | tags <tag> values` for discovery.
-   - If discovery is empty, retry with `--start` 7 days ago (sparse metrics).
-   - `find-metrics <value>` searches tag *values*, not metric names — use it only with a known entity name.
-   - Skip to the **Metrics/MPL Blueprint**.
+   **Metrics path:** Use Axiom MCP for metrics discovery and queries, then follow the **Metrics/MPL Blueprint**.
 
 4. **Golden signals** (APL path)
    - Traffic: requests/sec, events/min
@@ -100,14 +95,14 @@ Raw events that answer "what exactly happened?"
 
 ### Metrics/MPL Blueprint (metrics datasets)
 
-Use `align to $__interval using …` for bucketing — `$__interval` is supplied by the dashboard runtime. Hard-coded windows over- or under-resolve. Validate every pipeline with `scripts/metrics/mpl-validate-chart`; both it and `chart-add --mpl` reject inline time ranges (`[1h..]`).
+Use `align to $__interval using …` for bucketing — `$__interval` is supplied by the dashboard runtime. Hard-coded windows over- or under-resolve. Follow the [Metrics/MPL chart contract](./reference/metrics-mpl.md) for discovery and validation. `chart-add --mpl` rejects inline time ranges (`[1h..]`).
 
 Exception: for sparse metrics where `$__interval` rounds to empty buckets, a fixed wider window (e.g. `1h`) is acceptable; document why on the chart.
 
 #### 1. At-a-Glance (Statistic panels)
 Current values — "what's the state right now?"
 - Choose the `group` function by what the panel should show across series.
-- Read the metric's `unit` via `metrics-info … metrics <m> info` and pass it to `chart-add --unit`. Ratio metrics (0–1) need `| map * 100` in MPL before `--unit "%"`.
+- Read the metric's `unit` from its metadata and pass it to `chart-add --unit`. Ratio metrics (0–1) need `| map * 100` in MPL before `--unit "%"`.
 
 #### 2. Trends (TimeSeries panels)
 Trends over time — "what changed?"
@@ -136,7 +131,7 @@ Each chart needs a unique kebab-case `id` (`error-rate`, `p95-latency`); every l
 
 ## Chart Unit Configuration
 
-Pass a friendly unit string to `chart-add --unit` (`"%"`, `"s"`, `"ms"`, `"B"`, `"req/s"`). The script picks `unit` enum + `customUnits` suffix per chart type. `customUnits` is a label, not a formatter — scale magnitudes in MPL (`| map / 1048576` for bytes → MiB, `| map / 1000000` for bytes → MB, `| map * 100` for 0–1 ratio → percent). For metrics charts, read the source unit from `metrics-info … metrics <m> info` and pass it through. Internals (advanced options the agent may merge with `jq`): [reference/chart-config.md](./reference/chart-config.md).
+Pass a friendly unit string to `chart-add --unit` (`"%"`, `"s"`, `"ms"`, `"B"`, `"req/s"`). The script picks `unit` enum + `customUnits` suffix per chart type. `customUnits` is a label, not a formatter — scale magnitudes in MPL (`| map / 1048576` for bytes → MiB, `| map / 1000000` for bytes → MB, `| map * 100` for 0–1 ratio → percent). For metrics charts, read the source unit from the metric's metadata and pass it through. Internals (advanced options the agent may merge with `jq`): [reference/chart-config.md](./reference/chart-config.md).
 
 ---
 
@@ -270,7 +265,7 @@ Tools, prerequisites, and `~/.axiom.toml` configuration: see `README.md`. Verify
 | `scripts/axiom-api <deploy> <method> <path>` | **Dashboard/app API only** (rewrites to `app.*`). For data/metrics endpoints use `scripts/metrics/axiom-api` |
 | `scripts/metrics/axiom-api <deploy> <method> <path>` | **Data/metrics API** (supports `AXIOM_URL_OVERRIDE` for edge routing) |
 | `scripts/metrics/datasets <deploy>` | List datasets with `kind` and edge deployment |
-| `scripts/metrics/metrics-spec <deploy> <dataset>` | Fetch MPL query specification |
+| `scripts/metrics/metrics-spec` | Fetch MPL query specification |
 | `scripts/metrics/metrics-info <deploy> <dataset> ...` | Discover metrics, tags, and values |
 | `scripts/metrics/metrics-query <deploy> <mpl> <start> <end>` | Execute a metrics query (raw — no `$__interval` injection) |
 | `scripts/metrics/mpl-validate-chart <deploy> '<MPL>' [start] [end] [--interval D]` | **Validate a chart MPL pipeline.** Auto-injects `param $__interval: Duration;` and `-p __interval=…`; rejects inline time ranges. Use this in place of raw `metrics-query` when authoring chart queries. |
@@ -299,8 +294,8 @@ Use `--version <version>` for optimistic concurrency after fetching the dashboar
 
 `chart-add`, `layout-pack`, and `dashboard-assemble` own the JSON shape. Each chart lives in its own temp file; nothing chart-shaped re-enters the agent's context.
 
-1. Discover schema (`axiom-sre` / `getschema` for events; `metrics-spec` + `metrics-info` for metrics).
-2. Write each panel query. Validate APL via `axiom-sre` with an explicit time filter; validate MPL via `scripts/metrics/mpl-validate-chart`.
+1. Discover schema (`axiom-sre` / `getschema` for events; Axiom MCP for metrics).
+2. Write each panel query. Validate APL via `axiom-sre` with an explicit time filter; follow the [Metrics/MPL chart contract](./reference/metrics-mpl.md) for MPL.
 3. `chart-add --type … --apl '<APL>'` *or* `chart-add --type … --mpl '<MPL>' --dataset <name>` per chart, redirected to its own file.
 4. `layout-pack <id>:<Type|WxH> …` for the layout (ids in display order).
 5. `dashboard-assemble --name … --datasets … --layout LAYOUT CHART_FILES…` to compose.
@@ -313,7 +308,6 @@ Use `--version <version>` for optimistic concurrency after fetching the dashboar
 
 - **spl-to-apl** — Splunk SPL → APL (`timechart` → TimeSeries, `stats` → Statistic/Table). See `reference/splunk-migration.md`.
 - **axiom-sre** — schema discovery via `getschema`, baseline exploration.
-- **query-metrics** — metrics dataset/tag/value discovery; same scripts vendored under `scripts/metrics/`.
 
 ---
 
@@ -327,13 +321,12 @@ Compose with `chart-add` + `layout-pack` + `dashboard-assemble`. Pre-built templ
 
 | Problem | Cause | Solution |
 |---------|-------|----------|
-| `getschema` returns 0 rows | Dataset is `otel:metrics:v1` | Use `scripts/metrics/metrics-info` for metrics discovery. |
-| Metrics discovery returns empty | Sparse metrics outside the 24h default window | Retry with `--start` 7 days ago. |
+| `getschema` returns 0 rows | Dataset is `otel:metrics:v1` or `otel-metrics-v1` | Use MCP `listMetrics` for metrics discovery. |
 | 404 from metrics API calls | Used `scripts/axiom-api` (dashboard) instead of `scripts/metrics/axiom-api` | Use `scripts/metrics/axiom-api` for `/v1/query/*`, `/v1/datasets`. |
 | Statistic shows `1` instead of `100%` for a 0–1 ratio | `Percent` enum doesn't auto-multiply | `\| map * 100` in MPL, then `chart-add --unit "%"`. |
 | OTel histogram chart shows nonsense | Histogram aligned as a scalar | Use `bucket … using interpolate_cumulative_histogram` (or `_delta` per `temporality`). See [promql-to-mpl.md § Histogram translation](./reference/promql-to-mpl.md#histogram-translation-histogram_quantile--bucket--using-interpolate__histogram). |
 | Grafana migration filters/groups on the wrong subset | Read `expr` without `description`, or vice versa | Project all five panel fields before authoring; see [reference/grafana-migration.md](./reference/grafana-migration.md). |
-| PromQL metric name not found | Skipped OTel rename rules | Drop `_total`, decompose histograms, normalise units; validate with `metrics-info`. Labels need reverse-tag discovery. See [grafana-migration.md § Name Mapping](./reference/grafana-migration.md#name-mapping-promql--otel-ingest). |
+| PromQL metric name not found | Skipped OTel rename rules | Drop `_total`, decompose histograms, normalise units; validate with `listMetrics`. Labels need reverse-tag discovery. See [grafana-migration.md § Name Mapping](./reference/grafana-migration.md#name-mapping-promql--otel-ingest). |
 | MPL chart aggregates across a dimension PromQL filtered/grouped on | Dropped a selector or `by(...)` during translation | Every `{label=…}` → `where`; every `by(…)` → `group by`. See [reference/promql-to-mpl.md](./reference/promql-to-mpl.md). |
 | Panel shipped a different quantity than asked | Substituted instead of deferring | Replace with a `Note` documenting the blocker. See [Compute or Defer](#compute-or-defer). |
 | 403 "creating private dashboards" | API tokens only create shared dashboards | Leave `owner` as `dashboard-assemble`'s default (`X-AXIOM-EVERYONE`). |

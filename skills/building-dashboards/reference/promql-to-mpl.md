@@ -7,7 +7,7 @@ Mechanical translation rules. The source PromQL carries the spec — translate, 
 1. **Preserve structure.** Every `{label="x"}` selector → MPL `where`. Every `by(label1, label2)` → MPL `group by`. Never drop one because the metric "feels" scoped to it.
 2. **Reverse-tag discovery for missing labels.** Apply OTel rename rules first, then use `metrics-info` to find the equivalent tag. Discovery is a validator, not a generator.
 
-Run `scripts/metrics/metrics-spec <deploy> <dataset>` before authoring — operator names evolve and the spec is the source of truth.
+Use the [Metrics/MPL chart contract](./metrics-mpl.md) for MCP discovery and validation. The `metrics-info` examples below are alternatives for separately configured deployments; with MCP, use `listMetrics`, `listMetricTags`, `getMetricTagValues`, and `queryMetrics` for the same checks.
 
 ---
 
@@ -38,7 +38,7 @@ scripts/metrics/metrics-info <deploy> <dataset> metrics <metric> tags <tag> type
 # -> {"type": "int", "present_types": ["int"]}
 ```
 
-Don't infer from `metrics-info … tags <tag> values` alone — Prometheus-imported tags often stringify numerics; quoted values in JSON are inconclusive. The probe runs `filter <tag> is <T>` for each candidate type and reports which return non-empty series.
+Don't infer from tag values alone — Prometheus-imported tags often stringify numerics; quoted values in JSON are inconclusive. The helper probes `filter <tag> is <T>` for each candidate type and reports which return non-empty series; run these probes with `queryMetrics` when using MCP.
 
 If `type` comes back `"mixed"`, the tag carries multiple types across rows. Use the defensive form:
 
@@ -125,7 +125,7 @@ test:http_requests_total
 | align to 5m using prom::rate
 ```
 
-> **Why `prom::rate` and not `rate`?** `prom::rate` preserves Prometheus semantics (handles counter resets, extrapolates over the window). Use it for any translation from PromQL `rate()`. Plain `rate` exists for native MPL use cases where you do not want Prom's extrapolation. When in doubt, match the source: PromQL `rate(...)` → `prom::rate`. Confirm operator availability with `scripts/metrics/metrics-spec` before authoring.
+> **Why `prom::rate` and not `rate`?** `prom::rate` preserves Prometheus semantics (handles counter resets, extrapolates over the window). Use it for any translation from PromQL `rate()`. Plain `rate` exists for native MPL use cases where you do not want Prom's extrapolation. When in doubt, match the source: PromQL `rate(...)` → `prom::rate`. Confirm unfamiliar operators with `getMetricsSpec`.
 
 ### Other aggregations
 
@@ -176,7 +176,7 @@ test:http_request_duration_seconds_bucket
 1. **The `le` dimension drops from the `by` list.** MPL handles bucket boundaries internally; surfacing `le` would be redundant. The `by(method, path, le)` becomes `bucket by method, path` — `le` is gone.
 2. **The outer `rate(...)` collapses into the bucket call** as the rate argument: `interpolate_cumulative_histogram(rate, 0.90, …)`. The `[5m]` Prom range becomes the `bucket … to 5m` window.
 
-**Pick the right histogram operator** for the metric's temporality. Cumulative histograms (the OTel default) use `interpolate_cumulative_histogram`. Delta histograms use `interpolate_delta_histogram`. Read the metric's `temporality` from `scripts/metrics/metrics-info <deploy> <dataset> metrics <metric> info` before choosing — this is part of the metric metadata, not a guess.
+**Pick the right histogram operator** for the metric's temporality. Cumulative histograms (the OTel default) use `interpolate_cumulative_histogram`. Delta histograms use `interpolate_delta_histogram`. Read the metric's `temporality` from `listMetrics` before choosing — this is part of the metric metadata, not a guess.
 
 ---
 
@@ -192,7 +192,7 @@ PromQL's `<bool 0.4` expression returns 0 or 1 per timestamp depending on whethe
 | map is::lt(0.4)
 ```
 
-Common predicates: `is::lt`, `is::le`, `is::gt`, `is::ge`, `is::eq`, `is::ne`. Confirm names against `metrics-spec` for the dataset — operator availability evolves.
+Common predicates: `is::lt`, `is::le`, `is::gt`, `is::ge`, `is::eq`, `is::ne`. Confirm unfamiliar names with `getMetricsSpec` — operator availability evolves.
 
 ---
 
@@ -282,9 +282,9 @@ Detection trigger: the value isn't in `metrics-info … tags <label> values`. Fr
 Per panel:
 
 - [ ] Applied OTel metric-name rename rules to every metric in `expr` (drop `_total`, decompose histogram derivatives, normalize unit suffixes).
-- [ ] Validated each renamed metric name with `metrics-info` (or marked the chart blocked).
-- [ ] Resolved label names via `metrics-info … tags` — not via assumed renaming. Reverse-search if absent (capped at 2 candidates).
-- [ ] **For every PromQL selector value not present in `metrics-info … tags <label> values`: cited a written source for the expansion** (panel `description`, or upstream rule library file + line). Memory-as-source is forbidden; no citation → defer the panel. See [§ Selector Values Not in the Dataset Are Aliases](#selector-values-not-in-the-dataset-are-aliases--cite-the-source).
+- [ ] Validated each renamed metric name through discovery (or marked the chart blocked).
+- [ ] Resolved label names through tag discovery — not via assumed renaming. Reverse-search if absent (capped at 2 candidates).
+- [ ] **For every PromQL selector value absent from the discovered tag values: cited a written source for the expansion** (panel `description`, or upstream rule library file + line). Memory-as-source is forbidden; no citation → defer the panel. See [§ Selector Values Not in the Dataset Are Aliases](#selector-values-not-in-the-dataset-are-aliases--cite-the-source).
 - [ ] For each PromQL `{…}` matcher: produced a corresponding MPL `where` clause (regex `=~` → `== #/…/`, etc.).
 - [ ] For each PromQL `by(…)` dimension: included it in the MPL `group by` (or `bucket by` for histograms).
 - [ ] For each `rate(metric[X])`: produced `align to X using prom::rate`.
@@ -292,5 +292,5 @@ Per panel:
 - [ ] For each ratio: built a `compute … using /` block, branches with matching shape; multiplied by 100 if the chart is `Percent100`.
 - [ ] For each missing label: ran reverse-tag discovery (capped at 2 candidates), surfaced a blocker rather than dropping the selector.
 - [ ] No inline time ranges on the MPL source.
-- [ ] Tested via `scripts/metrics/metrics-query`, preserving `$__interval` (with `param` declaration and `-p __interval=…`).
+- [ ] Tested following the [Metrics/MPL chart contract](./metrics-mpl.md), preserving `$__interval`.
 - [ ] Spot-checked: does each translated panel filter the same subset and group by the same dimensions as the original?

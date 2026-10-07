@@ -19,7 +19,7 @@ npx skills add axiomhq/skills
 ## Prerequisites
 
 - `axiom-sre` skill (for API access and schema discovery)
-- `query-metrics` skill (for metrics dataset/metric/tag discovery; also vendored locally in `scripts/metrics/`)
+- Axiom MCP for metrics discovery and queries
 - Tools: `jq`, `curl`
 
 The install command above includes all skill dependencies.
@@ -39,6 +39,11 @@ org_id = "your-org-id"
 - **`token`** - Use an advanced API token with minimal privileges.
 
 **Tip:** This skill uses `~/.axiom.toml`. The SRE skill has a separate [initializer and configuration](../sre/README.md#setup).
+
+The bundled `scripts/metrics/` helpers support separately configured deployments.
+Requests must stay on the configured HTTP(S) origin, except for routing between
+hosted Axiom API/app/regional edge origins. This also applies to `AXIOM_URL_OVERRIDE`;
+existing curl configuration remains trusted.
 
 ## Usage
 
@@ -87,5 +92,4 @@ Pre-built templates in `reference/templates/`:
 ## Related Skills
 
 - `axiom-sre` - Schema discovery and query exploration
-- `query-metrics` - Discover metric names, tags, and tag values for MPL queries
 - `spl-to-apl` - Translate Splunk dashboards to Axiom

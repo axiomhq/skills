@@ -45,10 +45,16 @@ class Metadata:
     warnings: list = field(default_factory=list)
     unit: Optional[str] = None
     custom_unit: Optional[str] = None
+    ignore_unit: bool = False
 
     def y_label(self) -> str:
-        # Prefer the human custom_unit, fall back to the canonical unit.
-        return self.custom_unit or self.unit or ""
+        """choose the axis label without rescaling samples.
+
+        NOTE: a supplied custom unit wins, including an empty label; ignore_unit suppresses only the source unit.
+        """
+        if self.custom_unit is not None:
+            return self.custom_unit
+        return "" if self.ignore_unit else self.unit or ""
 
 
 @dataclass
@@ -119,6 +125,7 @@ def parse(doc) -> "tuple[Metadata, list]":
             warnings=list(m.get("warnings") or []),
             unit=m.get("unit"),
             custom_unit=m.get("custom_unit"),
+            ignore_unit=m.get("ignore_unit", False),
         )
 
     metrics = {s.get("metric") for s in raw_series}

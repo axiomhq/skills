@@ -219,7 +219,7 @@ Verify metrics charts set BOTH `query.apl` (MPL pipeline) and `query.metricsData
 - [ ] Agent sets `query.apl` to the MPL pipeline string (NOT `query.mpl`. "mpl" is incorrect).
 - [ ] Agent sets `query.metricsDataset` to the dataset name
 - [ ] Agent does NOT set `query.mpl` (rejected on create)
-- [ ] Agent runs `scripts/metrics/metrics-spec` before composing MPL queries
+- [ ] Agent uses `getMetricsSpec` for unfamiliar MPL (or `scripts/metrics/metrics-spec` for a separately configured deployment)
 - [ ] Pipeline order matches intended execution order
 - [ ] Dotted identifiers are backtick-escaped in MPL
 
