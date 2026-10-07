@@ -24,8 +24,6 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 
 `.mcp.json` configures the hosted [Axiom MCP Server](https://github.com/axiomhq/mcp) at `https://mcp.axiom.co/mcp` for agent clients that install plugins from a manifest. APL queries use `queryDataset`; metrics queries use `queryMetrics` with MPL. See the [MCP setup docs](https://axiom.co/docs/console/intelligence/mcp-server).
 
-Use `getMetricsSpec` for current MPL syntax and `queryMetrics` with `truncate: false` when saving complete results for `metrics-chart`.
-
 ## Installation
 
 ### Codex

@@ -19,10 +19,10 @@ npx skills add axiomhq/skills
 ## Prerequisites
 
 - `axiom-sre` skill (for API access and schema discovery)
-- Axiom MCP for metrics discovery and queries; deployment-specific chart validation uses the bundled `scripts/metrics/` helpers.
+- Axiom MCP for metrics discovery and queries
 - Tools: `jq`, `curl`
 
-The install command above includes all skill dependencies. The bundled metrics helpers support separately configured deployments and local chart validation.
+The install command above includes all skill dependencies.
 
 ## Configuration
 
@@ -40,10 +40,10 @@ org_id = "your-org-id"
 
 **Tip:** This skill uses `~/.axiom.toml`. The SRE skill has a separate [initializer and configuration](../sre/README.md#setup).
 
-Metrics requests, including `AXIOM_URL_OVERRIDE`, must use the configured HTTP(S)
-origin or route between hosted Axiom API/app/regional edge origins. Private
-deployments keep their configured origin. Select another configured deployment
-when using a different service; existing curl configuration remains trusted.
+The bundled `scripts/metrics/` helpers support separately configured deployments.
+Requests must stay on the configured HTTP(S) origin, except for routing between
+hosted Axiom API/app/regional edge origins. This also applies to `AXIOM_URL_OVERRIDE`;
+existing curl configuration remains trusted.
 
 ## Usage
 

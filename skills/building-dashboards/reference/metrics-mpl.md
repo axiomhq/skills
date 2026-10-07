@@ -23,26 +23,26 @@ Reference for metrics-backed chart queries. Authoring through `chart-add --mpl '
 
 ## Authoring Checklist
 
-1. Confirm the metrics dataset with MCP `listDatasets` (`otel:metrics:v1` or `otel-metrics-v1`). Use `scripts/metrics/datasets <deploy>` for a separately configured deployment.
-2. Read MCP `getMetricsSpec` for the dataset before composing MPL. The bundled `scripts/metrics/metrics-spec` is a deployment-independent fallback.
-3. Discover metrics and filters with MCP `listMetrics`, `listMetricTags`, and `getMetricTagValues`; the bundled `scripts/metrics/metrics-info` supports configured deployments.
-4. Read each metric’s `{type, temporality, unit}` from `listMetrics` or `metrics-info … metrics <m> info`. This drives query shape (below) and unit configuration.
-5. Use `align to $__interval using …`, never a fixed window. The runtime injects `param $__interval: Duration;`; don't add it to the chart string.
-6. Validate the pipeline with MCP `queryMetrics` over the intended time range. Use `scripts/metrics/mpl-validate-chart` for separately configured deployments.
-7. Pass to `chart-add --mpl '<query>' --dataset <name>`.
+Use Axiom MCP for discovery and queries. For separately configured deployments, the bundled `scripts/metrics/` helpers provide discovery and `mpl-validate-chart`; keep discovery, validation, and dashboard creation in the same organization.
 
-MCP `searchMetrics` and the bundled `find-metrics <value>` search tag *values*, not metric names — only useful with a known entity name.
+1. Confirm the metrics dataset with `listDatasets` (`otel:metrics:v1` or `otel-metrics-v1`).
+2. Use `getMetricsSpec` for unfamiliar MPL syntax.
+3. Discover metrics and filters with `listMetrics`, `listMetricTags`, and `getMetricTagValues`.
+4. Use each metric's `{type, temporality, unit}` from `listMetrics` to choose the query shape and units below.
+5. Use `align to $__interval using …`, never a fixed window. The runtime injects `param $__interval: Duration;`; don't add it to the chart string.
+6. Validate with `queryMetrics`, supplying `startTime` and `endTime` instead of an inline time range.
+7. Pass to `chart-add --mpl '<query>' --dataset <name>`.
 
 ## Choosing a Query Shape
 
-The `{type, temporality, unit}` block from `metrics-info` drives the pipeline:
+The metric's `{type, temporality, unit}` drives the pipeline:
 
 | `type` | `temporality` | Pipeline |
 |---|---|---|
 | `Gauge` | `null` | Align directly; the function follows the panel's intent. No rate. |
 | `CounterMonotonic` | `Cumulative` | Convert to per-second rate (`align using prom::rate`), then aggregate. |
 | `CounterMonotonic` | `Delta` | Already per-interval. Sum/align directly. |
-| `CounterNonMonotonic` | either | Choose rate, delta, or current value from the question; ask only if the intent is unclear. |
+| `CounterNonMonotonic` | either | Ambiguous (rate? delta? current value?). Ask the user. |
 | `Histogram` | either | Use `bucket … using interpolate_cumulative_histogram` (cumulative) or `interpolate_delta_histogram` (delta). Plain `align using avg` produces nonsense. |
 
 `temporality: null` means "not applicable" (the norm for Gauges), not "missing data".
@@ -55,11 +55,7 @@ If a chart combines metrics with mismatched units in arithmetic, surface the uni
 
 ### Workflow
 
-1. Fetch the metric's metadata:
-   ```bash
-   scripts/metrics/metrics-info <deploy> <dataset> metrics <metric> info
-   # -> {"type":"Gauge","temporality":null,"unit":"Cel"}
-   ```
+1. Read the metric's unit from `listMetrics`, e.g. `{"type":"Gauge","temporality":null,"unit":"Cel"}`.
 2. Map (or pass through to `chart-add --unit`):
    ```bash
    scripts/metrics/unit-for "Cel"   # -> {"unit":"Auto","customUnits":"Cel"}

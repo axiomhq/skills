@@ -31,9 +31,9 @@ response you already have.
 
 ## Input
 
-Use the complete `{metadata, series}` JSON from Axiom MCP's `queryMetrics` with `truncate: false`. Save its `structuredContent` field as `response.json`; do not save the MCP envelope or reconstruct samples from the default CSV preview. The text response can include a query-budget footer.
+For MCP results, call `queryMetrics` with `truncate: false` and save its `structuredContent` (`{metadata, series}`) as `response.json`. The default CSV preview can omit series and samples.
 
-The renderer also accepts saved API responses in v2 (`application/json+metrics.v2`) or v3 (`application/vnd.metrics.v3+json`) form. A per-series `summary` is ignored. Rendering an existing file needs no MCP connection.
+Saved API responses in v2 (`application/json+metrics.v2`) or v3 (`application/vnd.metrics.v3+json`) form also work. A per-series `summary` is ignored.
 
 ## Usage
 

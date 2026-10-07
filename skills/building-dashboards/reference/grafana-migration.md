@@ -2,6 +2,8 @@
 
 Guide for converting Grafana dashboards (Prometheus-backed) to Axiom dashboards on a metrics dataset.
 
+Use the [Metrics/MPL chart contract](./metrics-mpl.md) for MCP discovery and validation. The `metrics-info` examples below are alternatives for separately configured deployments.
+
 > **Headline rule.** A Grafana panel's spec is the **union of five fields**. No single field is the whole spec. Pull them together in your *first* projection and use their conjunction when authoring the MPL equivalent. The most common failure mode in this migration is reading one field and silently ignoring another — the resulting dashboard filters or groups on a different subset than the original, however honestly it claims to "match".
 
 ---
@@ -13,8 +15,8 @@ Guide for converting Grafana dashboards (Prometheus-backed) to Axiom dashboards 
 3. **Reconcile prose against `expr`** — more-restrictive wins. See [Reconciling description and expr](#reconciling-description-and-expr).
 4. **Map visualization types** (table below).
 5. **Translate PromQL → MPL** preserving every selector and grouping. Full rules: [`promql-to-mpl.md`](./promql-to-mpl.md).
-6. **Resolve metric/label name mismatches** by applying OTel renaming rules first, then validating with `metrics-info`. Escalate only after both fail.
-7. **Validate each query** with `scripts/metrics/mpl-validate-chart` (preserves `$__interval`).
+6. **Resolve metric/label name mismatches** by applying OTel renaming rules first, then validating through metric and tag discovery. Escalate only after both fail.
+7. **Validate each query** following the [Metrics/MPL chart contract](./metrics-mpl.md), preserving `$__interval`.
 8. **Compose the Axiom dashboard** with `chart-add` + `layout-pack` + `dashboard-assemble`. For top-level field mappings (`refresh` → `refreshTime`, `time.from` → `timeWindowStart` with `qr-` prefix, etc.) see [Top-Level Dashboard Fields](#top-level-dashboard-fields).
 9. **Deploy** with `dashboard-create`; URL via `dashboard-link`.
 
@@ -134,7 +136,7 @@ Full rules: [reference/promql-to-mpl.md](./promql-to-mpl.md). Headline guarantee
 
 - **Every PromQL `{label="x"}` becomes an MPL `where` clause.** Never drop a selector because the metric name "feels" scoped to the right thing — the selector was an authoring decision.
 - **Every PromQL `by(label1, label2)` dimension becomes an MPL `group by`.** Drop one and the chart shape changes.
-- **Aggregations** (`rate()`, `sum()`, `histogram_quantile()`) translate to MPL operators — consult `scripts/metrics/metrics-spec` for the operator names per metric type before authoring. The `promql-to-mpl.md` doc covers the common operator mappings (rate → `align using prom::rate`, histogram_quantile → `bucket … using interpolate_*_histogram`, etc.).
+- **Aggregations** (`rate()`, `sum()`, `histogram_quantile()`) translate to MPL operators — consult `getMetricsSpec` for unfamiliar operators. The `promql-to-mpl.md` doc covers the common operator mappings (rate → `align using prom::rate`, histogram_quantile → `bucket … using interpolate_*_histogram`, etc.).
 
 **Discovery is a validator, not a generator.** Discovery (`metrics-info`, `metrics-query`) confirms that the subset described by `expr`+`description` exists in the dataset. It does not invent a subset for you. If you find yourself running discovery to *decide* what the panel should filter on, stop — the source dashboard already wrote that down.
 
@@ -215,11 +217,11 @@ Symptom: agent screen-scrapes the rendered chart. **Fix:** always work from the 
 - [ ] Projected canonical panel spec via `jq` — every panel's `expr`, `legendFormat`, `unit`, `title`, `description`.
 - [ ] For every panel, listed the spec as the conjunction of its five fields; reconciled prose against `expr` (more-restrictive wins).
 - [ ] Mapped visualization types per the table above.
-- [ ] For every metric/label name in `expr`: applied OTel renaming rules first, validated with `metrics-info`, escalated only if both failed.
+- [ ] For every metric/label name in `expr`: applied OTel renaming rules first, validated through discovery, escalated only if both failed.
 - [ ] For every PromQL `{...}` selector: a corresponding MPL `where` clause.
-- [ ] **For every PromQL selector value not present in `metrics-info … tags <label> values`: cited a written source for the expansion** (panel `description`, or upstream rule library file + line). Memory-as-source is forbidden; no citation → defer the panel. See [promql-to-mpl.md § Selector Values Not in the Dataset Are Aliases](./promql-to-mpl.md#selector-values-not-in-the-dataset-are-aliases--cite-the-source).
+- [ ] **For every PromQL selector value absent from the discovered tag values: cited a written source for the expansion** (panel `description`, or upstream rule library file + line). Memory-as-source is forbidden; no citation → defer the panel. See [promql-to-mpl.md § Selector Values Not in the Dataset Are Aliases](./promql-to-mpl.md#selector-values-not-in-the-dataset-are-aliases--cite-the-source).
 - [ ] For every PromQL `by(...)`: a corresponding MPL `group by` with all dimensions preserved.
-- [ ] Tested every query with `metrics-query`, preserving `$__interval` (with `param` declaration and `-p __interval=…`).
+- [ ] Tested every query following the [Metrics/MPL chart contract](./metrics-mpl.md), preserving `$__interval`.
 - [ ] Built Axiom dashboard JSON without inline time ranges in chart queries.
 - [ ] Set chart units correctly: `customUnits` on Statistic, `unit` on TimeSeries (see `chart-config.md`).
 - [ ] Validated with `dashboard-validate`.

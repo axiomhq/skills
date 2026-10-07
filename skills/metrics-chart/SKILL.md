@@ -1,15 +1,13 @@
 ---
 name: metrics-chart
-description: Render saved Axiom metrics v2 or v3 JSON as line charts in a terminal or transcript. Uses Unicode/ASCII by default and supports PNG/SVG/sixel with gnuplot. Use when plotting metrics results; discovery and querying are provided by Axiom MCP.
+description: Render saved Axiom metrics v2 or v3 JSON as line charts in a terminal or transcript. Uses Unicode/ASCII by default and supports PNG/SVG/sixel with gnuplot. Use when plotting metrics query results.
 ---
 
 # metrics-chart
 
 Turns a metrics query response into a **multi-series line chart**.
 
-Input is a saved `{metadata, series}` response from Axiom MCP or the metrics API. If the user already supplied one, render it directly. To obtain data through MCP, use `queryMetrics` with `truncate: false` and save `structuredContent` as the input JSON. Preserve metadata and null samples; do not reconstruct data from CSV or include the MCP envelope or query-budget text footer. The default MCP preview can omit series and samples.
-
-Use `getMetricsSpec` for current MPL syntax when composing a query. Query discovery and execution belong to MCP; this skill handles rendering. An existing v2/v3 API response also works without a connection.
+Input is a saved `{metadata, series}` response in metrics v2 or v3 format. For MCP results, call `queryMetrics` with `truncate: false` and save its `structuredContent` as the input JSON. The default CSV preview can omit series and samples.
 
 ## TL;DR
 
