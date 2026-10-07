@@ -11,7 +11,7 @@
     "@types/node": "^22.0.0",
     "tsx": "^4.20.0",
     "typescript": "^5",
-    "vitest": "^4.0.17"
+    "vitest": "^4.1.0"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.18",
