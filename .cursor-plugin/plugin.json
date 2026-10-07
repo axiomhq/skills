@@ -9,6 +9,7 @@
   "homepage": "https://axiom.co/docs/console/intelligence/mcp-server",
   "repository": "https://github.com/axiomhq/skills",
   "license": "MIT",
+  "logo": "assets/axiom.png",
   "keywords": [
     "axiom",
     "observability",
@@ -20,5 +21,6 @@
     "dashboards",
     "alerts"
   ],
-  "skills": "./skills/"
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
 }

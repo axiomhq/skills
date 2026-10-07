@@ -11,7 +11,7 @@
     "@types/node": "^22.0.0",
     "tsx": "^4.20.0",
     "typescript": "^5",
-    "vitest": "^4.0.17"
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.18",
@@ -19,7 +19,7 @@
     "@anthropic-ai/sdk": "^0.40.0",
     "@t3-oss/env-core": "^0.13.10",
     "ai": "^6.0.43",
-    "axiom": "^0.38.0",
+    "axiom": "^0.38.1",
     "dotenv": "^17.2.3",
     "gray-matter": "^4.0.3",
     "zod": "^4.3.5"

@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '37 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'axiomhq/skills' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          target-branch: main
+
+      - uses: actions/checkout@v4
+        if: steps.release.outputs.release_created == 'true'
+        with:
+          ref: ${{ steps.release.outputs.sha }}
+          persist-credentials: false
+
+      - name: Package plugin for OpenAI
+        if: steps.release.outputs.release_created == 'true'
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          test "$(cat version.txt)" = "$RELEASE_VERSION"
+          bash scripts/package-openai-plugin "$RUNNER_TEMP/axiom-openai-plugin.zip"
+
+      - name: Attach OpenAI submission ZIP to release
+        if: steps.release.outputs.release_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+        run: gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/axiom-openai-plugin.zip"
