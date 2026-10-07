@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1.1](https://github.com/axiomhq/skills/compare/v1.1.0...v1.1.1) (2026-10-07)
+
+
+### Fixes
+
+* add Claude plugin icon and privacy policy ([479f228](https://github.com/axiomhq/skills/commit/479f22872155c132e3208a3be423fa8d4b101681))
+* add Claude plugin icon and privacy policy ([f14b53b](https://github.com/axiomhq/skills/commit/f14b53be7e3d3ea127b338830a4d5ba5f3371f3c))
+
+
+### SRE skill
+
+* sync from gilfoyle@631b5ee ([93d60c7](https://github.com/axiomhq/skills/commit/93d60c7d08838921e74b078b73d83936ec3f41bd))
+
 ## 1.1.0 (2026-10-02)
 
 
