@@ -40,6 +40,11 @@ Get your org_id from Settings → Organization. For the token, create a scoped *
 
 **Tip:** This skill uses `~/.axiom.toml`. The SRE skill has a separate [initializer and configuration](../sre/README.md#setup).
 
+Metrics requests, including `AXIOM_URL_OVERRIDE`, must use the configured HTTP(S)
+origin or route between hosted Axiom API/app/regional edge origins. Private
+deployments keep their configured origin. Select another configured deployment
+when using a different service; existing curl configuration remains trusted.
+
 ## Usage
 
 ```bash
