@@ -7,6 +7,8 @@
     "url": "https://axiom.co"
   },
   "homepage": "https://axiom.co/docs/console/intelligence/mcp-server",
+  "icon": "./assets/axiom.png",
+  "privacyPolicyUrl": "https://axiom.co/docs/legal/privacy",
   "repository": "https://github.com/axiomhq/skills",
   "license": "MIT",
   "keywords": [
