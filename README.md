@@ -6,18 +6,18 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 
 | Skill                                          | Description                                    |
 | ---------------------------------------------- | ---------------------------------------------- |
-| [sre](skills/sre/)                             | Hypothesis-driven SRE investigation with Axiom |
-| [spl-to-apl](skills/spl-to-apl/)               | Translate Splunk SPL queries to Axiom APL      |
-| [building-dashboards](skills/building-dashboards/) | Design and build Axiom dashboards from intent, templates, Splunk migrations, and metrics/MPL chart payloads |
+| [axiom-sre](skills/sre/)                       | Hypothesis-driven SRE investigation with Axiom |
+| [axiom-spl-to-apl](skills/axiom-spl-to-apl/)   | Translate Splunk SPL queries to Axiom APL      |
+| [axiom-building-dashboards](skills/axiom-building-dashboards/) | Design and build Axiom dashboards from intent, templates, Splunk migrations, and metrics/MPL chart payloads |
 | [axiom-alerting](skills/axiom-alerting/) | Unified monitor + notifier management for Axiom alerting via the v2 API |
-| [controlling-costs](skills/controlling-costs/) | Analyze query patterns to find unused data and optimize Axiom costs |
-| [metrics-chart](skills/metrics-chart/) | Render saved metrics v2/v3 JSON as line charts; zero-dependency ASCII by default, optional gnuplot PNG/SVG/sixel |
+| [axiom-controlling-costs](skills/axiom-controlling-costs/) | Analyze query patterns to find unused data and optimize Axiom costs |
+| [axiom-metrics-chart](skills/axiom-metrics-chart/) | Render saved metrics v2/v3 JSON as line charts; zero-dependency ASCII by default, optional gnuplot PNG/SVG/sixel |
 
 ## Requirements
 
 - **jq** - JSON processor (`brew install jq` or `apt install jq`)
 - **curl** - HTTP client (usually pre-installed)
-- **bc** - Calculator, needed by controlling-costs (`brew install bc` or `apt install bc`)
+- **bc** - Calculator, needed by axiom-controlling-costs (`brew install bc` or `apt install bc`)
 - **timeout** or **gtimeout** - Required by SRE scripts (`brew install coreutils` on macOS)
 
 ## MCP Server
@@ -85,7 +85,7 @@ To update, run `gemini extensions update axiom`, then restart Gemini CLI. See th
 npx skills add axiomhq/skills
 ```
 
-This installs all skills. Skills have dependencies on each other (e.g., `controlling-costs` depends on `sre` and `building-dashboards`), so installing all is recommended.
+This installs all skills. Skills have dependencies on each other (e.g., `axiom-controlling-costs` depends on `axiom-sre` and `axiom-building-dashboards`), so installing all is recommended.
 
 For SRE, run `scripts/init` from the installed skill directory; its location depends on your agent or plugin installer. From a checkout of this repository:
 

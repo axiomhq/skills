@@ -5,7 +5,7 @@
   "scripts": {
     "check": "tsc --noEmit",
     "eval": "axiom eval",
-    "eval:spl-to-apl": "axiom eval ../skills/spl-to-apl/.meta/spl-to-apl.eval.ts"
+    "eval:axiom-spl-to-apl": "axiom eval ../skills/axiom-spl-to-apl/.meta/axiom-spl-to-apl.eval.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
