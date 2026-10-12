@@ -144,3 +144,5 @@ Merging the release PR automatically creates a GitHub release and attaches `axio
 ## License
 
 MIT License - see [LICENSE](LICENSE)
+
+Temporary bot PR CI smoke test.
