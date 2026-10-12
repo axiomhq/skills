@@ -12,6 +12,9 @@ on:
         required: false
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
@@ -19,19 +22,23 @@ jobs:
       skills: ${{ steps.changed-skills.outputs.skills }}
       has_evals: ${{ steps.changed-skills.outputs.has_evals }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Detect changed skills with evals
         id: changed-skills
+        env:
+          INPUT_SKILL: ${{ inputs.skill }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
           # If skill input is provided, use it directly
-          if [ -n "${{ inputs.skill }}" ]; then
-            skill="${{ inputs.skill }}"
+          if [ -n "$INPUT_SKILL" ]; then
+            skill="$INPUT_SKILL"
             eval_file="skills/${skill}/.meta/${skill}.eval.ts"
             if [ -f "$eval_file" ]; then
-              echo "skills=[\"${skill}\"]" >> $GITHUB_OUTPUT
+              echo "skills=$(jq -cn --arg skill "$skill" '[$skill]')" >> "$GITHUB_OUTPUT"
               echo "has_evals=true" >> $GITHUB_OUTPUT
               echo "Running eval for manually specified skill: ${skill}"
               exit 0
@@ -44,14 +51,14 @@ jobs:
           fi
 
           # Get list of changed files in the PR
-          base_ref="${{ github.base_ref }}"
+          base_ref="$BASE_REF"
           if [ -z "$base_ref" ]; then
             base_ref="main"
           fi
-          changed_files=$(git diff --name-only origin/${base_ref}...HEAD)
+          changed_files=$(git diff --name-only "origin/${base_ref}...HEAD")
           
           # Extract unique skill names from changed paths (skills/<skill>/...)
-          skills=$(echo "$changed_files" | grep '^skills/' | cut -d'/' -f2 | sort -u)
+          skills=$(echo "$changed_files" | { grep '^skills/' || true; } | cut -d'/' -f2 | sort -u)
           
           # Filter to only skills that have eval files
           skills_with_evals=""
@@ -80,20 +87,25 @@ jobs:
 
   run-evals:
     needs: detect-changes
-    if: needs.detect-changes.outputs.has_evals == 'true'
+    if: >-
+      needs.detect-changes.outputs.has_evals == 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         skill: ${{ fromJson(needs.detect-changes.outputs.skills) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 9
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
           cache: 'pnpm'
@@ -105,17 +117,19 @@ jobs:
 
       - name: Get baseline ID
         id: baseline
+        env:
+          SKILL_NAME: ${{ matrix.skill }}
         run: |
           baseline_file=".eval-baselines.json"
           if [ -f "$baseline_file" ]; then
-            baseline_id=$(jq -r '.baselines["${{ matrix.skill }}"].baselineId // empty' "$baseline_file")
+            baseline_id=$(jq -r --arg skill "$SKILL_NAME" '.baselines[$skill].baselineId // empty' "$baseline_file")
             if [ -n "$baseline_id" ]; then
               echo "baseline_id=$baseline_id" >> $GITHUB_OUTPUT
               echo "has_baseline=true" >> $GITHUB_OUTPUT
-              echo "Found baseline for ${{ matrix.skill }}: $baseline_id"
+              echo "Found baseline for $SKILL_NAME: $baseline_id"
             else
               echo "has_baseline=false" >> $GITHUB_OUTPUT
-              echo "No baseline found for ${{ matrix.skill }}"
+              echo "No baseline found for $SKILL_NAME"
             fi
           else
             echo "has_baseline=false" >> $GITHUB_OUTPUT
@@ -126,6 +140,10 @@ jobs:
         id: run-eval
         working-directory: eval-tooling
         env:
+          SKILL_NAME: ${{ matrix.skill }}
+          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          BASELINE_ID: ${{ steps.baseline.outputs.baseline_id }}
           AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
           AXIOM_TOKEN: ${{ secrets.AXIOM_TOKEN }}
           AXIOM_DATASET: ${{ secrets.AXIOM_DATASET }}
@@ -134,20 +152,16 @@ jobs:
           AXIOM_PLAY_TOKEN: ${{ secrets.AXIOM_PLAY_TOKEN }}
           AXIOM_PLAY_ORG_ID: ${{ secrets.AXIOM_PLAY_ORG_ID }}
         run: |
-          echo "Running eval for skill: ${{ matrix.skill }}"
-          
-          # Build eval command with optional baseline and git metadata
-          eval_cmd="pnpm exec axiom eval ../skills/${{ matrix.skill }}/.meta/${{ matrix.skill }}.eval.ts"
-          eval_cmd="$eval_cmd --flag.git.branch=${{ github.head_ref || github.ref_name }}"
-          eval_cmd="$eval_cmd --flag.git.commit=${{ github.sha }}"
-          if [ "${{ steps.baseline.outputs.has_baseline }}" = "true" ]; then
-            eval_cmd="$eval_cmd --baseline ${{ steps.baseline.outputs.baseline_id }}"
-            echo "Comparing against baseline: ${{ steps.baseline.outputs.baseline_id }}"
+          echo "Running eval for skill: $SKILL_NAME"
+
+          args=("../skills/$SKILL_NAME/.meta/$SKILL_NAME.eval.ts"
+            "--flag.git.branch=$BRANCH_NAME" "--flag.git.commit=$COMMIT_SHA")
+          if [ -n "$BASELINE_ID" ]; then
+            args+=(--baseline "$BASELINE_ID")
+            echo "Comparing against baseline: $BASELINE_ID"
           fi
-          
-          # Capture output while still displaying it, strip ANSI codes
-          $eval_cmd 2>&1 | tee eval-output-raw.txt
-          
+          pnpm exec axiom eval "${args[@]}" 2>&1 | tee eval-output-raw.txt
+
           # Strip ANSI escape codes
           sed 's/\x1b\[[0-9;]*m//g' eval-output-raw.txt > eval-output.txt
           
@@ -171,33 +185,33 @@ jobs:
           echo "eval_url=$eval_url" >> $GITHUB_OUTPUT
 
       - name: Save eval report
+        env:
+          SKILL_NAME: ${{ matrix.skill }}
+          COMMIT_SHA: ${{ github.sha }}
+          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+          BASELINE_ID: ${{ steps.baseline.outputs.baseline_id }}
+          EVAL_URL: ${{ steps.run-eval.outputs.eval_url }}
         run: |
           mkdir -p eval-reports
-          report="eval-reports/${{ matrix.skill }}.md"
-          
-          echo "### ${{ matrix.skill }}" > "$report"
-          echo "" >> "$report"
-          echo "**commit:** \`${{ github.sha }}\`" >> "$report"
-          echo "**branch:** \`${{ github.head_ref || github.ref_name }}\`" >> "$report"
-          
-          if [ "${{ steps.baseline.outputs.has_baseline }}" = "true" ]; then
-            echo "**baseline:** \`${{ steps.baseline.outputs.baseline_id }}\`" >> "$report"
-          else
-            echo "**baseline:** _none (first eval)_" >> "$report"
-          fi
-          
-          echo "" >> "$report"
-          echo '```' >> "$report"
-          cat eval-tooling/report-section.txt >> "$report"
-          echo '```' >> "$report"
-          
-          if [ -n "${{ steps.run-eval.outputs.eval_url }}" ]; then
-            echo "" >> "$report"
-            echo "[view eval result](${{ steps.run-eval.outputs.eval_url }})" >> "$report"
-          fi
+          report="eval-reports/$SKILL_NAME.md"
+          {
+            printf '### %s\n\n' "$SKILL_NAME"
+            printf '**commit:** `%s`\n**branch:** `%s`\n' "$COMMIT_SHA" "$BRANCH_NAME"
+            if [ -n "$BASELINE_ID" ]; then
+              printf '**baseline:** `%s`\n' "$BASELINE_ID"
+            else
+              printf '**baseline:** _none (first eval)_\n'
+            fi
+            printf '\n```\n'
+            cat eval-tooling/report-section.txt
+            printf '```\n'
+            if [ -n "$EVAL_URL" ]; then
+              printf '\n[view eval result](%s)\n' "$EVAL_URL"
+            fi
+          } > "$report"
 
       - name: Upload eval report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: eval-report-${{ matrix.skill }}
           path: eval-reports/${{ matrix.skill }}.md
@@ -205,13 +219,16 @@ jobs:
 
   post-comment:
     needs: [detect-changes, run-evals]
-    if: always() && needs.detect-changes.outputs.has_evals == 'true'
+    if: >-
+      always() && github.event_name == 'pull_request' &&
+      needs.run-evals.result == 'success' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
     steps:
       - name: Download all eval reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: eval-report-*
           path: eval-reports
@@ -245,7 +262,7 @@ jobs:
           cat comment.md
 
       - name: Post or update PR comment
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const fs = require('fs');

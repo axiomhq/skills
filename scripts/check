@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Offline CI checks. Requires Bash, Python 3, jq, and Git.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+python3 - <<'PY'
+import json
+import re
+import subprocess
+from pathlib import Path
+
+files = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')
+for filename in filter(None, files):
+    path = Path(filename)
+    # TypeScript configuration permits comments; the other JSON is strict.
+    if path.suffix == '.json' and path.name != 'tsconfig.json':
+        json.loads(path.read_text())
+    elif path.is_file() and path.read_bytes().split(b'\n', 1)[0] in (
+        b'#!/bin/bash', b'#!/usr/bin/env bash',
+    ):
+        subprocess.run(['bash', '-n', filename], check=True)
+
+version = Path('version.txt').read_text().strip()
+assert json.loads(Path('.release-please-manifest.json').read_text())['.'] == version
+for filename in [*Path('.').glob('.*-plugin/plugin.json'), Path('gemini-extension.json')]:
+    manifest = json.loads(filename.read_text())
+    assert manifest['version'] == version, f'{filename}: version differs from version.txt'
+    for key in ('skills', 'mcpServers', 'icon', 'logo'):
+        value = manifest.get(key)
+        if isinstance(value, str):
+            assert Path(value).exists(), f'{filename}: missing {key}: {value}'
+    for key in ('logo', 'composerIcon'):
+        value = manifest.get('interface', {}).get(key)
+        if value:
+            assert Path(value).is_file(), f'{filename}: missing {key}: {value}'
+
+names = set()
+for path in Path('skills').glob('*/SKILL.md'):
+    text = path.read_text()
+    assert text.startswith('---\n'), f'{path}: missing frontmatter'
+    metadata = text.split('---', 2)[1]
+    name = re.search(r'^name: (\S+)\s*$', metadata, re.M)
+    assert name and name[1] not in names, f'{path}: missing or duplicate skill name'
+    assert re.search(r'^description:\s*\S', metadata, re.M), f'{path}: missing description'
+    names.add(name[1])
+assert names, 'No skills found'
+print(f'Validated JSON, shell syntax, plugin versions and {len(names)} skills')
+PY
+
+archive=$(mktemp "${TMPDIR:-/tmp}/axiom-plugin.XXXXXX")
+trap 'rm -f "$archive"' EXIT
+bash scripts/package-openai-plugin "$archive"
+python3 -m zipfile -t "$archive"
+
+for test in skills/building-dashboards/tests/*.sh \
+  skills/building-dashboards/scripts/test-toml-parsing \
+  skills/controlling-costs/scripts/test-ast-parser \
+  skills/sre/scripts/test-*; do
+  echo "Running $test"
+  bash "$test"
+done
+python3 skills/sre/scripts/memory-test
+python3 skills/metrics-chart/scripts/test_metrics_chart.py
