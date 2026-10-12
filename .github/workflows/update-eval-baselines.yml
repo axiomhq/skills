@@ -19,26 +19,33 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: read
+
 jobs:
   detect-skills:
+    if: github.repository == 'axiomhq/skills' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       skills: ${{ steps.detect.outputs.skills }}
       has_skills: ${{ steps.detect.outputs.has_skills }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 2
+          persist-credentials: false
 
       - name: Detect skills to update
         id: detect
+        env:
+          INPUT_SKILL: ${{ inputs.skill }}
         run: |
           # If skill input is provided, use it directly
-          if [ -n "${{ inputs.skill }}" ]; then
-            skill="${{ inputs.skill }}"
+          if [ -n "$INPUT_SKILL" ]; then
+            skill="$INPUT_SKILL"
             eval_file="skills/${skill}/.meta/${skill}.eval.ts"
             if [ -f "$eval_file" ]; then
-              echo "skills=[\"${skill}\"]" >> $GITHUB_OUTPUT
+              echo "skills=$(jq -cn --arg skill "$skill" '[$skill]')" >> "$GITHUB_OUTPUT"
               echo "has_skills=true" >> $GITHUB_OUTPUT
               echo "Updating baseline for: ${skill}"
               exit 0
@@ -54,7 +61,7 @@ jobs:
           changed_files=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only HEAD)
           
           # Extract unique skill names from changed paths
-          skills=$(echo "$changed_files" | grep '^skills/' | cut -d'/' -f2 | sort -u)
+          skills=$(echo "$changed_files" | { grep '^skills/' || true; } | cut -d'/' -f2 | sort -u)
           
           # Filter to only skills that have eval files
           skills_with_evals=""
@@ -84,24 +91,29 @@ jobs:
     needs: detect-skills
     if: needs.detect-skills.outputs.has_skills == 'true'
     runs-on: ubuntu-latest
+    concurrency:
+      group: eval-baseline-${{ matrix.skill }}
+      cancel-in-progress: false
     permissions:
       contents: write
+      pull-requests: write
     strategy:
       fail-fast: false
       max-parallel: 1
       matrix:
         skill: ${{ fromJson(needs.detect-skills.outputs.skills) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        id: checkout
         with:
           ref: main
-          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 9
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
           cache: 'pnpm'
@@ -113,8 +125,11 @@ jobs:
 
       - name: Run eval for ${{ matrix.skill }}
         id: run-eval
+        shell: bash
         working-directory: eval-tooling
         env:
+          SKILL_NAME: ${{ matrix.skill }}
+          COMMIT_SHA: ${{ steps.checkout.outputs.commit }}
           AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
           AXIOM_TOKEN: ${{ secrets.AXIOM_TOKEN }}
           AXIOM_DATASET: ${{ secrets.AXIOM_DATASET }}
@@ -123,11 +138,11 @@ jobs:
           AXIOM_PLAY_TOKEN: ${{ secrets.AXIOM_PLAY_TOKEN }}
           AXIOM_PLAY_ORG_ID: ${{ secrets.AXIOM_PLAY_ORG_ID }}
         run: |
-          echo "Running eval for skill: ${{ matrix.skill }}"
+          echo "Running eval for skill: $SKILL_NAME"
           
-          pnpm exec axiom eval ../skills/${{ matrix.skill }}/.meta/${{ matrix.skill }}.eval.ts \
+          pnpm exec axiom eval "../skills/$SKILL_NAME/.meta/$SKILL_NAME.eval.ts" \
             --flag.git.branch=main \
-            --flag.git.commit=${{ github.sha }} \
+            --flag.git.commit="$COMMIT_SHA" \
             2>&1 | tee eval-output-raw.txt
           
           # Strip ANSI escape codes
@@ -148,10 +163,14 @@ jobs:
           fi
 
       - name: Update baseline file
+        env:
+          BASELINE_ID: ${{ steps.run-eval.outputs.baseline_id }}
+          SKILL_NAME: ${{ matrix.skill }}
+          COMMIT_SHA: ${{ steps.checkout.outputs.commit }}
         run: |
-          baseline_id="${{ steps.run-eval.outputs.baseline_id }}"
-          skill="${{ matrix.skill }}"
-          commit="${{ github.sha }}"
+          baseline_id="$BASELINE_ID"
+          skill="$SKILL_NAME"
+          commit="$COMMIT_SHA"
           timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           
           # Update the baseline file using jq
@@ -167,23 +186,16 @@ jobs:
           echo "Updated baseline for $skill:"
           cat .eval-baselines.json
 
-      - name: Commit baseline update
-        env:
-          SKILL_NAME: ${{ matrix.skill }}
-          BASELINE_ID: ${{ steps.run-eval.outputs.baseline_id }}
-          COMMIT_SHA: ${{ github.sha }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          git add .eval-baselines.json
-          
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "chore: update eval baseline for ${SKILL_NAME}" \
-              -m "Baseline ID: ${BASELINE_ID}" \
-              -m "Commit: ${COMMIT_SHA}"
-            
-            git push
-          fi
+      - name: Open baseline PR
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
+        with:
+          base: main
+          branch: automation/eval-baseline-${{ matrix.skill }}
+          add-paths: .eval-baselines.json
+          commit-message: 'chore: update eval baseline for ${{ matrix.skill }}'
+          title: 'chore: update eval baseline for ${{ matrix.skill }}'
+          body: |
+            Baseline: ${{ steps.run-eval.outputs.baseline_id }}
+            Evaluated commit: ${{ steps.checkout.outputs.commit }}
+
+            Approve workflows to run if GitHub requests it, then review and merge once CI passes.

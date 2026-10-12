@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Test dashboards
+        run: |
+          for test in skills/building-dashboards/tests/*.sh; do
+            bash "$test"
+          done
+          bash skills/building-dashboards/scripts/test-toml-parsing
+      - name: Test cost analysis
+        run: bash skills/controlling-costs/scripts/test-ast-parser
+      - name: Test SRE
+        run: |
+          for test in skills/sre/scripts/test-*; do
+            bash "$test"
+          done
+          python3 skills/sre/scripts/memory-test
+      - name: Test metrics charts
+        run: python3 skills/metrics-chart/scripts/test_metrics_chart.py
+      - name: Package plugin
+        run: bash scripts/package-openai-plugin "$RUNNER_TEMP/axiom-openai-plugin.zip"
