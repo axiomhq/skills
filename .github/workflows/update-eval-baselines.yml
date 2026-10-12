@@ -22,10 +22,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: update-eval-baselines
-  cancel-in-progress: false
-
 jobs:
   detect-skills:
     if: github.repository == 'axiomhq/skills' && github.ref == 'refs/heads/main'
@@ -95,6 +91,9 @@ jobs:
     needs: detect-skills
     if: needs.detect-skills.outputs.has_skills == 'true'
     runs-on: ubuntu-latest
+    concurrency:
+      group: eval-baseline-${{ matrix.skill }}
+      cancel-in-progress: false
     permissions:
       contents: write
       pull-requests: write
