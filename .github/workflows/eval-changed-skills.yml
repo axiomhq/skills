@@ -138,6 +138,7 @@ jobs:
 
       - name: Run eval for ${{ matrix.skill }}
         id: run-eval
+        shell: bash
         working-directory: eval-tooling
         env:
           SKILL_NAME: ${{ matrix.skill }}

@@ -104,8 +104,9 @@ jobs:
         skill: ${{ fromJson(needs.detect-skills.outputs.skills) }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        id: checkout
         with:
-          ref: ${{ github.sha }}
+          ref: main
           persist-credentials: false
 
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
@@ -124,10 +125,11 @@ jobs:
 
       - name: Run eval for ${{ matrix.skill }}
         id: run-eval
+        shell: bash
         working-directory: eval-tooling
         env:
           SKILL_NAME: ${{ matrix.skill }}
-          COMMIT_SHA: ${{ github.sha }}
+          COMMIT_SHA: ${{ steps.checkout.outputs.commit }}
           AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
           AXIOM_TOKEN: ${{ secrets.AXIOM_TOKEN }}
           AXIOM_DATASET: ${{ secrets.AXIOM_DATASET }}
@@ -164,7 +166,7 @@ jobs:
         env:
           BASELINE_ID: ${{ steps.run-eval.outputs.baseline_id }}
           SKILL_NAME: ${{ matrix.skill }}
-          COMMIT_SHA: ${{ github.sha }}
+          COMMIT_SHA: ${{ steps.checkout.outputs.commit }}
         run: |
           baseline_id="$BASELINE_ID"
           skill="$SKILL_NAME"
@@ -194,6 +196,6 @@ jobs:
           title: 'chore: update eval baseline for ${{ matrix.skill }}'
           body: |
             Baseline: ${{ steps.run-eval.outputs.baseline_id }}
-            Evaluated commit: ${{ github.sha }}
+            Evaluated commit: ${{ steps.checkout.outputs.commit }}
 
             Approve workflows to run if GitHub requests it, then review and merge once CI passes.
