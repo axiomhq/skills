@@ -11,7 +11,10 @@
 #   5. Chart IDs match layout IDs
 #   6. LogStream queries have take limits
 #   7. Grid layout doesn't exceed 12 columns
-#   8. Per-chart-kind closed-field schema (mirrors the create API)
+#   8. Sections, when present: UUID ids, unique ids, titles.
+#      chart.sectionId must name one of those sections even when the
+#      sections key is absent. SmartFilter charts stay ungrouped.
+#   9. Per-chart-kind closed-field schema (mirrors the create API)
 #      - Source of truth: reference/chart-config.md
 #        § Fields Rejected on Create (Cross-Chart)
 #      - Verified empirically against staging create endpoint
@@ -144,7 +147,48 @@ if [[ -n "$missing_min" ]]; then
     info "$(echo "$missing_min" | wc -l | tr -d ' ') layout entries missing minH/minW (will be auto-fixed on deploy)"
 fi
 
-# 12. Per-chart-kind closed-field schema check.
+# 12. Sections. The sections array is optional. When it is present, ids
+# are UUIDs and titles are non-empty. chart.sectionId is checked either
+# way: a missing sections array means every sectionId is dangling.
+# SmartFilter charts stay ungrouped.
+section_type=$(jq -r '.sections | type' "$FILE" 2>/dev/null || echo null)
+if [[ "$section_type" != "null" && "$section_type" != "array" ]]; then
+    error "sections must be an array"
+fi
+
+section_problems=$(jq -r '
+  def uuid: test("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
+  . as $d
+  | (if (.sections | type) == "array" then .sections else [] end) as $sections
+  | (
+      (if ($d.sections | type) == "array" then
+        [$sections[] | select((.id | type) != "string" or (.id | uuid | not)) | "bad-id\t\(.id // "(missing)")"],
+        [$sections[] | select((.title | type) != "string" or (.title | test("^\\s*$")) or (.title | length) > 200) | "bad-title\t\(.id // "(missing)")"],
+        [$sections[] | select(has("defaultCollapsed") and (.defaultCollapsed | type) != "boolean") | "bad-collapsed\t\(.id // "(missing)")"],
+        [($sections | map(.id) | group_by(.) | map(select(length > 1) | .[0]))[] | "dup-id\t\(.)"]
+      else
+        empty
+      end),
+      [$d.charts[]? | select(.sectionId != null) | select(.sectionId as $sid | ([$sections[].id] | index($sid)) | not) | "dangling\t\(.id)\t\(.sectionId)"],
+      [$d.charts[]? | select(.type == "SmartFilter" and .sectionId != null) | "smartfilter\t\(.id)"]
+    )
+  | .[]
+' "$FILE" 2>/dev/null || true)
+if [[ -n "$section_problems" ]]; then
+    while IFS=$'\t' read -r kind a b; do
+        [[ -z "$kind" ]] && continue
+        case "$kind" in
+            bad-id)        error "Section id must be a UUID (got '$a')" ;;
+            bad-title)     error "Section '$a' needs a non-empty title of at most 200 characters" ;;
+            bad-collapsed) error "Section '$a' defaultCollapsed must be a boolean" ;;
+            dup-id)        error "Duplicate section id: '$a'" ;;
+            dangling)      error "Chart '$a' references a section that does not exist: $b" ;;
+            smartfilter)   error "SmartFilter chart '$a' cannot belong to a section" ;;
+        esac
+    done <<< "$section_problems"
+fi
+
+# 13. Per-chart-kind closed-field schema check.
 #
 # The create API rejects certain fields per chart kind with HTTP 400 and a
 # uniform error string:
