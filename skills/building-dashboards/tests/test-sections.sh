@@ -119,6 +119,20 @@ else
     ok "validate rejects a chart sectionId with no section"
 fi
 
+printf '%s\n' "$plain" | jq '.charts |= map(if .id == "err-rate" then .sectionId = "11111111-2222-4333-8444-555555555555" else . end)' > "$TMP/dangling-no-sections.json"
+if "$VALIDATE" "$TMP/dangling-no-sections.json" > /dev/null 2>&1; then
+    fail "validate rejects a sectionId when sections is absent" "validator passed"
+else
+    ok "validate rejects a sectionId when sections is absent"
+fi
+
+printf '%s\n' "$plain" | jq '.charts |= map(if .id == "filters" then .sectionId = "11111111-2222-4333-8444-555555555555" else . end)' > "$TMP/filter-no-sections.json"
+if "$VALIDATE" "$TMP/filter-no-sections.json" > /dev/null 2>&1; then
+    fail "validate rejects a SmartFilter sectionId when sections is absent" "validator passed"
+else
+    ok "validate rejects a SmartFilter sectionId when sections is absent"
+fi
+
 jq '.sections[0].id as $sid | .charts |= map(if .id == "filters" then .sectionId = $sid else . end)' \
     "$TMP/dashboard.json" > "$TMP/filter-section.json"
 if "$VALIDATE" "$TMP/filter-section.json" > /dev/null 2>&1; then
