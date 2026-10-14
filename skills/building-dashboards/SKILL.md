@@ -218,7 +218,27 @@ Traffic, error-rate, latency-percentile, and other golden-signal APL recipes: `r
 
 ## Layout Composition
 
-`layout-pack` packs charts row-major into the 12-column grid using per-type defaults (Statistic 3×3, TimeSeries 6×4, Table 6×5, LogStream 12×6, Note 12×2). Override with `id:WxH` when needed. Section blueprints: `reference/layout-recipes.md`. Naming and panel-ordering conventions: `reference/design-playbook.md`.
+`layout-pack` packs charts row-major into the 12-column grid using per-type defaults (Statistic 3×3, TimeSeries 6×4, Table 6×5, LogStream 12×6, Note 12×2). Override with `id:WxH` when needed. Grid recipes: `reference/layout-recipes.md`. Naming and panel-ordering conventions: `reference/design-playbook.md`.
+
+### Sections
+
+Collapsible groups are a top-level `sections` array. Pass them to `dashboard-assemble`. Do not invent `sectionId` on the chart file, and do not discover the shape by sending an invalid update.
+
+```bash
+dashboard-assemble \
+  --name "API" \
+  --datasets logs \
+  --layout /tmp/d/layout.json \
+  --section "Requests:err-rate,traffic-ts" \
+  --section-collapsed "Errors:top-errors" \
+  /tmp/d/c-err-rate.json /tmp/d/c-traffic-ts.json /tmp/d/c-top-errors.json
+```
+
+- The title is the text before the first `:`. Chart ids follow, comma-separated, and must match chart `id`s.
+- Flag order is display order. `--section-collapsed` sets `defaultCollapsed: true`.
+- The section `id` is a UUID derived from the title, so the same title keeps the same id on the next run.
+- A chart omitted from every `--section` stays ungrouped. Leave every SmartFilter chart ungrouped.
+- A Note used as a grid header is layout, not a section. Use `--section` when the dashboard should collapse a group and stop its queries.
 
 ---
 
@@ -252,7 +272,7 @@ Tools, prerequisites, and `~/.axiom.toml` configuration: see `README.md`. Verify
 |--------|-------|
 | `scripts/chart-add --type <T> --id <id> --name <n> [--apl <q> \| --mpl <q> --dataset <d>] [--unit <u>]` | **Emit a single chart JSON** to stdout. Splits APL vs MPL; MPL queries are checked for inline time ranges; unit fields applied per chart type. |
 | `scripts/layout-pack <id>:<Type\|WxH> ...` | **Emit a layout JSON array** to stdout. Row-major into a 12-column grid; type names map to default sizes. |
-| `scripts/dashboard-assemble --name … --datasets … --layout F.json [opts] CHART_FILES…` | **Compose a complete dashboard JSON** from chart files + layout. Owns the envelope (`owner`, `schemaVersion`, `qr-` prefix, `refreshTime` validation, id cross-checks). |
+| `scripts/dashboard-assemble --name … --datasets … --layout F.json [--section TITLE:id,id ...] [opts] CHART_FILES…` | **Compose a complete dashboard JSON** from chart files + layout. Owns the envelope (`owner`, `schemaVersion`, `qr-` prefix, `refreshTime` validation, id cross-checks, `sections`). |
 | `scripts/dashboard-list <deploy>` | List all dashboards |
 | `scripts/dashboard-get <deploy> <id>` | Fetch dashboard JSON |
 | `scripts/dashboard-validate <file>` | Validate JSON structure |
@@ -298,7 +318,7 @@ Use `--version <version>` for optimistic concurrency after fetching the dashboar
 2. Write each panel query. Validate APL via `axiom-sre` with an explicit time filter; follow the [Metrics/MPL chart contract](./reference/metrics-mpl.md) for MPL.
 3. `chart-add --type … --apl '<APL>'` *or* `chart-add --type … --mpl '<MPL>' --dataset <name>` per chart, redirected to its own file.
 4. `layout-pack <id>:<Type|WxH> …` for the layout (ids in display order).
-5. `dashboard-assemble --name … --datasets … --layout LAYOUT CHART_FILES…` to compose.
+5. `dashboard-assemble --name … --datasets … --layout LAYOUT [--section TITLE:id,id ...] CHART_FILES…` to compose. Repeat `--section` for each collapsible group. Use `--section-collapsed` when the group should start collapsed.
 6. `dashboard-validate` then `dashboard-create` (or `dashboard-update`).
 7. `dashboard-link` for the URL — never hand-construct.
 
@@ -330,6 +350,7 @@ Compose with `chart-add` + `layout-pack` + `dashboard-assemble`. Pre-built templ
 | MPL chart aggregates across a dimension PromQL filtered/grouped on | Dropped a selector or `by(...)` during translation | Every `{label=…}` → `where`; every `by(…)` → `group by`. See [reference/promql-to-mpl.md](./reference/promql-to-mpl.md). |
 | Panel shipped a different quantity than asked | Substituted instead of deferring | Replace with a `Note` documenting the blocker. See [Compute or Defer](#compute-or-defer). |
 | 403 "creating private dashboards" | API tokens only create shared dashboards | Leave `owner` as `dashboard-assemble`'s default (`X-AXIOM-EVERYONE`). |
+| 400 `invalid_dashboard` while adding sections | Chart JSON invented `sections` or `sectionId` | Pass `--section` / `--section-collapsed` to `dashboard-assemble`. Do not probe the API. |
 
 ---
 

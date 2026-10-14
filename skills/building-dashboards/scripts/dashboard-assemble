@@ -17,6 +17,8 @@
 #     [--time-window <SPEC>] \
 #     [--refresh <KEY|SECONDS>] \
 #     [--owner <STR>] \
+#     [--section <TITLE>:<CHART_ID>[,<CHART_ID>...]] \
+#     [--section-collapsed <TITLE>:<CHART_ID>[,<CHART_ID>...]] \
 #     <CHART_FILE> [<CHART_FILE> ...] \
 #     > dashboard.json
 #
@@ -48,6 +50,15 @@
 #   --owner        Defaults to "X-AXIOM-EVERYONE" (the only value an API
 #                  token can use; private dashboards aren't supported via
 #                  token auth).
+#   --section      Repeatable. Collapsible dashboard section. The title is
+#                  the text before the first colon; chart ids follow,
+#                  comma-separated, and must match chart `id`s. Section
+#                  order is flag order. The section id is a UUID derived
+#                  from the title, so the same title keeps the same id on
+#                  the next run. Charts omitted here stay ungrouped.
+#                  SmartFilter charts cannot be listed.
+#   --section-collapsed
+#                  Same as --section, and sets defaultCollapsed: true.
 #
 # Positional args: one or more chart JSON files. Each file may contain
 # either a single chart object {} or an array of charts [{},{}]. They are
@@ -89,6 +100,7 @@ TIME_WINDOW="1h"
 REFRESH="60"
 OWNER="X-AXIOM-EVERYONE"
 CHART_FILES=()
+SECTION_SPECS=()
 
 usage() {
     sed -n '2,/^set -euo pipefail/p' "$0" | sed 's/^# \?//' | sed '$d'
@@ -104,6 +116,12 @@ while [[ $# -gt 0 ]]; do
         --time-window)  TIME_WINDOW="$2"; shift 2 ;;
         --refresh)      REFRESH="$2"; shift 2 ;;
         --owner)        OWNER="$2"; shift 2 ;;
+        --section)
+            [[ -n "${2:-}" ]] || { echo "Error: --section requires TITLE:chart-id[,chart-id...]" >&2; exit 1; }
+            SECTION_SPECS+=("0"$'\t'"$2"); shift 2 ;;
+        --section-collapsed)
+            [[ -n "${2:-}" ]] || { echo "Error: --section-collapsed requires TITLE:chart-id[,chart-id...]" >&2; exit 1; }
+            SECTION_SPECS+=("1"$'\t'"$2"); shift 2 ;;
         -h|--help)      usage 0 ;;
         --*)            echo "Error: unknown flag '$1'" >&2; exit 1 ;;
         *)              CHART_FILES+=("$1"); shift ;;
@@ -220,6 +238,95 @@ if [[ -n "$CHART_ONLY" ]]; then
     exit 1
 fi
 
+# --- Sections -------------------------------------------------------------
+#
+# Section ids are UUID v5 over "axiom-dashboard-section:<title>" in the DNS
+# namespace, so re-running assemble with the same title keeps the same id.
+# Chart files do not carry sectionId; this script writes it.
+
+section_uuid() {
+    local name="axiom-dashboard-section:$1"
+    local ns_hex="6ba7b8109dad11d180b400c04fd430c8"
+    local hash h time_low time_mid time_hi clock node
+    hash=$(
+        { printf '%s' "$ns_hex" | xxd -r -p; printf '%s' "$name"; } \
+            | openssl dgst -sha1 -binary | xxd -p -c 256
+    )
+    h="${hash:0:32}"
+    time_low="${h:0:8}"
+    time_mid="${h:8:4}"
+    time_hi="${h:12:4}"
+    clock="${h:16:4}"
+    node="${h:20:12}"
+    time_hi=$(printf '%04x' $(( (16#${time_hi} & 0x0fff) | 0x5000 )))
+    clock=$(printf '%04x' $(( (16#${clock} & 0x3fff) | 0x8000 )))
+    printf '%s-%s-%s-%s-%s\n' "$time_low" "$time_mid" "$time_hi" "$clock" "$node"
+}
+
+SECTIONS_JSON='[]'
+SECTION_ASSIGNMENTS_JSON='{}'
+
+if [[ ${#SECTION_SPECS[@]} -gt 0 ]]; then
+    seen_titles=$'\n'
+    assigned_ids=$'\n'
+    for spec in "${SECTION_SPECS[@]}"; do
+        collapsed="${spec%%$'\t'*}"
+        rest="${spec#*$'\t'}"
+        title="${rest%%:*}"
+        ids="${rest#*:}"
+        title=$(printf '%s' "$title" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        if [[ "$title" == "$rest" || -z "$title" || -z "$ids" || "$ids" == "$rest" ]]; then
+            echo "Error: section must be TITLE:chart-id[,chart-id...] (got '$rest')" >&2
+            exit 1
+        fi
+        if (( ${#title} > 200 )); then
+            echo "Error: section title exceeds 200 characters" >&2
+            exit 1
+        fi
+        if [[ "$seen_titles" == *$'\n'"$title"$'\n'* ]]; then
+            echo "Error: duplicate section title '$title' (titles map to one section id)" >&2
+            exit 1
+        fi
+        seen_titles+="$title"$'\n'
+
+        sid=$(section_uuid "$title")
+        if [[ "$collapsed" == "1" ]]; then
+            SECTIONS_JSON=$(printf '%s' "$SECTIONS_JSON" | jq -c \
+                --arg id "$sid" --arg title "$title" \
+                '. + [{id: $id, title: $title, defaultCollapsed: true}]')
+        else
+            SECTIONS_JSON=$(printf '%s' "$SECTIONS_JSON" | jq -c \
+                --arg id "$sid" --arg title "$title" \
+                '. + [{id: $id, title: $title}]')
+        fi
+
+        IFS=',' read -r -a chart_ids <<< "$ids"
+        for cid in "${chart_ids[@]}"; do
+            cid=$(printf '%s' "$cid" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            if [[ -z "$cid" ]]; then
+                echo "Error: empty chart id in section '$title'" >&2
+                exit 1
+            fi
+            if [[ "$assigned_ids" == *$'\n'"$cid"$'\n'* ]]; then
+                echo "Error: chart '$cid' is listed in more than one section" >&2
+                exit 1
+            fi
+            chart_type=$(printf '%s' "$CHARTS_JSON" | jq -r --arg id "$cid" '[.[] | select(.id == $id) | .type] | first // empty')
+            if [[ -z "$chart_type" ]]; then
+                echo "Error: section '$title' references chart id with no matching chart: $cid" >&2
+                exit 1
+            fi
+            if [[ "$chart_type" == "SmartFilter" ]]; then
+                echo "Error: SmartFilter chart '$cid' cannot belong to a section" >&2
+                exit 1
+            fi
+            assigned_ids+="$cid"$'\n'
+            SECTION_ASSIGNMENTS_JSON=$(printf '%s' "$SECTION_ASSIGNMENTS_JSON" | jq -c \
+                --arg cid "$cid" --arg sid "$sid" '. + {($cid): $sid}')
+        done
+    done
+fi
+
 # --- Emit dashboard JSON --------------------------------------------------
 
 jq -n \
@@ -232,6 +339,8 @@ jq -n \
     --arg timeWindowEnd "$TIME_WINDOW_END" \
     --argjson charts "$CHARTS_JSON" \
     --argjson layout "$LAYOUT_JSON" \
+    --argjson sections "$SECTIONS_JSON" \
+    --argjson sectionAssignments "$SECTION_ASSIGNMENTS_JSON" \
     '
     {
       name: $name,
@@ -241,8 +350,15 @@ jq -n \
       schemaVersion: 2,
       timeWindowStart: $timeWindowStart,
       timeWindowEnd: $timeWindowEnd,
-      charts: $charts,
+      charts: (
+        $charts
+        | map(
+            del(.sectionId)
+            | if $sectionAssignments[.id] then .sectionId = $sectionAssignments[.id] else . end
+          )
+      ),
       layout: $layout
     }
     | if ($description | length) > 0 then .description = $description else . end
+    | if ($sections | length) > 0 then .sections = $sections else . end
     '

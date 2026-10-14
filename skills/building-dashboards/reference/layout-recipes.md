@@ -1,6 +1,8 @@
 # Layout Recipes
 
-Section blueprints for common dashboard structures. The grid is **12 columns wide**; `dashboard-validate` rejects entries past column 12. `scripts/layout-pack` packs ordered ids into the grid using per-type defaults — most recipes below are expressible as a `layout-pack` invocation.
+Grid blueprints for common dashboard structures. The grid is **12 columns wide**; `dashboard-validate` rejects entries past column 12. `scripts/layout-pack` packs ordered ids into the grid using per-type defaults — most recipes below are expressible as a `layout-pack` invocation.
+
+These recipes place charts. They do not create collapsible sections. Pass `--section` to `dashboard-assemble` for a group that expands and collapses and stops its queries while collapsed. A Note header is only a label in the grid.
 
 Default per-type sizes (from `layout-pack`): Statistic 3×3, TimeSeries 6×4, Heatmap 6×4, Pie 4×4, Table 6×5, LogStream 12×6, Note 12×2, MonitorList 6×4, SmartFilter 12×1.
 
