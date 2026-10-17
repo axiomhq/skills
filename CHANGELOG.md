@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.1.3](https://github.com/axiomhq/skills/compare/v1.1.2...v1.1.3) (2026-10-17)
+
+
+### Fixes
+
+* emit dashboard sections from the building-dashboards skill ([192670f](https://github.com/axiomhq/skills/commit/192670f9ffb5519aee99bc0fdc0307a77455e5b4))
+* emit dashboard sections from the building-dashboards skill ([ef913cf](https://github.com/axiomhq/skills/commit/ef913cfe10a45b24e401f684182e7520453f889e))
+* open pull requests for automated skill updates ([9f00143](https://github.com/axiomhq/skills/commit/9f00143bc31bbe8c35c8fd19059ddae7e4593d77))
+* prevent stale and failed eval baseline updates ([a49853a](https://github.com/axiomhq/skills/commit/a49853ae65c757fc589589493ace4084d24eea3b))
+* reject chart sectionId when the dashboard has no sections ([b03fea0](https://github.com/axiomhq/skills/commit/b03fea03de57a2c24e90386c94d39c59b3c20350))
+* serialize baseline updates per skill ([d14945a](https://github.com/axiomhq/skills/commit/d14945a64b4e5ab77712f4067b8b5caea1e471a3))
+
+
+### Documentation
+
+* remove cost claims from plugin descriptions ([36cd208](https://github.com/axiomhq/skills/commit/36cd208a298f54ca80adcc92ea3f06b7b207b030))
+* remove cost claims from plugin descriptions ([38a769f](https://github.com/axiomhq/skills/commit/38a769f05144efcbb4cb2940e4a99f8cfded3d07))
+
 ## [1.1.2](https://github.com/axiomhq/skills/compare/v1.1.1...v1.1.2) (2026-10-07)
 
 
