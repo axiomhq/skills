@@ -41,16 +41,36 @@ set -euo pipefail
 
 UNIT="${1-}"
 
-# Metric units the Console maps to a value formatter. "%" is left out on
-# purpose, see above.
+# Metric units whose Console formatter already supplies the unit. Keep the
+# SI byte and rate families too: MBy -> MB, By/s -> B/s, bit/s -> bps.
+# Evidence and source revision: reference/metrics-mpl.md, Unit Handling.
+# "%" is left out on purpose, see above. Named counts such as {requests}
+# keep their label: the Console's short formatter only abbreviates the number.
 jq -n --arg u "$UNIT" '
   [
     "USD", "GBP", "EUR", "BTC",
     "ns", "us", "ms", "s", "min", "h", "d",
     "Hz",
-    "By", "KiBy", "MiBy", "GiBy", "TiBy", "PiBy"
+    "By", "KiBy", "MiBy", "GiBy", "TiBy", "PiBy",
+    "kBy", "MBy", "GBy", "TBy", "PBy",
+    "By/s", "kBy/s", "MBy/s", "GBy/s", "TBy/s", "PBy/s",
+    "bit/s", "kbit/s", "Mbit/s", "Gbit/s", "Tbit/s", "Pbit/s",
+    "{packets}/s", "{requests}/s", "{operations}/s"
   ] as $formatted
-  | if $u == "" or $u == "1" or ($formatted | any(. == $u)) then {}
+  # mapOtelUnitToFormatId also tries an unmapped unit lowercased as a
+  # formatter ID. Only lowercase IDs can match that fallback (e.g. bytes,
+  # not KBs). none/short do not supply a unit; preserve their custom label.
+  | [
+    "percent100", "percent", "curusd", "curgbp", "cureur", "curbtc",
+    "bits", "bytes", "kbytes", "mbytes", "gbytes", "tbytes", "pbytes",
+    "decbits", "decbytes", "deckbytes", "decmbytes", "decgbytes", "dectbytes", "decpbytes",
+    "pps", "bps", "datetimeiso", "hertz", "ns", "µs", "ms",
+    "secs", "mins", "hours", "days", "ago",
+    "cps", "ops", "reqps", "rps", "wps", "iops", "cpm", "opm", "reqpm", "rpm", "wpm"
+  ] as $format_ids
+  | if $u == "" or $u == "1"
+       or ($formatted | any(. == $u))
+       or ($format_ids | any(. == ($u | ascii_downcase))) then {}
     else {customUnits: $u}
     end
 '

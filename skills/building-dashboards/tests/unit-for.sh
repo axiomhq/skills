@@ -41,27 +41,44 @@ check() {
     fi
 }
 
-# The Console formats these from the metric's own unit. A suffix would show
-# the unit twice ("$1.03K$").
-check "formatted:s"       "s"             '{}'
-check "formatted:ms"      "ms"            '{}'
-check "formatted:us"      "us"            '{}'
-check "formatted:ns"      "ns"            '{}'
-check "formatted:min"     "min"           '{}'
-check "formatted:h"       "h"             '{}'
-check "formatted:d"       "d"             '{}'
-check "formatted:By"      "By"            '{}'
-check "formatted:KiBy"    "KiBy"          '{}'
-check "formatted:USD"     "USD"           '{}'
-check "formatted:EUR"     "EUR"           '{}'
+# Expectations come from the Console unitMap and the registered formatters,
+# not unit-for's table. See reference/metrics-mpl.md for pinned source links.
+# Exercise every explicitly mapped unit whose formatter supplies its label.
+for unit in USD GBP EUR BTC ns us ms s min h d Hz \
+    By KiBy MiBy GiBy TiBy PiBy \
+    kBy MBy GBy TBy PBy \
+    By/s kBy/s MBy/s GBy/s TBy/s PBy/s \
+    bit/s kbit/s Mbit/s Gbit/s Tbit/s Pbit/s \
+    '{packets}/s' '{requests}/s' '{operations}/s'; do
+    check "formatted:$unit" "$unit" '{}'
+done
+
+# The Console also resolves lowercased formatter IDs for unmapped inputs.
+# Expectations are from units.ts at the same pinned revision.
+for unit in percent100 percent curusd curgbp cureur curbtc \
+    bits bytes kbytes mbytes gbytes tbytes pbytes \
+    decbits decbytes deckbytes decmbytes decgbytes dectbytes decpbytes \
+    pps bps datetimeiso hertz ns µs ms secs mins hours days ago \
+    cps ops reqps rps wps iops cpm opm reqpm rpm wpm; do
+    check "formatter-id:$unit" "$unit" '{}'
+done
+check "formatter-id:BYTES" "BYTES" '{}'
 
 # Percent: the suffix for a 0-1 ratio scaled with `| map * 100`.
 check "percent"           "%"             '{"customUnits":"%"}'
 
 # Units the Console does not format stay a suffix.
-check "suffix:MBy"        "MBy"           '{"customUnits":"MBy"}'
-check "suffix:By/s"       "By/s"          '{"customUnits":"By/s"}'
 check "suffix:JPY"        "JPY"           '{"customUnits":"JPY"}'
+# The Console's short formatter abbreviates counts but adds no count label.
+check "count:requests"    "{requests}"    '{"customUnits":"{requests}"}'
+check "count:packets"     "{packets}"     '{"customUnits":"{packets}"}'
+# UCUM codes are case-sensitive: kBy is mapped, KBy is not.
+check "unmapped:KBy"      "KBy"           '{"customUnits":"KBy"}'
+check "unmapped:KBs"      "KBs"           '{"customUnits":"KBs"}'
+check "unmapped:usd"      "usd"           '{"customUnits":"usd"}'
+check "unmapped:seconds"  "seconds"       '{"customUnits":"seconds"}'
+check "unitless:short"    "short"         '{"customUnits":"short"}'
+check "unitless:none"     "none"          '{"customUnits":"none"}'
 
 # Custom units exercise the fallback path.
 check "custom:Cel"        "Cel"           '{"customUnits":"Cel"}'

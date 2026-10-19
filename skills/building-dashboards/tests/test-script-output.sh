@@ -180,6 +180,24 @@ check_stat_units "MPL --unit USD writes no unit fields" '{}' \
 check_stat_units "MPL --unit % writes the % suffix" '{"customUnits":"%"}' \
     --mpl '`m`:ratio | map * 100' --dataset m --unit %
 
+# Regressions: these units already have Console formatters. Test the public
+# chart-add path as well as unit-for, so a bypass of its mapping fails here.
+for unit in kBy MBy GBy TBy PBy \
+    By/s kBy/s MBy/s GBy/s TBy/s PBy/s \
+    bit/s kbit/s Mbit/s Gbit/s Tbit/s Pbit/s \
+    '{packets}/s' '{requests}/s' '{operations}/s'; do
+    check_stat_units "MPL --unit $unit leaves formatting to the Console" '{}' \
+        --mpl '`m`:sample | group using avg' --dataset m --unit "$unit"
+done
+check_stat_units "MPL unknown unit retains its suffix" '{"customUnits":"Cel"}' \
+    --mpl '`m`:temperature | group using avg' --dataset m --unit Cel
+check_stat_units "MPL named count retains its label" '{"customUnits":"{requests}"}' \
+    --mpl '`m`:requests | group using sum' --dataset m --unit '{requests}'
+check_stat_units "MPL formatter alias leaves formatting to the Console" '{}' \
+    --mpl '`m`:size | group using avg' --dataset m --unit BYTES
+check_stat_units "APL numeric byte rate retains its explicit suffix" '{"customUnits":"By/s"}' \
+    --apl "['logs'] | summarize avg(bytes_per_second)" --unit By/s
+
 sizes=$("$SCRIPTS_DIR/layout-pack" n:Note s:Statistic t:TimeSeries h:Heatmap tb:Table p:Pie l:LogStream m:MonitorList f:SmartFilter \
     | jq -c 'map("\(.i)=\(.w)x\(.h)") | join(" ")')
 want='"n=12x2 s=3x2 t=4x4 h=4x4 tb=6x5 p=3x5 l=12x7 m=4x4 f=12x1"'

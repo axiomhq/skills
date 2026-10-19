@@ -77,9 +77,36 @@ The Console formats these units from the metric's own unit. The following units 
 | Currency (prefix) | `USD`, `GBP`, `EUR`, `BTC` |
 | Time | `ns`, `us`, `ms`, `s`, `min`, `h`, `d` |
 | Frequency | `Hz` |
-| Bytes | `By`, `KiBy`, `MiBy`, `GiBy`, `TiBy`, `PiBy` |
+| Bytes (IEC) | `By`, `KiBy`, `MiBy`, `GiBy`, `TiBy`, `PiBy` |
+| Bytes (SI) | `kBy`, `MBy`, `GBy`, `TBy`, `PBy` |
+| Byte rates | `By/s`, `kBy/s`, `MBy/s`, `GBy/s`, `TBy/s`, `PBy/s` |
+| Bit rates | `bit/s`, `kbit/s`, `Mbit/s`, `Gbit/s`, `Tbit/s`, `Pbit/s` |
+| Count rates | `{packets}/s`, `{requests}/s`, `{operations}/s` |
 
-`unit-for` also writes no suffix for an empty unit or `1` (OTel "dimensionless"). Every other unit becomes `customUnits` as written. This includes the ambiguous `m` (metres or minutes) and `B` (Bel, bytes are `By`).
+The Console also tries an unmapped unit lowercased as a formatter ID. `unit-for` suppresses the suffix for those registered formatters too, for example `bytes`, `BYTES`, `µs`, and `reqps`. This does not make UCUM codes case-insensitive: `kBy` is mapped, but `KBy` is not. The `none` and `short` formatters add no unit label, so they do not trigger suppression.
+
+`unit-for` also writes no suffix for an empty unit or `1` (OTel "dimensionless"). Other units become `customUnits` as written. This includes the ambiguous `m` (metres or minutes), `B` (Bel, bytes are `By`), and named counts such as `{requests}`: the Console abbreviates their numbers but does not add the count label. `%` remains an intentional exception for converted ratios, described below.
+
+### Why these suffixes are suppressed
+
+Verified against Console commit `80a95cb572548b4aec58185c26bbf4e1f79335ce` on 2026-10-19:
+
+- [`ElementsDatasetStore.ts`](https://github.com/axiomhq/ctrl/blob/80a95cb572548b4aec58185c26bbf4e1f79335ce/apps/console/src/hubs/dash/stores/ElementsDatasetStore.ts#L205) maps metric units to formatter IDs and falls back to the lowercased unit. [`units.ts`](https://github.com/axiomhq/ctrl/blob/80a95cb572548b4aec58185c26bbf4e1f79335ce/apps/console/src/hubs/dash/util/elements/units/units.ts) registers the actual formatters.
+- [`StatisticChart.tsx`](https://github.com/axiomhq/ctrl/blob/80a95cb572548b4aec58185c26bbf4e1f79335ce/apps/console/src/hubs/dash/components/charts/StatisticChart.tsx#L123) appends `customUnits` after formatting. It does not replace the formatter's unit.
+
+Executing the pinned Console formatters and appending the helper's actual `customUnits` reproduced these results. This checks the formatting composition, not a live dashboard rendering:
+
+| Metric unit | Value | Before correction | After correction |
+|---|---:|---|---|
+| `MBy` | 1 | `1MBMBy` | `1MB` |
+| `By/s` | 1000 | `1kB/sBy/s` | `1kB/s` |
+| `bit/s` | 1000 | `1kbpsbit/s` | `1kbps` |
+| `{requests}/s` | 1000 | `1K reqps{requests}/s` | `1K reqps` |
+| `bytes` | 1024 | `1KiBbytes` | `1KiB` |
+
+An omitted suffix leaves both magnitude scaling and the displayed unit to the Console. Do not compensate by rescaling the query. This mapping assumes the result retains the supplied unit; MPL `custom_unit` and `ignore_unit` can change which formatter the result receives.
+
+`tests/unit-for.sh` covers the mapped families, formatter-ID fallback, and units that must retain labels. `tests/test-script-output.sh` exercises the same regression through `chart-add --mpl`, including preservation of custom units and the `%` ratio suffix. The corrected expectations fail against the original helper; rerun both when changing unit handling. When the Console changes, compare both its mapping and formatter registry rather than deriving expected test values from `unit-for` itself.
 
 ### Percentages and ratios (OTel 0–1 fractions)
 
