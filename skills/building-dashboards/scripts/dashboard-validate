@@ -17,8 +17,7 @@
 #   9. Per-chart-kind closed-field schema (mirrors the create API)
 #      - Source of truth: reference/chart-config.md
 #        § Fields Rejected on Create (Cross-Chart)
-#      - Verified empirically against staging create endpoint
-#        (28-cell + 3 null-value probes, 2026-05-08)
+#      - Validated against the dashboard create API.
 #
 # Options:
 #   --strict  Treat warnings as errors

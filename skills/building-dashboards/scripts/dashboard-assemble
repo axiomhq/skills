@@ -77,13 +77,13 @@
 #   chart-add --type Note --id intro --name Notice --text "..." \
 #     > /tmp/d/c-intro.json
 #   chart-add --type Statistic --id avail --name "Availability" \
-#       --mpl '...' --dataset k8s-metrics-staging --unit "%" \
+#       --mpl '...' --dataset example-metrics --unit "%" \
 #     > /tmp/d/c-avail.json
 #   layout-pack intro:Note avail:Statistic > /tmp/d/layout.json
 #
 #   dashboard-assemble \
 #       --name "API server v22" \
-#       --datasets k8s-metrics-staging \
+#       --datasets example-metrics \
 #       --time-window 30d \
 #       --refresh oncall \
 #       --layout /tmp/d/layout.json \

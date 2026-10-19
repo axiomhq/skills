@@ -24,14 +24,14 @@
 #
 # Examples:
 #   mpl-validate-chart staging \
-#     '`k8s-metrics-staging`:apiserver_request_total
+#     '`example-metrics`:apiserver_request_total
 #       | where `service.name` == "apiserver"
 #       | align to $__interval using prom::rate
 #       | group by code using sum'
 #
 #   # Override the simulated interval
 #   mpl-validate-chart --interval 1h staging \
-#     '`k8s-metrics-staging`:process_resident_memory_bytes
+#     '`example-metrics`:process_resident_memory_bytes
 #       | align to $__interval using avg'
 
 set -euo pipefail

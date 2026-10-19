@@ -63,9 +63,7 @@ check "suffix:MBy"        "MBy"           '{"customUnits":"MBy"}'
 check "suffix:By/s"       "By/s"          '{"customUnits":"By/s"}'
 check "suffix:JPY"        "JPY"           '{"customUnits":"JPY"}'
 
-# Custom (unmapped) — these are real units observed in the homeassistant-metrics
-# dataset on the axiom deployment, so the tests double as regression coverage
-# for the fallback path against real-world inputs.
+# Custom units exercise the fallback path.
 check "custom:Cel"        "Cel"           '{"customUnits":"Cel"}'
 check "custom:kW.h"       "kW.h"          '{"customUnits":"kW.h"}'
 check "custom:[ppm]"      "[ppm]"         '{"customUnits":"[ppm]"}'

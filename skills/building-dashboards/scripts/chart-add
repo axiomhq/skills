@@ -68,10 +68,10 @@
 #
 #   # MPL / metrics
 #   chart-add --type Statistic --id avail --name "Availability (30d)" \
-#       --mpl '...MPL...' --dataset k8s-metrics-staging --unit "%"
+#       --mpl '...MPL...' --dataset example-metrics --unit "%"
 #
 #   chart-add --type TimeSeries --id rps --name "Read Requests (req/s)" \
-#       --mpl '...MPL...' --dataset k8s-metrics-staging --unit "req/s"
+#       --mpl '...MPL...' --dataset example-metrics --unit "req/s"
 #
 # Composing a dashboard:
 #   chart-add --type Note ... > /tmp/c1.json
