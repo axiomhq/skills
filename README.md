@@ -125,6 +125,8 @@ The deployment name (e.g., `prod`, `staging`) is passed to scripts: `scripts/axi
 
 Use conventional commit titles: `feat:`, `fix:`, or `docs:`. Release Please opens a PR to update `version.txt`, all five client manifests, and `CHANGELOG.md`. The daily run also picks up SRE sync commits.
 
+SRE syncs and eval baseline updates also open PRs. On bot PRs, click **Approve workflows to run** if GitHub requests it, then review and merge once CI passes. SRE changes still come from Gilfoyle; update their source there.
+
 Merging the release PR automatically creates a GitHub release and attaches `axiom-openai-plugin.zip` from that commit. Download the ZIP and submit it to OpenAI using the docs below.
 
 ### Marketplace docs
