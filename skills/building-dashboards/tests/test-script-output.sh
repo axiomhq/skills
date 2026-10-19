@@ -180,6 +180,15 @@ check_stat_units "MPL --unit USD writes no unit fields" '{}' \
 check_stat_units "MPL --unit % writes the % suffix" '{"customUnits":"%"}' \
     --mpl '`m`:ratio | map * 100' --dataset m --unit %
 
+sizes=$("$SCRIPTS_DIR/layout-pack" n:Note s:Statistic t:TimeSeries h:Heatmap tb:Table p:Pie l:LogStream m:MonitorList f:SmartFilter \
+    | jq -c 'map("\(.i)=\(.w)x\(.h)") | join(" ")')
+want='"n=12x2 s=3x2 t=4x4 h=4x4 tb=6x5 p=3x5 l=12x7 m=4x4 f=12x1"'
+if [[ "$sizes" == "$want" ]]; then
+    ok "layout-pack uses the documented default sizes"
+else
+    fail "layout-pack uses the documented default sizes" "got: $sizes"
+fi
+
 logstream_doc() {
     jq -n --arg apl "$1" '{name: "T", owner: "X-AXIOM-EVERYONE", schemaVersion: 2,
         charts: [{id: "logs", name: "Logs", type: "LogStream", query: {apl: $apl}}],

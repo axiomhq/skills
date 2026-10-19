@@ -4,7 +4,7 @@ Grid blueprints for common dashboard structures. The grid is **12 columns wide**
 
 These recipes place charts. They do not create collapsible sections. Pass `--section` to `dashboard-assemble` for a group that expands and collapses and stops its queries while collapsed. A Note header is only a label in the grid.
 
-Default per-type sizes (from `layout-pack`): Statistic 3×3, TimeSeries 6×4, Heatmap 6×4, Pie 4×4, Table 6×5, LogStream 12×6, Note 12×2, MonitorList 6×4, SmartFilter 12×1.
+Default per-type sizes (from `layout-pack`): Statistic 3×2, TimeSeries 4×4, Heatmap 4×4, Pie 3×5, Table 6×5, LogStream 12×7, Note 12×2, MonitorList 4×4, SmartFilter 12×1.
 
 ## Service Overview (oncall)
 
@@ -13,7 +13,7 @@ Stats row → trend row → breakdowns → evidence.
 ```bash
 layout-pack \
   err-rate:Statistic p95:Statistic traffic:Statistic alerts:Statistic \
-  traffic-ts:TimeSeries latency-ts:TimeSeries \
+  traffic-ts:6x4 latency-ts:6x4 \
   top-routes:Table top-errors:Table \
   recent-errors:LogStream
 ```
@@ -22,9 +22,9 @@ Resulting grid:
 
 ```
 y= 0  [err-rate 3] [p95 3] [traffic 3] [alerts 3]
-y= 3  [traffic-ts  6      ] [latency-ts  6       ]
-y= 7  [top-routes  6      ] [top-errors  6       ]
-y=12  [recent-errors            12               ]
+y= 2  [traffic-ts  6      ] [latency-ts  6       ]
+y= 6  [top-routes  6      ] [top-errors  6       ]
+y=11  [recent-errors            12               ]
 ```
 
 ## Service Overview with Filter Bar
@@ -44,12 +44,12 @@ Three SLO statistics across the top, two trend charts below, violations table at
 
 ```bash
 layout-pack \
-  avail:4x3 latency-slo:4x3 budget:4x3 \
-  avail-trend:TimeSeries burn-rate:TimeSeries \
+  avail:4x2 latency-slo:4x2 budget:4x2 \
+  avail-trend:6x4 burn-rate:6x4 \
   violations:Table
 ```
 
-`Statistic` defaults to 3×3; override with `id:4x3` to fit three across.
+`Statistic` defaults to 3×2. Override with `id:4x2` to fit three across. Two trends share a row at `6x4`.
 
 ## Incident Investigation
 
@@ -74,7 +74,7 @@ layout-pack \
   filters:SmartFilter \
   traffic-stacked:12x4 \
   errors-by-service:12x4 \
-  api-stat:4x3 auth-stat:4x3 pay-stat:4x3 \
+  api-stat:4x2 auth-stat:4x2 pay-stat:4x2 \
   api-table:4x5 auth-table:4x5 pay-table:4x5
 ```
 
@@ -85,7 +85,7 @@ Cluster-health stats → resource usage → pod issues → events.
 ```bash
 layout-pack \
   nodes:Statistic pods:Statistic restarts:Statistic oomkills:Statistic \
-  cpu-by-ns:TimeSeries mem-by-ns:TimeSeries \
+  cpu-by-ns:6x4 mem-by-ns:6x4 \
   pods-restarts:Table pods-cpu:Table \
   events:LogStream
 ```

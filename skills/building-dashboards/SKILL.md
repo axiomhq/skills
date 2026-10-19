@@ -218,7 +218,7 @@ Traffic, error-rate, latency-percentile, and other golden-signal APL recipes: `r
 
 ## Layout Composition
 
-`layout-pack` packs charts row-major into the 12-column grid using per-type defaults (Statistic 3×3, TimeSeries 6×4, Table 6×5, LogStream 12×6, Note 12×2). Override with `id:WxH` when needed. Grid recipes: `reference/layout-recipes.md`. Naming and panel-ordering conventions: `reference/design-playbook.md`.
+`layout-pack` packs charts row-major into the 12-column grid using per-type defaults (Statistic 3×2, TimeSeries 4×4, Table 6×5, Pie 3×5, LogStream 12×7, Note 12×2). They match the Console's defaults (four 3×2 KPIs per row). Override with `id:WxH` when needed. Grid recipes: `reference/layout-recipes.md`. Naming and panel-ordering conventions: `reference/design-playbook.md`.
 
 ### Sections
 
