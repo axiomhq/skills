@@ -214,20 +214,33 @@ resolve_axiom_query_url() {
           (.[] | select(.name == $ds) | .edgeDeploymentUrl // (if .edgeDeployment then "https://" + (.edgeDeployment | sub("^cloud\\."; "")) + ".edge.axiom.co" else empty end)) // empty
         ' 2>/dev/null | head -n 1)
       fi
-      if [[ -z "$discovered_edge" ]]; then
-        discovered_edge=$(printf '%s' "$catalog" | jq -r '
-          first(.[] | .edgeDeploymentUrl // (if .edgeDeployment then "https://" + (.edgeDeployment | sub("^cloud\\."; "")) + ".edge.axiom.co" else empty end) | select(length > 0)) // empty
-        ' 2>/dev/null)
-      fi
-
       if [[ -n "$discovered_edge" && "$discovered_edge" != "null" ]]; then
         printf '%s/v1/query/_apl?format=tabular\n' "${discovered_edge%/}"
         return
       fi
     fi
+
+    if [[ -n "$edge_url" ]]; then
+      if [[ "$edge_url" != *://* ]]; then
+        edge_url="https://$edge_url"
+      fi
+      printf '%s/v1/query/_apl?format=tabular\n' "${edge_url%/}"
+      return
+    fi
+
+    if [[ -n "$catalog" ]]; then
+      local fallback_edge=""
+      fallback_edge=$(printf '%s' "$catalog" | jq -r '
+        first(.[] | .edgeDeploymentUrl // (if .edgeDeployment then "https://" + (.edgeDeployment | sub("^cloud\\."; "")) + ".edge.axiom.co" else empty end) | select(length > 0)) // empty
+      ' 2>/dev/null)
+      if [[ -n "$fallback_edge" && "$fallback_edge" != "null" ]]; then
+        printf '%s/v1/query/_apl?format=tabular\n' "${fallback_edge%/}"
+        return
+      fi
+    fi
   fi
 
-  # 4. Configured edge_url fallback (used when token is dataset-scoped without /v1/datasets permission)
+  # 4. Configured edge_url fallback
   if [[ -n "$edge_url" ]]; then
     if [[ "$edge_url" != *://* ]]; then
       edge_url="https://$edge_url"

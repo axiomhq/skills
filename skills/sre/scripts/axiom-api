@@ -67,8 +67,37 @@ resolve_edge_base_url() {
       fi
     fi
 
+    local discovered_edge=""
+    local target_ds=""
+    if [[ -n "$catalog" && -n "$BODY" ]]; then
+      local apl=""
+      apl=$(printf '%s' "$BODY" | jq -r '.apl // empty' 2>/dev/null || true)
+      if [[ -n "$apl" ]]; then
+        target_ds=$(printf '%s' "$apl" | sed -n "s/^[[:space:]]*\['\([^']*\)'\].*/\1/p; s/^[[:space:]]*\[\"\([^\"]*\)\"\].*/\1/p" | head -n 1)
+        if [[ -z "$target_ds" ]]; then
+          target_ds=$(printf '%s' "$apl" | sed -n 's/^[[:space:]]*\([a-zA-Z0-9_-][a-zA-Z0-9_.-]*\)[[:space:]]*|.*/\1/p' | head -n 1)
+        fi
+      fi
+      if [[ -n "$target_ds" ]]; then
+        discovered_edge=$(printf '%s' "$catalog" | jq -r --arg ds "$target_ds" '
+          (.[] | select(.name == $ds) | .edgeDeploymentUrl // (if .edgeDeployment then "https://" + (.edgeDeployment | sub("^cloud\\."; "")) + ".edge.axiom.co" else empty end)) // empty
+        ' 2>/dev/null | head -n 1)
+      fi
+      if [[ -n "$discovered_edge" && "$discovered_edge" != "null" ]]; then
+        printf '%s\n' "${discovered_edge%/}"
+        return
+      fi
+    fi
+
+    if [[ -n "$edge_url" ]]; then
+      if [[ "$edge_url" != *://* ]]; then
+        edge_url="https://$edge_url"
+      fi
+      printf '%s\n' "${edge_url%/}"
+      return
+    fi
+
     if [[ -n "$catalog" ]]; then
-      local discovered_edge=""
       discovered_edge=$(printf '%s' "$catalog" | jq -r '
         first(.[] | .edgeDeploymentUrl // (if .edgeDeployment then "https://" + (.edgeDeployment | sub("^cloud\\."; "")) + ".edge.axiom.co" else empty end) | select(length > 0)) // empty
       ' 2>/dev/null)

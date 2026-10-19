@@ -192,12 +192,10 @@ export async function executeAplQuery(
       body.endTime = options.endTime;
     }
 
-    const edgeUrl = process.env.AXIOM_PLAY_EDGE_URL?.replace(/\/$/, "");
-    const baseUrl = (edgeUrl || config.url).replace(/\/$/, "");
-    const queryPath =
-      edgeUrl || /\.edge\.axiom\.co$/i.test(baseUrl)
-        ? "/v1/query/_apl?format=tabular"
-        : "/v1/datasets/_apl?format=tabular";
+    const baseUrl = config.url.replace(/\/$/, "");
+    const queryPath = /\.edge\.axiom\.co$/i.test(baseUrl)
+      ? "/v1/query/_apl?format=tabular"
+      : "/v1/datasets/_apl?format=tabular";
 
     const response = await fetch(
       `${baseUrl}${queryPath}`,
