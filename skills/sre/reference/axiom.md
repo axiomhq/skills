@@ -2,8 +2,8 @@
 
 Summary of all operations available via Axiom API with a personal access token (PAT).
 
-**Base URL:** `https://api.axiom.co` (for all endpoints except ingestion)  
-**Ingest URL:** Use edge deployment domain (e.g., `https://us-east-1.aws.edge.axiom.co`)
+**Management API Base URL:** `https://api.axiom.co` (datasets, monitors, notifiers, annotations, etc.)  
+**Edge URL:** Regional edge deployment domain (e.g., `https://us-east-1.aws.edge.axiom.co` or `https://eu-central-1.aws.edge.axiom.co`) for queries and ingestion. Required when using API tokens with query cost limits.
 
 **Authentication:**
 Use `scripts/axiom-api` or `scripts/curl-auth axiom <deployment> <url>` with the configured Axiom service URL. These helpers load the selected deployment's token and organization internally; do not read or construct authorization headers in the agent conversation.
@@ -14,13 +14,13 @@ Use `scripts/axiom-api` or `scripts/curl-auth axiom <deployment> <url>` with the
 
 | Operation | Endpoint | Description |
 |-----------|----------|-------------|
-| Run APL query | `POST /v1/datasets/_apl?format=tabular` | Execute APL query with tabular output |
-| Run APL query (legacy) | `POST /v1/datasets/_apl?format=legacy` | Execute APL query with legacy output |
+| Run APL query (edge) | `POST /v1/query/_apl?format=tabular` | Execute APL query via regional edge deployment (supports token query cost limits) |
+| Run APL query (legacy API) | `POST /v1/datasets/_apl?format=tabular` | Legacy APL query endpoint on `api.axiom.co` (rejects tokens with query cost limits with HTTP 430) |
 | Run query (legacy) | `POST /v1/datasets/{dataset_name}/query` | Legacy query endpoint with filter/aggregation model |
 
 **Query parameters:** `apl`, `startTime`, `endTime`, `cursor`, `includeCursor`, `queryOptions`, `variables`
 
-`scripts/axiom-query` always sets `startTime` and `endTime` from its required `--since` or `--from`/`--to` flags.
+`scripts/axiom-query` resolves the deployment's regional edge URL (via `edge_url` in `config.toml` or dataset catalog discovery) and always sets `startTime` and `endTime` from its required `--since` or `--from`/`--to` flags.
 
 ---
 

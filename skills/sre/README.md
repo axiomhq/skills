@@ -39,6 +39,7 @@ Edit `~/.config/axiom-sre/config.toml` and add your deployment:
 ```toml
 [axiom.deployments.prod]
 url = "https://api.axiom.co"
+edge_url = "https://us-east-1.aws.edge.axiom.co" # or eu-central-1.aws.edge.axiom.co (Settings → General → Edge deployment)
 token = "xaat-your-api-token"
 org_id = "your-org-id"
 ```
@@ -47,7 +48,7 @@ Then run `scripts/init` again.
 
 If you already have `~/.axiom.toml`, use `scripts/init --migrate` **instead of the initial `scripts/init` run**. This imports legacy configuration into the new format; it refuses to overwrite an existing SRE config. Other skills may still use `~/.axiom.toml`, so keep it for those workflows.
 
-Get your org_id from Settings → Organization. For the token, create a scoped **API token** (Settings → API Tokens) with the permissions your workflow needs. Avoid Personal Access Tokens for automated tooling.
+Get your `org_id` from Settings → Organization and your `edge_url` from Settings → General → Edge deployment. For the token, create a scoped **API token** (Settings → API Tokens) with the permissions and query cost limits your workflow needs. Setting `edge_url` ensures queries go directly through the regional edge query API (`/v1/query/_apl`), which is required when token query cost limits are enabled. Avoid Personal Access Tokens for automated tooling.
 
 ## Usage
 

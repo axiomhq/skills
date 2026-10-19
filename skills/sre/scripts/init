@@ -116,6 +116,9 @@ token = \"${BASH_REMATCH[1]}\""
             elif [[ "$line" =~ ^org_id[[:space:]]*=[[:space:]]*\"?([^\"]+)\"? ]]; then
                 CONFIG_CONTENT+="
 org_id = \"${BASH_REMATCH[1]}\""
+            elif [[ "$line" =~ ^edge_url[[:space:]]*=[[:space:]]*\"?([^\"]+)\"? ]]; then
+                CONFIG_CONTENT+="
+edge_url = \"${BASH_REMATCH[1]}\""
             fi
         done < "$HOME/.axiom.toml"
         echo "  → Migrated Axiom deployments"
@@ -215,7 +218,8 @@ EOF
 # Example Axiom configuration
 # [axiom.deployments.prod]
 # url = "https://api.axiom.co"
-# token = "xapt-xxx"
+# edge_url = "https://us-east-1.aws.edge.axiom.co" # regional edge domain (required for tokens with query cost limits)
+# token = "xaat-xxx"
 # org_id = "my-org"
 
 # Example Grafana with API token (cloud)
@@ -254,7 +258,8 @@ if [[ -f "$CONFIG_FILE" ]] && ! grep -qE '^[[:space:]]*\[(axiom|grafana|pyroscop
     echo ""
     echo "     [axiom.deployments.prod]"
     echo "     url = \"https://api.axiom.co\""
-    echo "     token = \"xapt-xxx\""
+    echo "     edge_url = \"https://us-east-1.aws.edge.axiom.co\" # or eu-central-1.aws.edge.axiom.co"
+    echo "     token = \"xaat-xxx\""
     echo "     org_id = \"your-org\""
     echo ""
     echo "     [grafana.deployments.prod]"

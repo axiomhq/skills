@@ -41,7 +41,8 @@ fi
 #   https://api.dev.axiom.co → https://app.dev.axiom.co
 #   https://cloud.axiom.co → https://app.axiom.co
 #   https://api.axiom.co → https://app.axiom.co
-if [[ "$URL" == *"cloud.axiom.co"* ]]; then
+#   https://us-east-1.aws.edge.axiom.co → https://app.axiom.co
+if [[ "$URL" == *"cloud.axiom.co"* || "$URL" == *".edge.axiom.co"* ]]; then
   BASE_URL="https://app.axiom.co"
 elif [[ "$URL" == https://api.* ]]; then
   # Replace api. with app.

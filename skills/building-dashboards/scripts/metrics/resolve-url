@@ -65,13 +65,22 @@ extract_value() {
 }
 
 FALLBACK_URL=$(extract_value "url")
+CONFIGURED_EDGE_URL=$(extract_value "edge_url")
+if [[ -n "$CONFIGURED_EDGE_URL" ]]; then
+    if [[ "$CONFIGURED_EDGE_URL" != *://* ]]; then
+        CONFIGURED_EDGE_URL="https://$CONFIGURED_EDGE_URL"
+    fi
+    FALLBACK_URL="${CONFIGURED_EDGE_URL%/}"
+fi
 
-EDGE_DEPLOYMENT=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET /v2/datasets \
-    | jq -r --arg name "$DATASET" '.[] | select(.name == $name) | .edgeDeployment // empty')
+EDGE_DEPLOYMENT=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET /v2/datasets 2>/dev/null \
+    | jq -r --arg name "$DATASET" '.[] | select(.name == $name) | (.edgeDeploymentUrl // .edgeDeployment) // empty' 2>/dev/null || true)
 
 RESOLVED_URL=""
 if [[ -z "$EDGE_DEPLOYMENT" || "$EDGE_DEPLOYMENT" == "null" ]]; then
     RESOLVED_URL="$FALLBACK_URL"
+elif [[ "$EDGE_DEPLOYMENT" == *://* ]]; then
+    RESOLVED_URL="${EDGE_DEPLOYMENT%/}"
 else
     # cloud.us-east-1.aws → https://us-east-1.aws.edge.axiom.co
     EDGE_HOST="${EDGE_DEPLOYMENT#cloud.}"

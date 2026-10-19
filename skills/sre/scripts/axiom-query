@@ -141,6 +141,107 @@ PAYLOAD=$(jq -cn \
 # shellcheck disable=SC1090
 eval "$("$SCRIPT_DIR/config" axiom "$DEPLOYMENT")"
 
+# Resolve the regional edge URL for APL queries.
+# API tokens with query cost limits are rejected by the legacy
+# https://api.axiom.co/v1/datasets/_apl endpoint with HTTP 430
+# ("query prevented due to limiter") and must query the regional edge API:
+# POST https://<edge-domain>/v1/query/_apl?format=tabular
+resolve_axiom_query_url() {
+  local base_url="${AXIOM_URL%/}"
+  local edge_url="${AXIOM_EDGE_URL:-}"
+  local override_url="${AXIOM_URL_OVERRIDE:-}"
+
+  # 1. Explicit environment override
+  if [[ -n "$override_url" ]]; then
+    if [[ "$override_url" != *://* ]]; then
+      override_url="https://$override_url"
+    fi
+    printf '%s/v1/query/_apl?format=tabular\n' "${override_url%/}"
+    return
+  fi
+
+  # 2. AXIOM_URL is already a regional edge deployment domain
+  if [[ "$base_url" =~ ^https://([a-z0-9-]+\.)+edge\.axiom\.co$ ]]; then
+    printf '%s/v1/query/_apl?format=tabular\n' "$base_url"
+    return
+  fi
+
+  # 3. For hosted Axiom (api.axiom.co / app.axiom.co), resolve the dataset's
+  #    authoritative regional edge URL from /v1/datasets (sharing discover-axiom's cache).
+  if [[ "$base_url" =~ ^https://(api|app)\.axiom\.co$ ]]; then
+    local cache_dir="${SRE_CONFIG_DIR:-$HOME/.config/axiom-sre}/cache/axiom/$DEPLOYMENT"
+    local cache_file="$cache_dir/datasets.json"
+    local catalog=""
+
+    if [[ "${SRE_NO_CACHE:-}" != "1" && -f "$cache_file" ]]; then
+      local now mtime age
+      now=$(date +%s)
+      mtime=$(stat -c %Y "$cache_file" 2>/dev/null || stat -f %m "$cache_file" 2>/dev/null || echo 0)
+      age=$(( now - mtime ))
+      if [[ "$age" -lt 600 ]]; then
+        catalog=$(cat "$cache_file" 2>/dev/null || true)
+      fi
+    fi
+
+    if [[ -z "$catalog" ]]; then
+      catalog=$(curl -sS --connect-timeout 10 --max-time 30 \
+        -H "Authorization: Bearer $AXIOM_TOKEN" \
+        -H "X-Axiom-Org-Id: $AXIOM_ORG_ID" \
+        -H "Content-Type: application/json" \
+        "$base_url/v1/datasets" 2>/dev/null || true)
+      if [[ -n "$catalog" ]] && printf '%s' "$catalog" | jq -e 'type == "array"' >/dev/null 2>&1; then
+        mkdir -p "$cache_dir" 2>/dev/null || true
+        local tmp_file="$cache_file.tmp.$$"
+        if printf '%s' "$catalog" > "$tmp_file" 2>/dev/null; then
+          chmod 600 "$tmp_file" 2>/dev/null || true
+          mv "$tmp_file" "$cache_file" 2>/dev/null || true
+        fi
+      else
+        catalog=""
+      fi
+    fi
+
+    if [[ -n "$catalog" ]]; then
+      local target_ds=""
+      target_ds=$(printf '%s' "$APL" | sed -n "s/^[[:space:]]*\['\([^']*\)'\].*/\1/p; s/^[[:space:]]*\[\"\([^\"]*\)\"\].*/\1/p" | head -n 1)
+      if [[ -z "$target_ds" ]]; then
+        target_ds=$(printf '%s' "$APL" | sed -n 's/^[[:space:]]*\([a-zA-Z0-9_-][a-zA-Z0-9_.-]*\)[[:space:]]*|.*/\1/p' | head -n 1)
+      fi
+
+      local discovered_edge=""
+      if [[ -n "$target_ds" ]]; then
+        discovered_edge=$(printf '%s' "$catalog" | jq -r --arg ds "$target_ds" '
+          (.[] | select(.name == $ds) | .edgeDeploymentUrl // (if .edgeDeployment then "https://" + (.edgeDeployment | sub("^cloud\\."; "")) + ".edge.axiom.co" else empty end)) // empty
+        ' 2>/dev/null | head -n 1)
+      fi
+      if [[ -z "$discovered_edge" ]]; then
+        discovered_edge=$(printf '%s' "$catalog" | jq -r '
+          first(.[] | .edgeDeploymentUrl // (if .edgeDeployment then "https://" + (.edgeDeployment | sub("^cloud\\."; "")) + ".edge.axiom.co" else empty end) | select(length > 0)) // empty
+        ' 2>/dev/null)
+      fi
+
+      if [[ -n "$discovered_edge" && "$discovered_edge" != "null" ]]; then
+        printf '%s/v1/query/_apl?format=tabular\n' "${discovered_edge%/}"
+        return
+      fi
+    fi
+  fi
+
+  # 4. Configured edge_url fallback (used when token is dataset-scoped without /v1/datasets permission)
+  if [[ -n "$edge_url" ]]; then
+    if [[ "$edge_url" != *://* ]]; then
+      edge_url="https://$edge_url"
+    fi
+    printf '%s/v1/query/_apl?format=tabular\n' "${edge_url%/}"
+    return
+  fi
+
+  # 5. Fallback for self-hosted / non-edge deployments
+  printf '%s/v1/datasets/_apl?format=tabular\n' "$base_url"
+}
+
+QUERY_URL=$(resolve_axiom_query_url)
+
 RESP_HEADERS=$(mktemp)
 RESP_BODY=$(mktemp)
 cleanup() {
@@ -150,7 +251,7 @@ trap cleanup EXIT
 
 # Execute query and pipe to formatter
 HTTP_CODE=$(curl -sS -o "$RESP_BODY" -D "$RESP_HEADERS" -w "%{http_code}" \
-  -X POST "$AXIOM_URL/v1/datasets/_apl?format=tabular" \
+  -X POST "$QUERY_URL" \
   -H "Authorization: Bearer $AXIOM_TOKEN" \
   -H "X-Axiom-Org-Id: $AXIOM_ORG_ID" \
   -H "Content-Type: application/json" \
@@ -162,6 +263,9 @@ if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
   echo "error: ${msg:-http $HTTP_CODE}" >&2
   if [[ -n "$trace" ]]; then
     echo "trace_id: $trace" >&2
+  fi
+  if [[ "$HTTP_CODE" == "430" || "$msg" == *"query prevented due to limiter"* ]]; then
+    echo "hint: API tokens with query cost limits must query the regional edge endpoint. Set edge_url = \"https://<region>.edge.axiom.co\" in [axiom.deployments.$DEPLOYMENT] (see Settings > General > Edge deployment)." >&2
   fi
   exit 1
 fi

@@ -290,6 +290,27 @@ for pair in 'path\\segment|path\segment' 'path\segment|path\segment' '\$CONFIG_T
 done
 
 echo ""
+echo "=== axiom edge_url extraction and normalization ==="
+cat > "$TEST_DIR/edge.toml" <<'EOF'
+[axiom.deployments.bare]
+url = "https://api.axiom.co"
+edge_url = "eu-central-1.aws.edge.axiom.co"
+token = "xaat-test"
+org_id = "org-test"
+
+[axiom.deployments.full]
+url = "https://api.axiom.co"
+edge_url = "https://us-east-1.aws.edge.axiom.co/"
+token = "xaat-test"
+org_id = "org-test"
+EOF
+export SRE_CONFIG="$TEST_DIR/edge.toml"
+result=$(eval "$("$SCRIPT_DIR/config" axiom bare)" && printf '%s' "$AXIOM_EDGE_URL")
+assert_eq "normalizes bare edge_url to https://" "https://eu-central-1.aws.edge.axiom.co" "$result"
+result=$(eval "$("$SCRIPT_DIR/config" axiom full)" && printf '%s' "$AXIOM_EDGE_URL")
+assert_eq "strips trailing slash from edge_url" "https://us-east-1.aws.edge.axiom.co" "$result"
+
+echo ""
 echo "==========================="
 echo "Results: $PASS passed, $FAIL failed"
 if [[ $FAIL -gt 0 ]]; then
