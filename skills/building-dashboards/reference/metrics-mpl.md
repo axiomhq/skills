@@ -51,40 +51,39 @@ If a chart combines metrics with mismatched units in arithmetic, surface the uni
 
 ## Unit Handling
 
-`chart-add --unit` accepts a friendly string and maps via `scripts/metrics/unit-for` (same script does the OTel → Axiom enum translation on its own). The chart-level rendering rules — which fields each chart kind accepts, the `Percent`/`Percent100` trap — live in [`chart-config.md`](./chart-config.md). This section covers the metrics-specific path.
+`chart-add --unit` takes the metric's own unit and maps it via `scripts/metrics/unit-for`. [`chart-config.md` § Units](./chart-config.md#units) lists the unit fields each chart kind accepts and shows. This section covers the metrics-specific path.
 
 ### Workflow
 
+Configure metric units with these steps:
+
 1. Read the metric's unit from `listMetrics`, e.g. `{"type":"Gauge","temporality":null,"unit":"Cel"}`.
-2. Map (or pass through to `chart-add --unit`):
+2. If the metric unit is `%`, omit `--unit`. For a 0–1 ratio, multiply by 100 and pass `--unit "%"`.
+3. Otherwise, pass the unit to `chart-add --unit` unchanged. Never translate it to a symbol (`USD`, not `$`). `unit-for` decides whether the Statistic needs a suffix:
    ```bash
-   scripts/metrics/unit-for "Cel"   # -> {"unit":"Auto","customUnits":"Cel"}
-   scripts/metrics/unit-for "ms"    # -> {"unit":"TimeMS"}
-   scripts/metrics/unit-for "%"     # -> {"unit":"Percent100","customUnits":"%"}
+   scripts/metrics/unit-for "Cel"   # -> {"customUnits":"Cel"}
+   scripts/metrics/unit-for "ms"    # -> {}  (the Console formats ms itself)
+   scripts/metrics/unit-for "USD"   # -> {}  (the Console adds the $ prefix)
+   scripts/metrics/unit-for "%"     # -> {"customUnits":"%"}
    ```
-3. For `Statistic`, `chart-add --unit` writes both fields. For other chart types, only `customUnits` — also encode the unit in `--name` (`"P95 Latency (ms)"`).
+4. For other chart types, `chart-add` writes `customUnits`, which the Console does not show. Encode the unit in `--name` (`"P95 Latency (ms)"`).
 
 ### Mapping reference
 
-`unit-for` recognises these UCUM/OTel codes; everything else falls through to `customUnits`:
+The Console formats these units from the metric's own unit. The following units need no suffix:
 
-| Input | Axiom enum |
+| Kind | Units |
 |---|---|
-| `s`, `seconds`, `sec` | `TimeSec` |
-| `ms`, `milliseconds` | `TimeMS` |
-| `us`, `µs`, `microseconds` | `TimeUS` |
-| `ns`, `nanoseconds` | `TimeNS` |
-| `min`, `h`, `hour`, `d`, `day` | `TimeMin`/`TimeHour`/`TimeDay` |
-| `By`, `bytes`, `KBy`/`MBy`/`GBy` | `Byte`/`Kilobyte`/`Megabyte`/`Gigabyte` |
-| `By/s`, `bit/s` | `BytesSec`/`BitsSec` |
-| `%` | `Percent100` (+ `customUnits: "%"`) |
-| `USD`/`EUR`/`GBP`/`JPY`/`INR`/`CAD`/`AUD`/`CZK`/`PLN` | `Currency<XXX>` |
+| Currency (prefix) | `USD`, `GBP`, `EUR`, `BTC` |
+| Time | `ns`, `us`, `ms`, `s`, `min`, `h`, `d` |
+| Frequency | `Hz` |
+| Bytes | `By`, `KiBy`, `MiBy`, `GiBy`, `TiBy`, `PiBy` |
 
-Deliberately not auto-mapped (ambiguous): `m` (metres or minutes), `B` (Bel — bytes are `By`), `1` (OTel "dimensionless" — could be ratio or count), empty/null. These fall through to `customUnits` verbatim or `Auto`.
+`unit-for` also writes no suffix for an empty unit or `1` (OTel "dimensionless"). Every other unit becomes `customUnits` as written. This includes the ambiguous `m` (metres or minutes) and `B` (Bel, bytes are `By`).
 
 ### Percentages and ratios (OTel 0–1 fractions)
 
-OTel ratios (availability, error rate, saturation, hit ratio) are emitted as 0–1 fractions. `Percent100` does NOT auto-multiply — convert in MPL:
+OTel metrics represent dimensionless ratios as 0–1 fractions with unit `1`. Examples are availability, error rate, saturation, and hit ratio. The Console does not scale them. Convert in MPL:
 
 ```mpl
 (
@@ -96,4 +95,4 @@ OTel ratios (availability, error rate, saturation, hit ratio) are emitted as 0�
 | align to $__interval using avg
 ```
 
-Then pass `chart-add --unit "%"`.
+Then pass `chart-add --unit "%"`. If the metric's own unit is already `%`, omit `--unit`: the Console adds the sign itself.

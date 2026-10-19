@@ -95,7 +95,7 @@ Rule of thumb when both are present and disagree: **the more-restrictive constra
 | Grafana panel type | Axiom chart type      | Notes                                                                                              |
 |:-------------------|:----------------------|:---------------------------------------------------------------------------------------------------|
 | `timeseries`       | TimeSeries            | Direct mapping. Preserve grouping dimensions in MPL `group by`.                                    |
-| `stat`             | Statistic             | Requires `customUnits`, not `unit` (the create API rejects `unit` on Statistic). See `chart-config.md`. |
+| `stat`             | Statistic             | Requires `customUnits`, not `unit` (the Console ignores `unit` on Statistic). See `chart-config.md`. |
 | `gauge`            | Statistic             | Map thresholds to `warningThreshold` / `errorThreshold`. Statistic does not draw a dial; the value + threshold colour is the equivalent signal. |
 | `bargauge`         | Statistic or Table    | Single value → Statistic. Multi-row → Table sorted by the value column.                            |
 | `table`            | Table                 | Direct. Preserve column projections.                                                               |
@@ -223,7 +223,7 @@ Symptom: agent screen-scrapes the rendered chart. **Fix:** always work from the 
 - [ ] For every PromQL `by(...)`: a corresponding MPL `group by` with all dimensions preserved.
 - [ ] Tested every query following the [Metrics/MPL chart contract](./metrics-mpl.md), preserving `$__interval`.
 - [ ] Built Axiom dashboard JSON without inline time ranges in chart queries.
-- [ ] Set chart units correctly: `customUnits` on Statistic, `unit` on TimeSeries (see `chart-config.md`).
+- [ ] Set chart units correctly: `customUnits` on Statistic, the unit in the name on TimeSeries (see `chart-config.md`).
 - [ ] Validated with `dashboard-validate`.
 - [ ] Deployed with `dashboard-create`.
 - [ ] Got the URL via `dashboard-link` (never constructed manually).

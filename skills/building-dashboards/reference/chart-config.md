@@ -95,19 +95,18 @@ Set in `query.queryOptions.timeSeriesView`:
 | `invertTheme` | bool | Invert colors. |
 | `errorThreshold` / `warningThreshold` | `Above`, `AboveOrEqual`, `Below`, `BelowOrEqual`, `AboveOrBelow` | Comparison direction. The companion *value* field is not reachable through the create API on probed deployments — see `chart-add` header for the gap; set thresholds via the UI for now. |
 
-## `unit` enum reference (Statistic only)
+## Units
 
-`chart-add --unit` accepts a friendly string and maps via `scripts/metrics/unit-for`. The enum it picks from:
+A `Statistic` gets its unit from two places:
 
-- Numbers: `Auto`, `Abbreviated`
-- Data: `Byte`, `Kilobyte`, `Megabyte`, `Gigabyte`
-- Data rates: `BitsSec`, `BytesSec`, `KilobitsSec`/…/`GigabytesSec`
-- Time: `TimeNS`, `TimeUS`, `TimeMS`, `TimeSec`, `TimeMin`, `TimeHour`, `TimeDay`
-- Percent: `Percent100` (input is 0–100; pair with `customUnits: "%"`). The `Percent` enum does NOT auto-multiply — convert OTel 0–1 ratios in MPL.
-- Currency: `CurrencyUSD`, `CurrencyEUR`, `CurrencyGBP`, `CurrencyCAD`, `CurrencyAUD`, `CurrencyJPY`, `CurrencyINR`, `CurrencyCZK`, `CurrencyPLN`
-- Date: `DateDateTime`, `DateFromNow`, `DateYYYYMMDDHHmmss`
+- **The metric's own unit.** The Console formats currency, time, and byte units from the metric's own unit. It adds a currency prefix, or it scales the value and adds a suffix. See [metrics-mpl.md § Unit Handling](./metrics-mpl.md#unit-handling) for the list.
+- **`customUnits`.** The Console appends this suffix to the formatted value as written, with no space and no scaling.
 
-`TimeSeries`/`Heatmap`/`Pie`/`Table`/`LogStream` reject the `unit` enum entirely — set `customUnits` and encode the unit in `name` instead.
+For MPL Statistics, `chart-add --unit` goes through `scripts/metrics/unit-for`. It writes no suffix for the units that the Console formats itself. For APL Statistics, `chart-add` writes `customUnits` as given. A suffix on a formatted metric shows the unit twice: `--unit "$"` on a `USD` metric shows `$1.031K$`.
+
+The Console ignores the `unit` enum (`TimeSec`, `Percent100`, `CurrencyUSD`, …).
+
+On `TimeSeries`, `Heatmap`, `Pie`, `Table`, and `LogStream`, the Console does not show `customUnits`. Encode the unit in `name` instead.
 
 ## Annotations
 
@@ -154,7 +153,7 @@ dashboard validation failed at [charts <index>]: Unrecognized key: "<field>"
 | `options` | Rejected on every chart kind. Common contamination from Grafana text panels (`options.content`). Note `text` is top-level, not `options.text`. |
 | `overrideDashboardTimeRange`, `overrideDashboardCompareAgainst` | No API representation. Silently dropped on data charts, rejected on `Note` and `SmartFilter`, rejected at dashboard top level. |
 
-**Per-chart rejections:**
+**Per-chart rejections.** The API applies these rules to unit fields:
 
-- `unit` — accepted on `Statistic` only. Rejected on `TimeSeries`, `Heatmap`, `Pie`, `Table`, `LogStream`, `Note`.
-- `customUnits` — rejected on `Note`. Accepted on every other chart kind.
+- `unit`: The API accepts `unit` only on `Statistic`. The Console ignores it.
+- `customUnits`: The API rejects `customUnits` on `Note`. Other chart kinds accept it. Only `Statistic` shows it.

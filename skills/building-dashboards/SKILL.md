@@ -131,7 +131,7 @@ Each chart needs a unique kebab-case `id` (`error-rate`, `p95-latency`); every l
 
 ## Chart Unit Configuration
 
-Pass a friendly unit string to `chart-add --unit` (`"%"`, `"s"`, `"ms"`, `"B"`, `"req/s"`). The script picks `unit` enum + `customUnits` suffix per chart type. `customUnits` is a label, not a formatter — scale magnitudes in MPL (`| map / 1048576` for bytes → MiB, `| map / 1000000` for bytes → MB, `| map * 100` for 0–1 ratio → percent). For metrics charts, read the source unit from the metric's metadata and pass it through. Internals (advanced options the agent may merge with `jq`): [reference/chart-config.md](./reference/chart-config.md).
+Pass a unit string to `chart-add --unit` (`"%"`, `"ms"`, `"req/s"`). On a Statistic it becomes `customUnits`, a suffix the Console appends to its own formatting. `chart-add` never writes the `unit` enum, which the Console ignores. For APL charts, `chart-add` writes the suffix as given. For metrics charts, pass the metric's own unit from its metadata (`USD`, `s`, `By`), never a symbol such as `$`. The Console formats those units itself, so `chart-add` writes no suffix for them. If the metric unit is `%`, omit `--unit`. For a 0–1 ratio, multiply by 100 and pass `--unit "%"`. Scale values in the query only when the Console does not format the unit. See [chart configuration](./reference/chart-config.md) for other options.
 
 ---
 
@@ -343,7 +343,8 @@ Compose with `chart-add` + `layout-pack` + `dashboard-assemble`. Pre-built templ
 |---------|-------|----------|
 | `getschema` returns 0 rows | Dataset is `otel:metrics:v1` or `otel-metrics-v1` | Use MCP `listMetrics` for metrics discovery. |
 | 404 from metrics API calls | Used `scripts/axiom-api` (dashboard) instead of `scripts/metrics/axiom-api` | Use `scripts/metrics/axiom-api` for `/v1/query/*`, `/v1/datasets`. |
-| Statistic shows `1` instead of `100%` for a 0–1 ratio | `Percent` enum doesn't auto-multiply | `\| map * 100` in MPL, then `chart-add --unit "%"`. |
+| Statistic shows `1` instead of `100%` for a 0–1 ratio | The Console does not scale OTel unit `1` | `\| map * 100` in MPL, then `chart-add --unit "%"`. |
+| Statistic shows the unit twice (`$1.031K$`) | `--unit "$"` on a metric whose unit the Console formats (`USD`) | Pass the metric's own unit (`--unit USD`) or no `--unit`. |
 | OTel histogram chart shows nonsense | Histogram aligned as a scalar | Use `bucket … using interpolate_cumulative_histogram` (or `_delta` per `temporality`). See [promql-to-mpl.md § Histogram translation](./reference/promql-to-mpl.md#histogram-translation-histogram_quantile--bucket--using-interpolate__histogram). |
 | Grafana migration filters/groups on the wrong subset | Read `expr` without `description`, or vice versa | Project all five panel fields before authoring; see [reference/grafana-migration.md](./reference/grafana-migration.md). |
 | PromQL metric name not found | Skipped OTel rename rules | Drop `_total`, decompose histograms, normalise units; validate with `listMetrics`. Labels need reverse-tag discovery. See [grafana-migration.md § Name Mapping](./reference/grafana-migration.md#name-mapping-promql--otel-ingest). |

@@ -158,6 +158,28 @@ check_verbatim "an @-verbatim literal" '["logs"] | where p == @"c:\x | y" | proj
 check_verbatim "a // comment" '["logs"] // note | here
 | count'
 
+check_stat_units() {
+    local label="$1" expected="$2" got
+    shift 2
+    # Keep only the unit keys that are present, so an absent key never reads as null.
+    got=$("$SCRIPTS_DIR/chart-add" --type Statistic --id t --name T "$@" \
+        | jq -c 'with_entries(select(.key == "unit" or .key == "customUnits"))')
+    if [[ "$got" == "$expected" ]]; then
+        ok "chart-add Statistic $label"
+    else
+        fail "chart-add Statistic $label" "got: $got"
+    fi
+}
+
+check_stat_units "APL --unit ms writes customUnits only" '{"customUnits":"ms"}' \
+    --apl "['logs'] | summarize avg(duration_ms)" --unit ms
+check_stat_units "APL --unit 1 writes no unit fields" '{}' \
+    --apl "['logs'] | summarize count()" --unit 1
+check_stat_units "MPL --unit USD writes no unit fields" '{}' \
+    --mpl '`m`:cost | group using sum' --dataset m --unit USD
+check_stat_units "MPL --unit % writes the % suffix" '{"customUnits":"%"}' \
+    --mpl '`m`:ratio | map * 100' --dataset m --unit %
+
 logstream_doc() {
     jq -n --arg apl "$1" '{name: "T", owner: "X-AXIOM-EVERYONE", schemaVersion: 2,
         charts: [{id: "logs", name: "Logs", type: "LogStream", query: {apl: $apl}}],

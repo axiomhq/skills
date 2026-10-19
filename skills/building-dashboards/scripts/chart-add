@@ -19,10 +19,10 @@
 #       because the dashboard runtime always supplies start/end via the
 #       API. Use `align to $__interval using …` for bucketing.
 #
-# - Statistic gets BOTH `unit` (enum, e.g. Percent100) AND `customUnits`
-#   (suffix, e.g. "%"). The mapping is delegated to scripts/metrics/unit-for,
-#   which already handles UCUM → Axiom-enum lookup, the "%" double-emit,
-#   and the "1" / "By" / "m" ambiguities.
+# - Statistic gets `customUnits`, a suffix the Console appends after its
+#   own formatting. It never gets the `unit` enum, which the Console
+#   ignores. For --mpl, scripts/metrics/unit-for drops the suffix when the
+#   Console already formats the metric's unit (USD, s, By, ...).
 # - TimeSeries / Table / Pie / LogStream / Heatmap accept ONLY `customUnits`
 #   (never the `unit` enum — the create API rejects it). They get the raw
 #   unit string passed verbatim as customUnits.
@@ -51,9 +51,9 @@
 #   All others: exactly one of --apl <APL> or --mpl <MPL> --dataset <name>
 #
 # Common optional flags (data charts only):
-#   --unit <string>      Friendly unit string ("%", "s", "ms", "B",
-#                        "req/s", "bytes", etc.). For Statistic, mapped
-#                        via unit-for. For other charts, becomes
+#   --unit <string>      Unit string ("%", "ms", "req/s", etc.). With
+#                        --mpl, pass the metric's own unit. A Statistic
+#                        maps it via unit-for. Otherwise it becomes
 #                        customUnits verbatim.
 #
 # Statistic-only flags:
@@ -174,14 +174,16 @@ fi
 # --- Helpers ---------------------------------------------------------------
 
 # Echo the unit-fields JSON object for a Statistic chart.
-# Empty input → {} (chart will render bare numbers; caller's choice).
+# Empty input and "1" (dimensionless) → {}, so the chart renders bare numbers.
 unit_fields_statistic() {
     local u="$1"
-    if [[ -z "$u" ]]; then
+    if [[ -z "$u" || "$u" == "1" ]]; then
         echo '{}'
-        return
+    elif [[ -n "$MPL" ]]; then
+        "$UNIT_FOR" "$u"
+    else
+        unit_fields_other "$u"
     fi
-    "$UNIT_FOR" "$u"
 }
 
 # Echo the unit-fields JSON object for any non-Statistic data chart.

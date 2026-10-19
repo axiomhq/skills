@@ -41,66 +41,54 @@ check() {
     fi
 }
 
-# Time units
-check "time:s"            "s"             '{"unit":"TimeSec"}'
-check "time:seconds"      "seconds"       '{"unit":"TimeSec"}'
-check "time:ms"           "ms"            '{"unit":"TimeMS"}'
-check "time:us"           "us"            '{"unit":"TimeUS"}'
-check "time:ns"           "ns"            '{"unit":"TimeNS"}'
-check "time:min"          "min"           '{"unit":"TimeMin"}'
-check "time:h"            "h"             '{"unit":"TimeHour"}'
-check "time:hour"         "hour"          '{"unit":"TimeHour"}'
-check "time:d"            "d"             '{"unit":"TimeDay"}'
+# The Console formats these from the metric's own unit. A suffix would show
+# the unit twice ("$1.03K$").
+check "formatted:s"       "s"             '{}'
+check "formatted:ms"      "ms"            '{}'
+check "formatted:us"      "us"            '{}'
+check "formatted:ns"      "ns"            '{}'
+check "formatted:min"     "min"           '{}'
+check "formatted:h"       "h"             '{}'
+check "formatted:d"       "d"             '{}'
+check "formatted:By"      "By"            '{}'
+check "formatted:KiBy"    "KiBy"          '{}'
+check "formatted:USD"     "USD"           '{}'
+check "formatted:EUR"     "EUR"           '{}'
 
-# Bytes
-check "bytes:By"          "By"            '{"unit":"Byte"}'
-check "bytes:bytes"       "bytes"         '{"unit":"Byte"}'
-check "bytes:KBy"         "KBy"           '{"unit":"Kilobyte"}'
-check "bytes:MBy"         "MBy"           '{"unit":"Megabyte"}'
-check "bytes:GBy"         "GBy"           '{"unit":"Gigabyte"}'
-check "bytes:KiBy"        "KiBy"          '{"unit":"Kilobyte"}'
+# Percent: the suffix for a 0-1 ratio scaled with `| map * 100`.
+check "percent"           "%"             '{"customUnits":"%"}'
 
-# Rates
-check "rate:By/s"         "By/s"          '{"unit":"BytesSec"}'
-check "rate:bit/s"        "bit/s"         '{"unit":"BitsSec"}'
-
-# Percent
-# Special case: "%" emits BOTH `unit` and `customUnits` because Percent100
-# alone scales the value but does not paint the suffix. See unit-for header
-# and reference/chart-config.md § Unit Configuration.
-check "percent"           "%"             '{"unit":"Percent100","customUnits":"%"}'
-
-# Currency (a representative subset)
-check "currency:EUR"      "EUR"           '{"unit":"CurrencyEUR"}'
-check "currency:USD"      "USD"           '{"unit":"CurrencyUSD"}'
-check "currency:JPY"      "JPY"           '{"unit":"CurrencyJPY"}'
+# Units the Console does not format stay a suffix.
+check "suffix:MBy"        "MBy"           '{"customUnits":"MBy"}'
+check "suffix:By/s"       "By/s"          '{"customUnits":"By/s"}'
+check "suffix:JPY"        "JPY"           '{"customUnits":"JPY"}'
 
 # Custom (unmapped) — these are real units observed in the homeassistant-metrics
 # dataset on the axiom deployment, so the tests double as regression coverage
 # for the fallback path against real-world inputs.
-check "custom:Cel"        "Cel"           '{"unit":"Auto","customUnits":"Cel"}'
-check "custom:kW.h"       "kW.h"          '{"unit":"Auto","customUnits":"kW.h"}'
-check "custom:[ppm]"      "[ppm]"         '{"unit":"Auto","customUnits":"[ppm]"}'
-check "custom:m3/h"       "m3/h"          '{"unit":"Auto","customUnits":"m3/h"}'
-check "custom:lx"         "lx"            '{"unit":"Auto","customUnits":"lx"}'
-check "custom:ug/m3"      "ug/m3"         '{"unit":"Auto","customUnits":"ug/m3"}'
-check "custom:A"          "A"             '{"unit":"Auto","customUnits":"A"}'
-check "custom:V"          "V"             '{"unit":"Auto","customUnits":"V"}'
+check "custom:Cel"        "Cel"           '{"customUnits":"Cel"}'
+check "custom:kW.h"       "kW.h"          '{"customUnits":"kW.h"}'
+check "custom:[ppm]"      "[ppm]"         '{"customUnits":"[ppm]"}'
+check "custom:m3/h"       "m3/h"          '{"customUnits":"m3/h"}'
+check "custom:lx"         "lx"            '{"customUnits":"lx"}'
+check "custom:ug/m3"      "ug/m3"         '{"customUnits":"ug/m3"}'
+check "custom:A"          "A"             '{"customUnits":"A"}'
+check "custom:V"          "V"             '{"customUnits":"V"}'
 
 # Ambiguous — by design, NOT auto-mapped. These properties are documented in
 # unit-for's header and in reference/metrics-mpl.md; a regression here means
 # we have unintentionally introduced a footgun.
-check "ambiguous:m"       "m"             '{"unit":"Auto","customUnits":"m"}'
-check "ambiguous:B"       "B"             '{"unit":"Auto","customUnits":"B"}'
+check "ambiguous:m"       "m"             '{"customUnits":"m"}'
+check "ambiguous:B"       "B"             '{"customUnits":"B"}'
 
 # Special sentinels
-check "sentinel:1"        "1"             '{"unit":"Auto"}'
-check "sentinel:empty"    ""              '{"unit":"Auto"}'
+check "sentinel:1"        "1"             '{}'
+check "sentinel:empty"    ""              '{}'
 
 # Missing arg should behave like empty string (bash ${1-})
 if MISSING_OUT=$("$SCRIPT" 2>&1); then
     actual_sorted=$(echo "$MISSING_OUT" | jq -S .)
-    expected_sorted=$(echo '{"unit":"Auto"}' | jq -S .)
+    expected_sorted=$(echo '{}' | jq -S .)
     if [[ "$actual_sorted" == "$expected_sorted" ]]; then
         PASS=$((PASS+1))
     else
