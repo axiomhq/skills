@@ -93,7 +93,7 @@
       "name": "Recent Errors",
       "type": "LogStream",
       "query": {
-        "apl": "['{{dataset}}'] | where service == '{{service}}' and status >= 500 | project-keep _time, trace_id, route, status, error_message, duration_ms | order by _time desc | take 100"
+        "apl": "['{{dataset}}'] | where service == '{{service}}' and status >= 500 | project-keep _time, trace_id, route, status, error_message, duration_ms"
       }
     }
   ],

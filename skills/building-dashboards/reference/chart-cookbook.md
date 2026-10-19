@@ -263,14 +263,14 @@ Share-of-total for low-cardinality dimensions only.
 
 Raw event inspection with focused fields.
 
+The Console adds its own `order by _time` and `limit` to every LogStream query. Do not add `take` or `limit`. The query fails with HTTP 400.
+
 ### Recent Errors
 ```apl
 ['http-logs']
 | where _time between (ago(15m) .. now())
 | where status >= 500
 | project-keep _time, trace_id, service, route, status, error_message, duration_ms
-| order by _time desc
-| take 100
 ```
 
 ### Slow Requests
@@ -279,8 +279,6 @@ Raw event inspection with focused fields.
 | where _time between (ago(15m) .. now())
 | where duration_ms > 5000
 | project-keep _time, trace_id, service, route, duration_ms, status
-| order by duration_ms desc
-| take 100
 ```
 
 ### Authentication Failures
@@ -289,8 +287,6 @@ Raw event inspection with focused fields.
 | where _time between (ago(1h) .. now())
 | where event_type == "login_failed"
 | project-keep _time, user_id, ip_address, failure_reason, user_agent
-| order by _time desc
-| take 100
 ```
 
 ### Kubernetes Events
@@ -299,8 +295,6 @@ Raw event inspection with focused fields.
 | where _time between (ago(1h) .. now())
 | where type in ("Warning", "Error")
 | project-keep _time, type, reason, ['involvedObject.name'], message
-| order by _time desc
-| take 100
 ```
 
 ### Filtered by Trace ID
@@ -309,7 +303,6 @@ Raw event inspection with focused fields.
 | where _time between (ago(24h) .. now())
 | where trace_id == "abc123xyz"
 | project-keep _time, service, route, status, duration_ms, error_message
-| order by _time asc
 ```
 
 ---

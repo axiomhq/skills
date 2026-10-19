@@ -9,7 +9,7 @@
 #   3. All charts have an id field
 #   4. No duplicate chart IDs
 #   5. Chart IDs match layout IDs
-#   6. LogStream queries have take limits
+#   6. LogStream queries have no take/limit (the Console appends its own)
 #   7. Grid layout doesn't exceed 12 columns
 #   8. Sections, when present: UUID ids, unique ids, titles.
 #      chart.sectionId must name one of those sections even when the
@@ -121,11 +121,16 @@ if [[ "$chart_ids" != "$layout_ids" ]]; then
     echo "  Layout: $(echo $layout_ids | tr '\n' ' ')"
 fi
 
-# 8. Check LogStream queries for take limits
-logstream_without_take=$(jq -r '.charts[] | select(.type == "LogStream") | select(.query.apl != null) | select(.query.apl | test("take ") | not) | .id' "$FILE" 2>/dev/null || true)
-if [[ -n "$logstream_without_take" ]]; then
-    for id in $logstream_without_take; do
-        warn "LogStream '$id' may be missing 'take N' limit"
+# 8. The Console adds its own sort and limit to LogStream queries.
+# A take/limit fails with HTTP 400. String literals and // comments are not operators.
+logstream_with_take=$(jq -r '
+  def operators: gsub("\"(\\\\.|[^\"\\\\\n])*\"|\\x27(\\\\.|[^\\x27\\\\\n])*\\x27|//[^\n]*"; "");
+  .charts[] | select(.type == "LogStream") | select(.query.apl != null)
+  | select(.query.apl | operators | test("\\|\\s*(take|limit)\\b")) | .id
+' "$FILE" 2>/dev/null || true)
+if [[ -n "$logstream_with_take" ]]; then
+    for id in $logstream_with_take; do
+        warn "LogStream '$id' has take/limit. The query fails with HTTP 400."
     done
 fi
 

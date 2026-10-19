@@ -158,6 +158,35 @@ check_verbatim "an @-verbatim literal" '["logs"] | where p == @"c:\x | y" | proj
 check_verbatim "a // comment" '["logs"] // note | here
 | count'
 
+logstream_doc() {
+    jq -n --arg apl "$1" '{name: "T", owner: "X-AXIOM-EVERYONE", schemaVersion: 2,
+        charts: [{id: "logs", name: "Logs", type: "LogStream", query: {apl: $apl}}],
+        layout: [{i: "logs", x: 0, y: 0, w: 12, h: 7, minW: 3, minH: 3}]}'
+}
+
+check_logstream() {
+    local want="$1" label="$2" apl="$3" got
+    logstream_doc "$apl" > "$TMPDIR/ls.json"
+    if "$SCRIPTS_DIR/dashboard-validate" "$TMPDIR/ls.json" --strict > /dev/null; then
+        got=accepts
+    else
+        got=rejects
+    fi
+    if [[ "$got" == "$want" ]]; then
+        ok "dashboard-validate --strict $want a LogStream $label"
+    else
+        fail "dashboard-validate --strict $want a LogStream $label" "it $got it"
+    fi
+}
+
+check_logstream accepts "without take" "['logs'] | where status >= 500 | project-keep _time, msg"
+check_logstream rejects "with take" "['logs'] | where status >= 500 | take 100"
+check_logstream rejects "with limit" "['logs'] | where status >= 500 | limit 100"
+check_logstream accepts "with '| take' in a string" "['logs'] | where message contains \"| take 100\""
+check_logstream accepts "with '| take' in a single-quoted string" "['logs'] | where message contains '| take 100'"
+check_logstream accepts "with '| take' in a comment" $'[\'logs\'] // old example: | take 100\n| where status >= 500'
+check_logstream rejects "with take after a comment" $'[\'logs\']\n| // comment\ntake 100'
+
 echo ""
 echo "======================"
 echo "Passed: $passed | Failed: $failed"
