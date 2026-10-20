@@ -263,7 +263,7 @@ Share-of-total for low-cardinality dimensions only.
 
 Raw event inspection with focused fields.
 
-The Console adds its own `order by _time` and `limit` to every LogStream query. Do not add `take` or `limit`. The query fails with HTTP 400.
+The Console adds its own `order by _time` and `limit` to every LogStream query and streams the result. Use per-event operators only (`where`, `search`, `extend`, `parse`, `project-keep`) and keep `_time`. A row limit (`take`, `limit`, `top`), an aggregation (`summarize`, `count`, `distinct`), `sample`, `mv-expand`, `join`, or `union` fails with HTTP 400. Use a Table for top-N lists and aggregates.
 
 ### Recent Errors
 ```apl

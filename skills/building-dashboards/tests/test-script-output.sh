@@ -235,6 +235,16 @@ check_logstream accepts "with '| take' in a string" "['logs'] | where message co
 check_logstream accepts "with '| take' in a single-quoted string" "['logs'] | where message contains '| take 100'"
 check_logstream accepts "with '| take' in a comment" $'[\'logs\'] // old example: | take 100\n| where status >= 500'
 check_logstream rejects "with take after a comment" $'[\'logs\']\n| // comment\ntake 100'
+check_logstream accepts "with '| take' after an @-verbatim path" "['logs'] | where path startswith @\"C:\\\" and message contains \"| take 100\""
+check_logstream accepts "with '| limit' after a single-quoted @-verbatim path" "['logs'] | where path startswith @'C:\\' and message contains '| limit 10'"
+check_logstream accepts "with '| take' after an escaped quote" "['logs'] | where message == \"say \\\" | take 100\""
+check_logstream accepts "with '| take' in a triple-backtick string" "['logs'] | where message contains \`\`\`| take 100\`\`\`"
+check_logstream accepts "with '| limit' in a multiline triple-backtick string" $'[\'logs\']\n| where message contains ```query failed:\n| limit 10\n```'
+check_logstream rejects "with summarize" "['logs'] | summarize count() by bin_auto(_time)"
+check_logstream rejects "with top" "['logs'] | top 10 by _time"
+check_logstream rejects "with distinct" "['logs'] | distinct service"
+check_logstream rejects "with join" "['logs'] | join kind=inner (['users']) on user_id"
+check_logstream rejects "with a leading union" "union ['logs'], ['audit'] | where status >= 500"
 
 echo ""
 echo "======================"

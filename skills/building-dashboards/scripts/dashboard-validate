@@ -120,16 +120,21 @@ if [[ "$chart_ids" != "$layout_ids" ]]; then
     echo "  Layout: $(echo $layout_ids | tr '\n' ' ')"
 fi
 
-# 8. The Console adds its own sort and limit to LogStream queries.
-# A take/limit fails with HTTP 400. String literals and // comments are not operators.
-logstream_with_take=$(jq -r '
-  def operators: gsub("\"(\\\\.|[^\"\\\\\n])*\"|\\x27(\\\\.|[^\\x27\\\\\n])*\\x27|//[^\n]*"; "");
+# 8. The Console appends its own order and limit to a LogStream query and
+# streams the result. A row limit, aggregation, or join fails with HTTP 400.
+# Strings and // comments are not operators. Queries with a backslash or a
+# ``` literal are skipped: their string boundaries are not followed here, and
+# a false match would block a valid deploy under --strict.
+logstream_unstreamable=$(jq -r '
   .charts[] | select(.type == "LogStream") | select(.query.apl != null)
-  | select(.query.apl | operators | test("\\|\\s*(take|limit)\\b")) | .id
+  | select(.query.apl | test("\\\\|```") | not)
+  | select(.query.apl | gsub("\"[^\"\n]*\"|\\x27[^\\x27\n]*\\x27|//[^\n]*"; "")
+      | test("\\|\\s*(take|limit|top|summarize|count|distinct|sample|mv-expand|join|union)\\b|^\\s*union\\b"))
+  | .id
 ' "$FILE" 2>/dev/null || true)
-if [[ -n "$logstream_with_take" ]]; then
-    for id in $logstream_with_take; do
-        warn "LogStream '$id' has take/limit. The query fails with HTTP 400."
+if [[ -n "$logstream_unstreamable" ]]; then
+    for id in $logstream_unstreamable; do
+        warn "LogStream '$id' limits, aggregates, or joins rows. The Console adds its own order and limit, so the query fails with HTTP 400. Use a Table for top-N lists and aggregates."
     done
 fi
 

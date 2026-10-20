@@ -161,7 +161,7 @@ Common blockers: MPL parser limits, missing tag with no reverse-tag equivalent, 
 | TimeSeries    | Trends over time, percentile overlays               | `bin_auto(_time)`; `percentiles_array()` for multi-percentile.       |
 | Table         | Top-N lists, breakdowns                             | Bound with `top N`; control columns via `project`.                   |
 | Pie           | Share-of-total for ≤6 categories                    | Aggregate to ≤6 slices; never high-cardinality.                      |
-| LogStream     | Raw event inspection                                | No `take` or `limit`. The Console adds its own sort and limit. Select relevant fields with `project-keep`, and filter hard. |
+| LogStream     | Raw event inspection                                | No row limit (`take`, `limit`, `top`), aggregation, or join. The Console adds its own sort and limit. Select fields with `project-keep`, keep `_time`, and filter hard. |
 | Heatmap       | Distribution / latency density                      | `summarize histogram(field, buckets) by bin_auto(_time)`.            |
 | Scatter Plot  | Correlate two metrics per group                     | `summarize avg(x), avg(y) by group`.                                 |
 | SmartFilter   | Interactive filter bar                              | Each panel query needs `declare query_parameters`. See `reference/smartfilter.md`. |
