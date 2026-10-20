@@ -102,7 +102,7 @@ Exception: for sparse metrics where `$__interval` rounds to empty buckets, a fix
 #### 1. At-a-Glance (Statistic panels)
 Current values — "what's the state right now?"
 - Choose the `group` function by what the panel should show across series.
-- Read the metric's `unit` from its metadata and pass it to `chart-add --unit`. Ratio metrics (0–1) need `| map * 100` in MPL before `--unit "%"`.
+- Pass the unit of the result to `chart-add --unit`: the metric's `unit` from its metadata, or the new unit after a `map` or a rate that changes it (`prom::rate` on `By` gives `By/s`). Ratio metrics (0–1) need `| map * 100` in MPL before `--unit "%"`.
 
 #### 2. Trends (TimeSeries panels)
 Trends over time — "what changed?"
@@ -131,7 +131,7 @@ Each chart needs a unique kebab-case `id` (`error-rate`, `p95-latency`); every l
 
 ## Chart Unit Configuration
 
-Pass a unit string to `chart-add --unit` (`"%"`, `"ms"`, `"req/s"`). On a Statistic it becomes `customUnits`, a suffix the Console appends to its own formatting. `chart-add` never writes the `unit` enum, which the Console ignores. For APL charts, `chart-add` writes the suffix as given. For metrics charts, pass the metric's own unit from its metadata (`USD`, `s`, `By`), never a symbol such as `$`. The Console formats those units itself, so `chart-add` writes no suffix for them. If the metric unit is `%`, omit `--unit`. For a 0–1 ratio, multiply by 100 and pass `--unit "%"`. Scale values in the query only when the Console does not format the unit. See [chart configuration](./reference/chart-config.md) for other options.
+Pass a unit string to `chart-add --unit` (`"%"`, `"ms"`, `"req/s"`). `chart-add` never writes the `unit` enum, which the Console ignores. On an MPL Statistic, `chart-add` writes `set custom_unit="<unit>";` into the query and adds a `customUnits` suffix only for units the Console does not format. Pass the UCUM code of the result (`USD`, `s`, `By`, `%`), never a symbol such as `$`. For a 0–1 ratio, multiply by 100 and pass `--unit "%"`. On an APL Statistic, `chart-add` adds the suffix only for units the Console does not format, because the Console formats a field from its unit metadata. `%` keeps its suffix there. See [chart configuration](./reference/chart-config.md) for other options.
 
 ---
 
@@ -344,7 +344,9 @@ Compose with `chart-add` + `layout-pack` + `dashboard-assemble`. Pre-built templ
 | `getschema` returns 0 rows | Dataset is `otel:metrics:v1` or `otel-metrics-v1` | Use MCP `listMetrics` for metrics discovery. |
 | 404 from metrics API calls | Used `scripts/axiom-api` (dashboard) instead of `scripts/metrics/axiom-api` | Use `scripts/metrics/axiom-api` for `/v1/query/*`, `/v1/datasets`. |
 | Statistic shows `1` instead of `100%` for a 0–1 ratio | The Console does not scale OTel unit `1` | `\| map * 100` in MPL, then `chart-add --unit "%"`. |
-| Statistic shows the unit twice (`$1.031K$`) | `--unit "$"` on a metric whose unit the Console formats (`USD`) | Pass the metric's own unit (`--unit USD`) or no `--unit`. |
+| Statistic shows the unit twice (`$1.031K$`) | A `customUnits` suffix on a unit the Console formats (`"$"` on `USD`) | Pass the UCUM code (`--unit USD`). `chart-add` rejects `$`. |
+| MPL Statistic shows a bare number after `map` or a rate | The result no longer carries the metric's unit | Pass the unit of the result to `chart-add --unit` (`map / 3600` on `s` gives `--unit h`). |
+| MPL rate tile shows `KB` instead of `KB/s` | `--unit` names the metric's unit, not the rate's | Pass the per-second unit (`prom::rate` on `By` gives `--unit By/s`). |
 | OTel histogram chart shows nonsense | Histogram aligned as a scalar | Use `bucket … using interpolate_cumulative_histogram` (or `_delta` per `temporality`). See [promql-to-mpl.md § Histogram translation](./reference/promql-to-mpl.md#histogram-translation-histogram_quantile--bucket--using-interpolate__histogram). |
 | Grafana migration filters/groups on the wrong subset | Read `expr` without `description`, or vice versa | Project all five panel fields before authoring; see [reference/grafana-migration.md](./reference/grafana-migration.md). |
 | PromQL metric name not found | Skipped OTel rename rules | Drop `_total`, decompose histograms, normalise units; validate with `listMetrics`. Labels need reverse-tag discovery. See [grafana-migration.md § Name Mapping](./reference/grafana-migration.md#name-mapping-promql--otel-ingest). |

@@ -51,30 +51,31 @@ If a chart combines metrics with mismatched units in arithmetic, surface the uni
 
 ## Unit Handling
 
-`chart-add --unit` takes the metric's own unit and maps it via `scripts/metrics/unit-for`. [`chart-config.md` § Units](./chart-config.md#units) lists the unit fields each chart kind accepts and shows. This section covers the metrics-specific path.
+`chart-add --unit` takes the unit of the query result. On a Statistic, `chart-add` writes it into the query as `set custom_unit="<unit>";` and maps it via `scripts/metrics/unit-for`. [`chart-config.md` § Units](./chart-config.md#units) lists the unit fields each chart kind accepts and shows. This section covers the metrics-specific path.
 
 ### Workflow
 
 Configure metric units with these steps:
 
 1. Read the metric's unit from `listMetrics`, e.g. `{"type":"Gauge","temporality":null,"unit":"Cel"}`.
-2. If the metric unit is `%`, omit `--unit`. For a 0–1 ratio, multiply by 100 and pass `--unit "%"`.
-3. Otherwise, pass the unit to `chart-add --unit` unchanged. Never translate it to a symbol (`USD`, not `$`). `unit-for` decides whether the Statistic needs a suffix:
+2. Pass the unit of the result to `chart-add --unit`: the metric's unit, or the new unit after a `map` or a rate that changes it. `map / 3600` on `s` gives `h`. A rate is per second: `prom::rate` on `By` gives `By/s`, on `{requests}` gives `{requests}/s`, and on `USD` gives `USD/s`. A ratio of two rates has no unit. For a 0–1 ratio, multiply by 100 and pass `--unit "%"`.
+3. Pass the UCUM code, never a symbol (`USD`, not `$`). `chart-add` rejects `$`, `€`, and `£`. `unit-for` decides whether the Statistic needs a suffix:
    ```bash
    scripts/metrics/unit-for "Cel"   # -> {"customUnits":"Cel"}
    scripts/metrics/unit-for "ms"    # -> {}  (the Console formats ms itself)
    scripts/metrics/unit-for "USD"   # -> {}  (the Console adds the $ prefix)
-   scripts/metrics/unit-for "%"     # -> {"customUnits":"%"}
+   scripts/metrics/unit-for "%"     # -> {}  (the Console adds the % sign)
    ```
 4. For other chart types, `chart-add` writes `customUnits`, which the Console does not show. Encode the unit in `--name` (`"P95 Latency (ms)"`).
 
 ### Mapping reference
 
-The Console formats these units from the metric's own unit. The following units need no suffix:
+The Console formats these units, so they need no suffix:
 
 | Kind | Units |
 |---|---|
 | Currency (prefix) | `USD`, `GBP`, `EUR`, `BTC` |
+| Percent (0–100) | `%` |
 | Time | `ns`, `us`, `ms`, `s`, `min`, `h`, `d` |
 | Frequency | `Hz` |
 | Bytes (IEC) | `By`, `KiBy`, `MiBy`, `GiBy`, `TiBy`, `PiBy` |
@@ -85,28 +86,17 @@ The Console formats these units from the metric's own unit. The following units 
 
 The Console also tries an unmapped unit lowercased as a formatter ID. `unit-for` suppresses the suffix for those registered formatters too, for example `bytes`, `BYTES`, `µs`, and `reqps`. This does not make UCUM codes case-insensitive: `kBy` is mapped, but `KBy` is not. The `none` and `short` formatters add no unit label, so they do not trigger suppression.
 
-`unit-for` also writes no suffix for an empty unit or `1` (OTel "dimensionless"). Other units become `customUnits` as written. This includes the ambiguous `m` (metres or minutes), `B` (Bel, bytes are `By`), and named counts such as `{requests}`: the Console abbreviates their numbers but does not add the count label. `%` remains an intentional exception for converted ratios, described below.
+`unit-for` also writes no suffix for an empty unit or `1` (OTel "dimensionless"). Other units become `customUnits` as written. This includes the ambiguous `m` (metres or minutes), `B` (Bel, bytes are `By`), and named counts such as `{requests}`: the Console abbreviates their numbers but does not add the count label.
 
-### Why these suffixes are suppressed
+### Why chart-add sets custom_unit
 
-Verified against Console commit `80a95cb572548b4aec58185c26bbf4e1f79335ce` on 2026-10-19:
+The Console picks a Statistic's formatter from the unit in the query response, then appends `customUnits` after the formatted value. A suffix on a unit the Console formats repeats the unit (`$1.03K$`, `1MBMBy`).
 
-- [`ElementsDatasetStore.ts`](https://github.com/axiomhq/ctrl/blob/80a95cb572548b4aec58185c26bbf4e1f79335ce/apps/console/src/hubs/dash/stores/ElementsDatasetStore.ts#L205) maps metric units to formatter IDs and falls back to the lowercased unit. [`units.ts`](https://github.com/axiomhq/ctrl/blob/80a95cb572548b4aec58185c26bbf4e1f79335ce/apps/console/src/hubs/dash/util/elements/units/units.ts) registers the actual formatters.
-- [`StatisticChart.tsx`](https://github.com/axiomhq/ctrl/blob/80a95cb572548b4aec58185c26bbf4e1f79335ce/apps/console/src/hubs/dash/components/charts/StatisticChart.tsx#L123) appends `customUnits` after formatting. It does not replace the formatter's unit.
+After `map` or a rate, the response marks the metric's unit as changed, and the Console formats the value only with a `custom_unit` that the query sets. Without it, `map / 3600` on a metric in `s` shows a bare number. So `chart-add` writes `set custom_unit="<unit>";` as the first line of an MPL Statistic query, unless the query already sets one. A `set` line must come before any `param` line.
 
-Executing the pinned Console formatters and appending the helper's actual `customUnits` reproduced these results. This checks the formatting composition, not a live dashboard rendering:
+An omitted suffix leaves both magnitude scaling and the displayed unit to the Console. Do not compensate by rescaling the query.
 
-| Metric unit | Value | Before correction | After correction |
-|---|---:|---|---|
-| `MBy` | 1 | `1MBMBy` | `1MB` |
-| `By/s` | 1000 | `1kB/sBy/s` | `1kB/s` |
-| `bit/s` | 1000 | `1kbpsbit/s` | `1kbps` |
-| `{requests}/s` | 1000 | `1K reqps{requests}/s` | `1K reqps` |
-| `bytes` | 1024 | `1KiBbytes` | `1KiB` |
-
-An omitted suffix leaves both magnitude scaling and the displayed unit to the Console. Do not compensate by rescaling the query. This mapping assumes the result retains the supplied unit; MPL `custom_unit` and `ignore_unit` can change which formatter the result receives.
-
-`tests/unit-for.sh` covers the mapped families, formatter-ID fallback, and units that must retain labels. `tests/test-script-output.sh` exercises the same regression through `chart-add --mpl`, including preservation of custom units and the `%` ratio suffix. The corrected expectations fail against the original helper; rerun both when changing unit handling. When the Console changes, compare both its mapping and formatter registry rather than deriving expected test values from `unit-for` itself.
+`tests/unit-for.sh` covers the mapped families, the formatter-ID fallback, and units that keep their label. When the Console changes its unit map or formatter registry, take the new expectations from the Console, not from `unit-for`.
 
 ### Percentages and ratios (OTel 0–1 fractions)
 
@@ -122,4 +112,4 @@ OTel metrics represent dimensionless ratios as 0–1 fractions with unit `1`. Ex
 | align to $__interval using avg
 ```
 
-Then pass `chart-add --unit "%"`. If the metric's own unit is already `%`, omit `--unit`: the Console adds the sign itself.
+Then pass `chart-add --unit "%"`. The Console adds the sign.

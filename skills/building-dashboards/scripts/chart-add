@@ -21,8 +21,13 @@
 #
 # - Statistic gets `customUnits`, a suffix the Console appends after its
 #   own formatting. It never gets the `unit` enum, which the Console
-#   ignores. For --mpl, scripts/metrics/unit-for drops the suffix when the
-#   Console already formats the metric's unit (USD, s, By, ...).
+#   ignores. For --mpl, the query also gets `set custom_unit="<unit>";`
+#   so the Console formats the result in that unit, also after `map` or a
+#   rate, and scripts/metrics/unit-for drops the suffix when the Console
+#   has a formatter for the unit (USD, s, By, %, ...). For --apl, unit-for
+#   applies too: the Console formats a field from its unit metadata, so
+#   `--unit ms` on a field in ms must not add a suffix. "%" stays a suffix
+#   for --apl, because nothing in an APL result names it.
 # - TimeSeries / Table / Pie / LogStream / Heatmap accept ONLY `customUnits`
 #   (never the `unit` enum — the create API rejects it). They get the raw
 #   unit string passed verbatim as customUnits.
@@ -52,9 +57,12 @@
 #
 # Common optional flags (data charts only):
 #   --unit <string>      Unit string ("%", "ms", "req/s", etc.). With
-#                        --mpl, pass the metric's own unit. A Statistic
-#                        maps it via unit-for. Otherwise it becomes
-#                        customUnits verbatim.
+#                        --mpl, pass the unit of the query result as a
+#                        UCUM code (USD, not $). A Statistic sets it with
+#                        custom_unit and maps it via unit-for. An APL
+#                        Statistic maps it via unit-for and keeps "%" as
+#                        a suffix. Other charts get it as customUnits
+#                        verbatim.
 #
 # Statistic-only flags:
 #   --show-chart         Render a sparkline behind the value
@@ -173,16 +181,13 @@ fi
 
 # --- Helpers ---------------------------------------------------------------
 
-# Echo the unit-fields JSON object for a Statistic chart.
-# Empty input and "1" (dimensionless) → {}, so the chart renders bare numbers.
+# Echo the unit-fields JSON object for a Statistic chart. An APL result
+# carries no custom_unit, so a computed "%" has nothing to format it.
 unit_fields_statistic() {
-    local u="$1"
-    if [[ -z "$u" || "$u" == "1" ]]; then
-        echo '{}'
-    elif [[ -n "$MPL" ]]; then
-        "$UNIT_FOR" "$u"
+    if [[ -z "$MPL" && "$1" == "%" ]]; then
+        echo '{"customUnits":"%"}'
     else
-        unit_fields_other "$u"
+        "$UNIT_FOR" "$1"
     fi
 }
 
@@ -231,6 +236,16 @@ case "$TYPE" in
         ;;
     Statistic)
         UNIT_JSON=$(unit_fields_statistic "$UNIT")
+        # After `map` or a rate the response drops the metric's unit. Set it
+        # so the Console formats the unit that unit-for decided on. `set`
+        # must come before any `param` line.
+        if [[ -n "$MPL" && -n "$UNIT" && "$UNIT" != "1" && "$MPL" != *custom_unit* ]]; then
+            if [[ "$UNIT" == *[\"\\]* ]]; then
+                echo "Error: --unit must not contain a quote or a backslash" >&2
+                exit 1
+            fi
+            MPL="set custom_unit=\"$UNIT\";"$'\n'"$MPL"
+        fi
         QUERY_JSON=$(build_query)
         RESULT=$(jq -n \
             --arg id "$ID" \

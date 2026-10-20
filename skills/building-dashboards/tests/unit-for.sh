@@ -42,9 +42,9 @@ check() {
 }
 
 # Expectations come from the Console unitMap and the registered formatters,
-# not unit-for's table. See reference/metrics-mpl.md for pinned source links.
+# not unit-for's table. See reference/metrics-mpl.md, Unit Handling.
 # Exercise every explicitly mapped unit whose formatter supplies its label.
-for unit in USD GBP EUR BTC ns us ms s min h d Hz \
+for unit in USD GBP EUR BTC % ns us ms s min h d Hz \
     By KiBy MiBy GiBy TiBy PiBy \
     kBy MBy GBy TBy PBy \
     By/s kBy/s MBy/s GBy/s TBy/s PBy/s \
@@ -54,7 +54,6 @@ for unit in USD GBP EUR BTC ns us ms s min h d Hz \
 done
 
 # The Console also resolves lowercased formatter IDs for unmapped inputs.
-# Expectations are from units.ts at the same pinned revision.
 for unit in percent100 percent curusd curgbp cureur curbtc \
     bits bytes kbytes mbytes gbytes tbytes pbytes \
     decbits decbytes deckbytes decmbytes decgbytes dectbytes decpbytes \
@@ -64,8 +63,15 @@ for unit in percent100 percent curusd curgbp cureur curbtc \
 done
 check "formatter-id:BYTES" "BYTES" '{}'
 
-# Percent: the suffix for a 0-1 ratio scaled with `| map * 100`.
-check "percent"           "%"             '{"customUnits":"%"}'
+# Currency symbols are rejected: the Console adds the symbol for the code.
+for sym in '$' '€' '£'; do
+    if "$SCRIPT" "$sym" > /dev/null 2>&1; then
+        echo "FAIL [symbol:$sym]: accepted"
+        FAIL=$((FAIL+1))
+    else
+        PASS=$((PASS+1))
+    fi
+done
 
 # Units the Console does not format stay a suffix.
 check "suffix:JPY"        "JPY"           '{"customUnits":"JPY"}'

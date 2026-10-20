@@ -99,10 +99,10 @@ Set in `query.queryOptions.timeSeriesView`:
 
 A `Statistic` gets its unit from two places:
 
-- **The metric's own unit.** The Console formats currency, time, and byte units from the metric's own unit. It adds a currency prefix, or it scales the value and adds a suffix. See [metrics-mpl.md § Unit Handling](./metrics-mpl.md#unit-handling) for the list.
+- **The Console's formatter.** For MPL, the Console picks it from the unit in the query response: the metric's unit, or a `custom_unit` that the query sets. For APL, it picks it from field metadata, a field named `duration`, or a timespan field. It adds a currency prefix, or it scales the value and adds a suffix. See [metrics-mpl.md § Unit Handling](./metrics-mpl.md#unit-handling) for the list.
 - **`customUnits`.** The Console appends this suffix to the formatted value as written, with no space and no scaling.
 
-For MPL Statistics, `chart-add --unit` goes through `scripts/metrics/unit-for`. It writes no suffix for the units that the Console formats itself. For APL Statistics, `chart-add` writes `customUnits` as given. A suffix on a formatted metric shows the unit twice: `--unit "$"` on a `USD` metric shows `$1.031K$`.
+For MPL Statistics, `chart-add --unit` writes `set custom_unit="<unit>";` into the query. For both languages, it goes through `scripts/metrics/unit-for`, which writes no suffix for the units that the Console formats itself. A suffix on a formatted value shows the unit twice (`250msms`). For APL, `%` stays a suffix, because an APL result does not name the unit of a computed percentage.
 
 The Console ignores the `unit` enum (`TimeSec`, `Percent100`, `CurrencyUSD`, …).
 

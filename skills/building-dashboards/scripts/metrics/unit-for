@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# unit-for: Map a metric's UCUM/OTel unit string to the unit fields of a
-# Statistic chart over that metric.
+# unit-for: Map the UCUM/OTel unit of an MPL Statistic's result to the
+# unit fields of the chart.
 #
 # Usage:
 #   unit-for <unit-string>
@@ -11,16 +11,14 @@
 #   {}                         # the Console already formats this unit
 #   {"customUnits":"<suffix>"} # the Console appends the suffix verbatim
 #
-# The Console ignores the Statistic `unit` field. It formats the value from
-# the metric's own unit when it knows that unit: USD gets a "$" prefix, "s"
-# and "By" get scaled. A customUnits suffix on such a metric doubles the
-# unit ("$1.03K$"), so this script drops it.
+# chart-add also writes `set custom_unit="<unit>";` into the query. The
+# Console then formats the result with that unit, also after `map` or a
+# rate: USD gets a "$" prefix, "s" and "By" get scaled, "%" gets the sign.
+# A customUnits suffix on such a unit doubles it ("$1.03K$"), so this
+# script drops it.
 #
 # Empty input, missing input, and "1" (OTel dimensionless) return {}.
-#
-# "%" returns {"customUnits":"%"}. It is the suffix for a 0-1 ratio metric
-# (unit "1") scaled with `| map * 100` in MPL. If the metric's own unit is
-# already "%", omit --unit: the Console adds the sign itself.
+# A currency symbol ($, €, £) is an error: pass the code (USD, EUR, GBP).
 #
 # Every other unit ("Cel", "kW.h", "m", "B") passes through verbatim as
 # customUnits. Also encode the unit in the chart name (e.g. "Latency (ms)")
@@ -31,7 +29,7 @@
 #   unit-for "s"       # -> {}
 #   unit-for "By"      # -> {}
 #   unit-for "USD"     # -> {}
-#   unit-for "%"       # -> {"customUnits":"%"}
+#   unit-for "%"       # -> {}
 #   unit-for "Cel"     # -> {"customUnits":"Cel"}
 #   unit-for "kW.h"    # -> {"customUnits":"kW.h"}
 #   unit-for ""        # -> {}
@@ -41,14 +39,22 @@ set -euo pipefail
 
 UNIT="${1-}"
 
-# Metric units whose Console formatter already supplies the unit. Keep the
-# SI byte and rate families too: MBy -> MB, By/s -> B/s, bit/s -> bps.
-# Evidence and source revision: reference/metrics-mpl.md, Unit Handling.
-# "%" is left out on purpose, see above. Named counts such as {requests}
-# keep their label: the Console's short formatter only abbreviates the number.
+case "$UNIT" in
+    '$'|'€'|'£')
+        echo "Error: unit '$UNIT' is a symbol. Pass the currency code (USD, EUR, GBP): the Console adds the symbol." >&2
+        exit 1
+        ;;
+esac
+
+# Units whose Console formatter already supplies the unit. Keep the SI byte
+# and rate families too: MBy -> MB, By/s -> B/s, bit/s -> bps.
+# Evidence: reference/metrics-mpl.md, Unit Handling. Named counts such as
+# {requests} keep their label: the Console's short formatter only
+# abbreviates the number.
 jq -n --arg u "$UNIT" '
   [
     "USD", "GBP", "EUR", "BTC",
+    "%",
     "ns", "us", "ms", "s", "min", "h", "d",
     "Hz",
     "By", "KiBy", "MiBy", "GiBy", "TiBy", "PiBy",

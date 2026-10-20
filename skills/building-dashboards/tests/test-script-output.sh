@@ -171,13 +171,17 @@ check_stat_units() {
     fi
 }
 
-check_stat_units "APL --unit ms writes customUnits only" '{"customUnits":"ms"}' \
+check_stat_units "APL --unit ms writes no suffix" '{}' \
     --apl "['logs'] | summarize avg(duration_ms)" --unit ms
 check_stat_units "APL --unit 1 writes no unit fields" '{}' \
     --apl "['logs'] | summarize count()" --unit 1
+check_stat_units "APL --unit req/s keeps its suffix" '{"customUnits":"req/s"}' \
+    --apl "['logs'] | summarize count() / 60" --unit req/s
+check_stat_units "APL --unit % keeps its suffix" '{"customUnits":"%"}' \
+    --apl "['logs'] | summarize 100.0 * countif(status >= 500) / count()" --unit %
 check_stat_units "MPL --unit USD writes no unit fields" '{}' \
     --mpl '`m`:cost | group using sum' --dataset m --unit USD
-check_stat_units "MPL --unit % writes the % suffix" '{"customUnits":"%"}' \
+check_stat_units "MPL --unit % leaves formatting to the Console" '{}' \
     --mpl '`m`:ratio | map * 100' --dataset m --unit %
 
 # Regressions: these units already have Console formatters. Test the public
@@ -195,8 +199,29 @@ check_stat_units "MPL named count retains its label" '{"customUnits":"{requests}
     --mpl '`m`:requests | group using sum' --dataset m --unit '{requests}'
 check_stat_units "MPL formatter alias leaves formatting to the Console" '{}' \
     --mpl '`m`:size | group using avg' --dataset m --unit BYTES
-check_stat_units "APL numeric byte rate retains its explicit suffix" '{"customUnits":"By/s"}' \
-    --apl "['logs'] | summarize avg(bytes_per_second)" --unit By/s
+
+check_stat_query() {
+    local label="$1" expected="$2" got
+    shift 2
+    got=$("$SCRIPTS_DIR/chart-add" --type Statistic --id t --name T "$@" | jq -r .query.apl)
+    if [[ "$got" == "$expected" ]]; then
+        ok "chart-add Statistic $label"
+    else
+        fail "chart-add Statistic $label" "got: $got"
+    fi
+}
+
+check_stat_query "MPL --unit h names the result unit" $'set custom_unit="h";\n`m`:active\n| map / 3600' \
+    --mpl '`m`:active | map / 3600' --dataset m --unit h
+check_stat_query "MPL --unit keeps a custom_unit the query sets" $'set custom_unit="min";\n`m`:active\n| map / 60' \
+    --mpl $'set custom_unit="min";\n`m`:active | map / 60' --dataset m --unit h
+check_stat_query "APL --unit leaves the query alone" $'[\'logs\']\n| summarize avg(duration)' \
+    --apl "['logs'] | summarize avg(duration)" --unit ms
+if "$SCRIPTS_DIR/chart-add" --type Statistic --id t --name T --mpl '`m`:cost' --dataset m --unit '$' > /dev/null 2>&1; then
+    fail "chart-add Statistic rejects --unit \$" "it accepts it"
+else
+    ok "chart-add Statistic rejects --unit \$"
+fi
 
 sizes=$("$SCRIPTS_DIR/layout-pack" n:Note s:Statistic t:TimeSeries h:Heatmap tb:Table p:Pie l:LogStream m:MonitorList f:SmartFilter \
     | jq -c 'map("\(.i)=\(.w)x\(.h)") | join(" ")')
