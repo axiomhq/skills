@@ -15,15 +15,15 @@
 #   id:Type   — use the type's default size from the table below
 #   id:WxH    — explicit width × height, both positive integers, w in 1..12
 #
-# Default sizes by type (the Console's defaults):
-#   Note         12 x 2   (full-width section header)
-#   Statistic     3 x 2   (KPI tile, 4 per row)
-#   TimeSeries    4 x 4   (3 per row)
-#   Heatmap       4 x 4
-#   Table         6 x 5   (2 per row)
-#   Pie           3 x 5   (minimum height 5)
-#   LogStream    12 x 7   (full-width evidence pane)
-#   MonitorList   4 x 4
+# Default sizes by type:
+#   Note         12 x 2   (full-width header)
+#   Statistic     3 x 3   (KPI tile, 4 fit per row)
+#   TimeSeries    6 x 4   (half-width chart, 2 per row)
+#   Heatmap       6 x 4
+#   Table         6 x 5
+#   Pie           4 x 5   (3 per row, the Console's minimum height)
+#   LogStream    12 x 6   (full-width evidence pane)
+#   MonitorList   6 x 4
 #   SmartFilter  12 x 1   (filter bar)
 #
 # Packing rule: row-major, left-to-right. When the next chart would push
@@ -80,13 +80,13 @@ done
 default_size() {
     case "$1" in
         Note)         echo "12 2" ;;
-        Statistic)    echo "3 2" ;;
-        TimeSeries)   echo "4 4" ;;
-        Heatmap)      echo "4 4" ;;
+        Statistic)    echo "3 3" ;;
+        TimeSeries)   echo "6 4" ;;
+        Heatmap)      echo "6 4" ;;
         Table)        echo "6 5" ;;
-        Pie)          echo "3 5" ;;
-        LogStream)    echo "12 7" ;;
-        MonitorList)  echo "4 4" ;;
+        Pie)          echo "4 5" ;;
+        LogStream)    echo "12 6" ;;
+        MonitorList)  echo "6 4" ;;
         SmartFilter)  echo "12 1" ;;
         *) return 1 ;;
     esac

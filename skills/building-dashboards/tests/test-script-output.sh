@@ -225,7 +225,7 @@ fi
 
 sizes=$("$SCRIPTS_DIR/layout-pack" n:Note s:Statistic t:TimeSeries h:Heatmap tb:Table p:Pie l:LogStream m:MonitorList f:SmartFilter \
     | jq -c 'map("\(.i)=\(.w)x\(.h)") | join(" ")')
-want='"n=12x2 s=3x2 t=4x4 h=4x4 tb=6x5 p=3x5 l=12x7 m=4x4 f=12x1"'
+want='"n=12x2 s=3x3 t=6x4 h=6x4 tb=6x5 p=4x5 l=12x6 m=6x4 f=12x1"'
 if [[ "$sizes" == "$want" ]]; then
     ok "layout-pack uses the documented default sizes"
 else
