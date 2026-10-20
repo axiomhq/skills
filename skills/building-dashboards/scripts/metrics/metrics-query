@@ -152,10 +152,10 @@ if [[ -n "$PIXEL_PER_POINT" && ! "$PIXEL_PER_POINT" =~ ^[1-9][0-9]*$ ]]; then
 fi
 
 # Extract dataset name from MPL: `dataset`:`metric` ... or dataset:`metric` ...
-# Strip leading `param <name>: <type>;` declarations first so their `:` doesn't
-# get mistaken for the dataset:metric separator.
+# Strip leading `param <name>: <type>;` and `set <name>=<value>;` statements
+# first so their `:` does not get mistaken for the dataset:metric separator.
 PIPELINE="$MPL"
-while [[ "$PIPELINE" =~ ^[[:space:]]*[Pp]aram[[:space:]] ]]; do
+while [[ "$PIPELINE" =~ ^[[:space:]]*([Pp]aram|[Ss]et)[[:space:]] ]]; do
     if [[ "$PIPELINE" != *";"* ]]; then break; fi
     PIPELINE="${PIPELINE#*;}"
 done

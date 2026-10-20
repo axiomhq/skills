@@ -29,7 +29,7 @@ Use Axiom MCP for discovery and queries. For separately configured deployments, 
 2. Use `getMetricsSpec` for unfamiliar MPL syntax.
 3. Discover metrics and filters with `listMetrics`, `listMetricTags`, and `getMetricTagValues`.
 4. Use each metric's `{type, temporality, unit}` from `listMetrics` to choose the query shape and units below.
-5. Use `align to $__interval using …`, never a fixed window. The runtime injects `param $__interval: Duration;`; don't add it to the chart string.
+5. Use `align to $__interval using …`, never a fixed window. The server declares and fills `$__interval`. Do not declare it in the chart string.
 6. Validate with `queryMetrics`, supplying `startTime` and `endTime` instead of an inline time range.
 7. Pass to `chart-add --mpl '<query>' --dataset <name>`.
 

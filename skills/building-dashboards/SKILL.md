@@ -288,7 +288,7 @@ Tools, prerequisites, and `~/.axiom.toml` configuration: see `README.md`. Verify
 | `scripts/metrics/metrics-spec` | Fetch MPL query specification |
 | `scripts/metrics/metrics-info <deploy> <dataset> ...` | Discover metrics, tags, and values |
 | `scripts/metrics/metrics-query <deploy> <mpl> <start> <end>` | Execute a metrics query (raw — no `$__interval` injection) |
-| `scripts/metrics/mpl-validate-chart <deploy> '<MPL>' [start] [end] [--interval D]` | **Validate a chart MPL pipeline.** Auto-injects `param $__interval: Duration;` and `-p __interval=…`; rejects inline time ranges. Use this in place of raw `metrics-query` when authoring chart queries. |
+| `scripts/metrics/mpl-validate-chart <deploy> '<MPL>' [start] [end]` | **Validate a chart MPL pipeline.** Rejects inline time ranges. The server fills `$__interval`. Use this in place of raw `metrics-query` when authoring chart queries. |
 
 > The two `axiom-api` scripts are not interchangeable. `scripts/axiom-api` is for the dashboard app API; `scripts/metrics/axiom-api` is for data/metrics endpoints and edge routing. Wrong one → 404.
 
