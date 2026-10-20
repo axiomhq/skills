@@ -216,6 +216,8 @@ fi
 #   - unit        : rejected on TimeSeries, Heatmap, Pie, Table, LogStream, Note
 #                   (i.e. every kind except Statistic)
 #   - customUnits : rejected on Note only
+#   - roundTo     : rejected on Statistic on create and update, although the
+#                   Console's editor writes it
 #
 # Only flag when the field is present AND non-null — the API treats null as
 # field-absent and strips the key on ingest, so null-valued rejected keys
@@ -234,6 +236,7 @@ schema_violations=$(jq -r '
     (if $c.decimals != null    then "\($idx)\tdecimals"    else empty end),
     (if $c.description != null then "\($idx)\tdescription" else empty end),
     (if $c.options != null     then "\($idx)\toptions"     else empty end),
+    (if $t == "Statistic" and $c.roundTo != null then "\($idx)\troundTo" else empty end),
     # unit rejected on every kind except Statistic (only for kinds we have
     # empirical evidence for)
     (if (["TimeSeries","Heatmap","Pie","Table","LogStream","Note"] | index($t)) and $c.unit != null

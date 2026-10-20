@@ -271,6 +271,16 @@ check_logstream rejects "with distinct" "['logs'] | distinct service"
 check_logstream rejects "with join" "['logs'] | join kind=inner (['users']) on user_id"
 check_logstream rejects "with a leading union" "union ['logs'], ['audit'] | where status >= 500"
 
+jq -n --arg apl "['logs'] | count" '{name: "T", owner: "X-AXIOM-EVERYONE", schemaVersion: 2,
+    charts: [{id: "s", name: "S", type: "Statistic", query: {apl: $apl}, roundTo: 2}],
+    layout: [{i: "s", x: 0, y: 0, w: 3, h: 3, minW: 2, minH: 2}]}' > "$TMPDIR/round.json"
+out=$("$SCRIPTS_DIR/dashboard-validate" "$TMPDIR/round.json" || true)
+if [[ "$out" == *'Unrecognized key: "roundTo"'* ]]; then
+    ok "dashboard-validate rejects roundTo on a Statistic"
+else
+    fail "dashboard-validate rejects roundTo on a Statistic" "$out"
+fi
+
 echo ""
 echo "======================"
 echo "Passed: $passed | Failed: $failed"

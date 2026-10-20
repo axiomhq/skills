@@ -157,3 +157,5 @@ dashboard validation failed at [charts <index>]: Unrecognized key: "<field>"
 
 - `unit`: The API accepts `unit` only on `Statistic`. The Console ignores it.
 - `customUnits`: The API rejects `customUnits` on `Note`. Other chart kinds accept it. Only `Statistic` shows it.
+
+**`roundTo` on `Statistic`.** The Console's editor writes `roundTo` (the "Round to" setting), so GET can return it, but create and update reject it. Removing it drops the tile's rounding, so tell the user when you remove it.
