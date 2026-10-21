@@ -19,10 +19,15 @@
 #       because the dashboard runtime always supplies start/end via the
 #       API. Use `align to $__interval using …` for bucketing.
 #
-# - Statistic gets BOTH `unit` (enum, e.g. Percent100) AND `customUnits`
-#   (suffix, e.g. "%"). The mapping is delegated to scripts/metrics/unit-for,
-#   which already handles UCUM → Axiom-enum lookup, the "%" double-emit,
-#   and the "1" / "By" / "m" ambiguities.
+# - Statistic gets `customUnits`, a suffix the Console appends after its
+#   own formatting. It never gets the `unit` enum, which the Console
+#   ignores. For --mpl, the query also gets `set custom_unit="<unit>";`
+#   so the Console formats the result in that unit, also after `map` or a
+#   rate, and scripts/metrics/unit-for drops the suffix when the Console
+#   has a formatter for the unit (USD, s, By, %, ...). For --apl, unit-for
+#   applies too: the Console formats a field from its unit metadata, so
+#   `--unit ms` on a field in ms must not add a suffix. "%" stays a suffix
+#   for --apl, because nothing in an APL result names it.
 # - TimeSeries / Table / Pie / LogStream / Heatmap accept ONLY `customUnits`
 #   (never the `unit` enum — the create API rejects it). They get the raw
 #   unit string passed verbatim as customUnits.
@@ -51,10 +56,13 @@
 #   All others: exactly one of --apl <APL> or --mpl <MPL> --dataset <name>
 #
 # Common optional flags (data charts only):
-#   --unit <string>      Friendly unit string ("%", "s", "ms", "B",
-#                        "req/s", "bytes", etc.). For Statistic, mapped
-#                        via unit-for. For other charts, becomes
-#                        customUnits verbatim.
+#   --unit <string>      Unit string ("%", "ms", "req/s", etc.). With
+#                        --mpl, pass the unit of the query result as a
+#                        UCUM code (USD, not $). A Statistic sets it with
+#                        custom_unit and maps it via unit-for. An APL
+#                        Statistic maps it via unit-for and keeps "%" as
+#                        a suffix. Other charts get it as customUnits
+#                        verbatim.
 #
 # Statistic-only flags:
 #   --show-chart         Render a sparkline behind the value
@@ -68,10 +76,10 @@
 #
 #   # MPL / metrics
 #   chart-add --type Statistic --id avail --name "Availability (30d)" \
-#       --mpl '...MPL...' --dataset k8s-metrics-staging --unit "%"
+#       --mpl '...MPL...' --dataset example-metrics --unit "%"
 #
 #   chart-add --type TimeSeries --id rps --name "Read Requests (req/s)" \
-#       --mpl '...MPL...' --dataset k8s-metrics-staging --unit "req/s"
+#       --mpl '...MPL...' --dataset example-metrics --unit "req/s"
 #
 # Composing a dashboard:
 #   chart-add --type Note ... > /tmp/c1.json
@@ -173,15 +181,14 @@ fi
 
 # --- Helpers ---------------------------------------------------------------
 
-# Echo the unit-fields JSON object for a Statistic chart.
-# Empty input → {} (chart will render bare numbers; caller's choice).
+# Echo the unit-fields JSON object for a Statistic chart. An APL result
+# carries no custom_unit, so a computed "%" has nothing to format it.
 unit_fields_statistic() {
-    local u="$1"
-    if [[ -z "$u" ]]; then
-        echo '{}'
-        return
+    if [[ -z "$MPL" && "$1" == "%" ]]; then
+        echo '{"customUnits":"%"}'
+    else
+        "$UNIT_FOR" "$1"
     fi
-    "$UNIT_FOR" "$u"
 }
 
 # Echo the unit-fields JSON object for any non-Statistic data chart.
@@ -229,6 +236,17 @@ case "$TYPE" in
         ;;
     Statistic)
         UNIT_JSON=$(unit_fields_statistic "$UNIT")
+        # After `map` or a rate the response drops the metric's unit. Set it
+        # so the Console formats the unit that unit-for decided on. `set`
+        # must come before any `param` line, so only a leading one counts.
+        set_unit_re='^([[:space:]]*[Ss]et[[:space:]][^;]*;)*[[:space:]]*[Ss]et[[:space:]]+custom_unit[[:space:]]*='
+        if [[ -n "$MPL" && -n "$UNIT" && "$UNIT" != "1" && ! "$MPL" =~ $set_unit_re ]]; then
+            if [[ "$UNIT" == *[\"\\]* ]]; then
+                echo "Error: --unit must not contain a quote or a backslash" >&2
+                exit 1
+            fi
+            MPL="set custom_unit=\"$UNIT\";"$'\n'"$MPL"
+        fi
         QUERY_JSON=$(build_query)
         RESULT=$(jq -n \
             --arg id "$ID" \

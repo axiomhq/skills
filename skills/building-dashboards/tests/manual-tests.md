@@ -278,7 +278,7 @@ cat /tmp/test-template.json | jq .
 **Expected:** Validation passes
 
 - [ ] Script runs without error
-- [ ] Reports any warnings (take limits, grid width)
+- [ ] Reports any warnings (row limits or aggregations in LogStream, grid width)
 - [ ] Exits 0 if valid
 
 ### 7.4 dashboard-validate with bad input
@@ -471,7 +471,7 @@ DASHBOARD_ID=$(./scripts/dashboard-create prod /tmp/deploy-test.json)
 - [ ] No hardcoded field names (uses placeholders)
 - [ ] Dashboard APL has NO time filters (inherits from UI picker)
 - [ ] Ad-hoc/exploration APL has explicit time filters
-- [ ] LogStream queries have take limits
+- [ ] LogStream queries have no row limit, aggregation, or join
 - [ ] Layout IDs match chart IDs
 
 ---

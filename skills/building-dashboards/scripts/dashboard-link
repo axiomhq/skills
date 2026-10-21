@@ -64,7 +64,6 @@ fi
 
 # Convert API URL to app URL
 # api.axiom.co -> app.axiom.co
-# api.dev.axiomtestlabs.co -> app.dev.axiomtestlabs.co
 APP_URL="${URL/api./app.}"
 
 echo "${APP_URL}/${ORG_ID}/dashboards/${LINK_ID}"

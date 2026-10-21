@@ -28,7 +28,7 @@ Guide for converting Splunk dashboards to Axiom dashboards.
 | Bar Chart (horizontal) | Table | No horizontal bar; use table |
 | Pie Chart | Pie | Limit to ≤6 categories |
 | Table | Table | Direct mapping |
-| Events List | LogStream | Add `take N` and `project-keep` |
+| Events List | LogStream | Add `project-keep`. No `take N`: the Console limits LogStream rows |
 | Choropleth Map | Table | No map support; use table |
 | Scatter Plot | Table | No scatter; use table with dimensions |
 
@@ -115,8 +115,6 @@ index=web status>=500
 ['web-logs']
 | where status >= 500
 | project-keep _time, uri, status, error_message
-| order by _time desc
-| take 100
 ```
 
 ### Chart with Eval → TimeSeries
@@ -212,7 +210,7 @@ Splunk and Axiom may have different field names for the same data.
 
 ### Unbounded Results
 **Problem:** Splunk implicitly limits; Axiom may return all rows.
-**Fix:** Add `| top N by ...` or `| take N` for tables/logs.
+**Fix:** Add `| top N by ...` or `| take N` for tables. LogStream needs neither: the Console limits it.
 
 ### Case Sensitivity
 **Problem:** Splunk search is case-insensitive by default.

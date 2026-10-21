@@ -113,7 +113,7 @@
       "name": "Recent Errors",
       "type": "LogStream",
       "query": {
-        "apl": "declare query_parameters (route_filter:string = \"\", status_filter:string = \"\");\n['{{dataset}}']\n| where service == '{{service}}' and status >= 500\n| where isempty(route_filter) or route == route_filter\n| where isempty(status_filter) or tostring(status) startswith status_filter\n| project-keep _time, trace_id, route, status, error_message, duration_ms\n| order by _time desc\n| take 100"
+        "apl": "declare query_parameters (route_filter:string = \"\", status_filter:string = \"\");\n['{{dataset}}']\n| where service == '{{service}}' and status >= 500\n| where isempty(route_filter) or route == route_filter\n| where isempty(status_filter) or tostring(status) startswith status_filter\n| project-keep _time, trace_id, route, status, error_message, duration_ms"
       }
     }
   ],

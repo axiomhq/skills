@@ -21,7 +21,7 @@
 #   TimeSeries    6 x 4   (half-width chart, 2 per row)
 #   Heatmap       6 x 4
 #   Table         6 x 5
-#   Pie           4 x 4   (3 per row)
+#   Pie           4 x 5   (3 per row, the Console's minimum height)
 #   LogStream    12 x 6   (full-width evidence pane)
 #   MonitorList   6 x 4
 #   SmartFilter  12 x 1   (filter bar)
@@ -84,7 +84,7 @@ default_size() {
         TimeSeries)   echo "6 4" ;;
         Heatmap)      echo "6 4" ;;
         Table)        echo "6 5" ;;
-        Pie)          echo "4 4" ;;
+        Pie)          echo "4 5" ;;
         LogStream)    echo "12 6" ;;
         MonitorList)  echo "6 4" ;;
         SmartFilter)  echo "12 1" ;;

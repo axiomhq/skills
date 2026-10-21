@@ -289,7 +289,7 @@ Per panel:
 - [ ] For each PromQL `by(…)` dimension: included it in the MPL `group by` (or `bucket by` for histograms).
 - [ ] For each `rate(metric[X])`: produced `align to X using prom::rate`.
 - [ ] For each `histogram_quantile(...)`: chose `interpolate_cumulative_histogram` or `interpolate_delta_histogram` based on the metric's `temporality` metadata.
-- [ ] For each ratio: built a `compute … using /` block, branches with matching shape; multiplied by 100 if the chart is `Percent100`.
+- [ ] Build each ratio with `compute … using /` and matching branch shapes. If the chart shows percentages, multiply by 100.
 - [ ] For each missing label: ran reverse-tag discovery (capped at 2 candidates), surfaced a blocker rather than dropping the selector.
 - [ ] No inline time ranges on the MPL source.
 - [ ] Tested following the [Metrics/MPL chart contract](./metrics-mpl.md), preserving `$__interval`.

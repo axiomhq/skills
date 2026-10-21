@@ -9,7 +9,7 @@
 #   3. All charts have an id field
 #   4. No duplicate chart IDs
 #   5. Chart IDs match layout IDs
-#   6. LogStream queries have take limits
+#   6. LogStream queries have no take/limit (the Console appends its own)
 #   7. Grid layout doesn't exceed 12 columns
 #   8. Sections, when present: UUID ids, unique ids, titles.
 #      chart.sectionId must name one of those sections even when the
@@ -17,8 +17,7 @@
 #   9. Per-chart-kind closed-field schema (mirrors the create API)
 #      - Source of truth: reference/chart-config.md
 #        § Fields Rejected on Create (Cross-Chart)
-#      - Verified empirically against staging create endpoint
-#        (28-cell + 3 null-value probes, 2026-05-08)
+#      - Validated against the dashboard create API.
 #
 # Options:
 #   --strict  Treat warnings as errors
@@ -121,11 +120,21 @@ if [[ "$chart_ids" != "$layout_ids" ]]; then
     echo "  Layout: $(echo $layout_ids | tr '\n' ' ')"
 fi
 
-# 8. Check LogStream queries for take limits
-logstream_without_take=$(jq -r '.charts[] | select(.type == "LogStream") | select(.query.apl != null) | select(.query.apl | test("take ") | not) | .id' "$FILE" 2>/dev/null || true)
-if [[ -n "$logstream_without_take" ]]; then
-    for id in $logstream_without_take; do
-        warn "LogStream '$id' may be missing 'take N' limit"
+# 8. The Console appends its own order and limit to a LogStream query and
+# streams the result. A row limit, aggregation, or join fails with HTTP 400.
+# Strings and // comments are not operators. Queries with a backslash or a
+# ``` literal are skipped: their string boundaries are not followed here, and
+# a false match would block a valid deploy under --strict.
+logstream_unstreamable=$(jq -r '
+  .charts[] | select(.type == "LogStream") | select(.query.apl != null)
+  | select(.query.apl | test("\\\\|```") | not)
+  | select(.query.apl | gsub("\"[^\"\n]*\"|\\x27[^\\x27\n]*\\x27|//[^\n]*"; "")
+      | test("\\|\\s*(take|limit|top|summarize|count|distinct|sample|mv-expand|join|union)\\b|^\\s*union\\b"))
+  | .id
+' "$FILE" 2>/dev/null || true)
+if [[ -n "$logstream_unstreamable" ]]; then
+    for id in $logstream_unstreamable; do
+        warn "LogStream '$id' limits, aggregates, or joins rows. The Console adds its own order and limit, so the query fails with HTTP 400. Use a Table for top-N lists and aggregates."
     done
 fi
 
@@ -207,6 +216,8 @@ fi
 #   - unit        : rejected on TimeSeries, Heatmap, Pie, Table, LogStream, Note
 #                   (i.e. every kind except Statistic)
 #   - customUnits : rejected on Note only
+#   - roundTo     : rejected on Statistic on create and update, although the
+#                   Console's editor writes it
 #
 # Only flag when the field is present AND non-null — the API treats null as
 # field-absent and strips the key on ingest, so null-valued rejected keys
@@ -225,6 +236,7 @@ schema_violations=$(jq -r '
     (if $c.decimals != null    then "\($idx)\tdecimals"    else empty end),
     (if $c.description != null then "\($idx)\tdescription" else empty end),
     (if $c.options != null     then "\($idx)\toptions"     else empty end),
+    (if $t == "Statistic" and $c.roundTo != null then "\($idx)\troundTo" else empty end),
     # unit rejected on every kind except Statistic (only for kinds we have
     # empirical evidence for)
     (if (["TimeSeries","Heatmap","Pie","Table","LogStream","Note"] | index($t)) and $c.unit != null
