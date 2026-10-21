@@ -16,7 +16,7 @@ Summary of all operations available via Axiom API with a personal access token (
 | Operation | Endpoint | Description |
 |-----------|----------|-------------|
 | Run APL query | `POST /v1/query/_apl?format=tabular` on the regional edge | Execute APL. Required for tokens with query cost limits |
-| Run APL query (legacy API) | `POST /v1/datasets/_apl?format=tabular` on `api.axiom.co` | Legacy path. Rejects tokens with query cost limits with HTTP 430 |
+| Run APL query (legacy API) | `POST /v1/datasets/_apl?format=tabular` on `api.axiom.co` | Not used by these scripts. Rejects tokens with query cost limits with HTTP 430 |
 | Run query (legacy) | `POST /v1/datasets/{dataset_name}/query` | Legacy query endpoint with filter/aggregation model |
 
 **Query parameters:** `apl`, `startTime`, `endTime`, `cursor`, `includeCursor`, `queryOptions`, `variables`

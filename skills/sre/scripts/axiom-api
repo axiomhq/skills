@@ -43,7 +43,7 @@ if [[ "$ENDPOINT" == /v1/query/* || "$ENDPOINT" == /v1/datasets/_apl* ]]; then
     echo "error: could not resolve an APL query endpoint" >&2
     exit 1
   fi
-  if [[ "$query_mode" == "edge" && "$TARGET_ENDPOINT" == /v1/datasets/_apl* ]]; then
+  if [[ "$TARGET_ENDPOINT" == /v1/datasets/_apl* ]]; then
     TARGET_ENDPOINT="/v1/query/_apl${TARGET_ENDPOINT#/v1/datasets/_apl}"
   fi
 

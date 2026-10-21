@@ -165,9 +165,6 @@ if [[ ${#query_bases[@]} -eq 0 ]]; then
 fi
 
 query_path="/v1/query/_apl?format=tabular"
-if [[ "$query_mode" == "legacy" ]]; then
-  query_path="/v1/datasets/_apl?format=tabular"
-fi
 
 attempt=0
 query_ok=false
@@ -198,9 +195,6 @@ for query_base in "${query_bases[@]}"; do
   echo "error: ${msg:-http $HTTP_CODE}" >&2
   if [[ -n "$trace" ]]; then
     echo "trace_id: $trace" >&2
-  fi
-  if [[ "$query_path" == /v1/datasets/_apl* && ( "$HTTP_CODE" == "430" || "$msg" == *"query prevented due to limiter"* ) ]]; then
-    echo "hint: this legacy endpoint rejects tokens with query cost limits. Hosted queries must use the regional edge POST /v1/query/_apl." >&2
   fi
   exit 1
 done

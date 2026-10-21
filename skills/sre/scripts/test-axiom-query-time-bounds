@@ -84,6 +84,11 @@ url = "https://api.axiom.co"
 edge_url = "https://us-east-1.aws.edge.axiom.co"
 token = "xaat-notrace-token"
 org_id = "test-org"
+
+[axiom.deployments.message_error]
+url = "https://api.axiom.co"
+token = "xaat-message-token"
+org_id = "test-org"
 EOF
 
 cat > "$TEST_DIR/curl" <<'EOF'
@@ -140,7 +145,11 @@ if [[ "$request_url" == *"/v2/edge-deployments/axiom" ]]; then
     emit '{"axiom":[{"domain":"https://eu-west-1.aws.edge.axiom.co","id":"region1"},{"domain":"https://us-east-1.aws.edge.axiom.co","environmentDefault":true,"id":"region2"}]}' 200
     exit 0
   fi
-  emit '{"code":403,"message":"forbidden"}' 200
+  if [[ "$auth_header" == *"xaat-message-token"* ]]; then
+    emit '{"message":"unavailable"}' 500
+    exit 0
+  fi
+  emit '{"code":403,"message":"forbidden"}' 403
   exit 0
 fi
 
@@ -153,7 +162,7 @@ if [[ "$request_url" == *"/v2/datasets" ]]; then
     emit '[{"name":"logs-ap","edgeDeployment":"region1"}]' 200
     exit 0
   fi
-  emit '{"code":403,"message":"forbidden"}' 200
+  emit '{"code":403,"message":"forbidden"}' 403
   exit 0
 fi
 
@@ -220,7 +229,7 @@ assert_eq "calls curl for --since window" "1" "$(wc -l < "$AXIOM_QUERY_TEST_CURL
 assert_payload "sends startTime for --since window" '.startTime' 'now-15m'
 assert_payload "sends endTime for --since window" '.endTime' 'now'
 assert_payload "preserves apl text for --since window" '.apl' "['anton-inference-logs'] | getschema"
-assert_eq "self-hosted query stays on the legacy endpoint" "https://api.axiom.test/v1/datasets/_apl?format=tabular" "$(tail -n 1 "$AXIOM_QUERY_TEST_URL_LOG")"
+assert_eq "configured url uses /v1/query/_apl" "https://api.axiom.test/v1/query/_apl?format=tabular" "$(tail -n 1 "$AXIOM_QUERY_TEST_URL_LOG")"
 
 : > "$AXIOM_QUERY_TEST_CURL_LOG"
 run_query "\"$TEST_DIR/axiom-query\" test --since 15m --from 2026-03-06T10:00:00Z --to 2026-03-06T10:30:00Z --raw" "['anton-inference-logs'] | getschema"
@@ -299,6 +308,30 @@ assert_eq "axiom-api retries the next edge" "0" "$API_STATUS"
 assert_eq "axiom-api returns the successful body" '{"status":"ok"}' "$(cat "$TEST_DIR/stdout")"
 assert_eq "axiom-api starts on the dataset edge" "https://eu-west-1.aws.edge.axiom.co/v1/query/_apl?format=tabular" "$(head -n 1 "$AXIOM_QUERY_TEST_URL_LOG")"
 assert_eq "axiom-api finishes on the next edge" "https://us-east-1.aws.edge.axiom.co/v1/query/_apl?format=tabular" "$(tail -n 1 "$AXIOM_QUERY_TEST_URL_LOG")"
+
+: > "$AXIOM_QUERY_TEST_URL_LOG"
+set +e
+"$SCRIPT_DIR/axiom-api" test POST "/v1/query/_apl?format=tabular" "$api_body" >"$TEST_DIR/stdout" 2>"$TEST_DIR/stderr"
+API_STATUS=$?
+set -e
+assert_eq "configured url axiom-api query succeeds" "0" "$API_STATUS"
+assert_eq "configured url keeps /v1/query/_apl" "https://api.axiom.test/v1/query/_apl?format=tabular" "$(tail -n 1 "$AXIOM_QUERY_TEST_URL_LOG")"
+
+: > "$AXIOM_QUERY_TEST_URL_LOG"
+set +e
+printf '%s' 'logs-ap:cpu.usage' | "$SCRIPT_DIR/axiom-metrics-query" retry --start 2026-01-01T00:00:00Z --end 2026-01-01T01:00:00Z >"$TEST_DIR/stdout" 2>"$TEST_DIR/stderr"
+METRICS_STATUS=$?
+set -e
+assert_eq "metrics query retries the next edge" "0" "$METRICS_STATUS"
+assert_eq "metrics query starts on the dataset edge" "https://eu-west-1.aws.edge.axiom.co/v1/query/_metrics?format=metrics-v1" "$(head -n 1 "$AXIOM_QUERY_TEST_URL_LOG")"
+assert_eq "metrics query finishes on the next edge" "https://us-east-1.aws.edge.axiom.co/v1/query/_metrics?format=metrics-v1" "$(tail -n 1 "$AXIOM_QUERY_TEST_URL_LOG")"
+
+: > "$AXIOM_QUERY_TEST_ALL_LOG"
+run_query "SRE_NO_CACHE= \"$TEST_DIR/axiom-query\" message_error --since 15m --raw" "['logs-ap'] | take 1"
+assert_eq "error catalog is not treated as success" "1" "$QUERY_STATUS"
+run_query "SRE_NO_CACHE= \"$TEST_DIR/axiom-query\" message_error --since 15m --raw" "['logs-ap'] | take 1"
+assert_eq "error catalog is not reused" "1" "$QUERY_STATUS"
+assert_eq "error catalog is not cached" "2" "$(grep -c '/v2/edge-deployments/axiom' "$AXIOM_QUERY_TEST_ALL_LOG")"
 
 echo
 echo "==========================="

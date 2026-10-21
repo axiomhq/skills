@@ -2,9 +2,9 @@
 # Resolve where an APL or metrics query must run.
 #
 # Hosted Axiom meters token query cost limits on the regional edge. Those tokens
-# are rejected by the legacy api host path POST /v1/datasets/_apl. Query calls
-# therefore go to POST <edge>/v1/query/_apl, using the same order as the MCP
-# client. Self-hosted deployments keep the legacy path on their configured URL.
+# are rejected by POST /v1/datasets/_apl on the API host. Query calls go to
+# POST /v1/query/_apl, using the same edge order as the MCP client. A configured
+# URL outside Axiom cloud is used as-is; there is no second query path.
 #
 # Expects AXIOM_URL, AXIOM_TOKEN, AXIOM_ORG_ID, and DEPLOYMENT. Optional:
 # AXIOM_EDGE_URL, for a query-only token that cannot list datasets or edges.
@@ -72,11 +72,13 @@ axiom_cache_dir() {
 
 axiom_http_get() {
   local url="$1"
+  local dest="$2"
   curl -sS --connect-timeout 10 --max-time 30 \
+    -o "$dest" -w "%{http_code}" \
     -H "Authorization: Bearer ${AXIOM_TOKEN}" \
     -H "X-Axiom-Org-Id: ${AXIOM_ORG_ID}" \
     -H "Accept: application/json" \
-    "$url"
+    "$url" || true
 }
 
 # Prints a cached JSON document, refreshing it when missing or older than 10 minutes.
@@ -97,7 +99,20 @@ axiom_cached_get() {
     fi
   fi
 
-  body=$(axiom_http_get "$(axiom_management_base)$path" || true)
+  local resp_file http_code body
+  resp_file=$(mktemp)
+  http_code=$(axiom_http_get "$(axiom_management_base)$path" "$resp_file")
+  http_code=$(printf '%s' "$http_code" | tr -d '[:space:]')
+  body=$(cat "$resp_file" 2>/dev/null || true)
+  rm -f "$resp_file"
+  if [[ "$http_code" == "401" || "$http_code" == "403" ]]; then
+    axiom_lookup_note denied
+    return 1
+  fi
+  if [[ ! "$http_code" =~ ^2 ]]; then
+    axiom_lookup_note error
+    return 1
+  fi
   if ! printf '%s' "$body" | jq -e . >/dev/null 2>&1; then
     axiom_lookup_note error
     return 1
@@ -111,6 +126,17 @@ axiom_cached_get() {
   if [[ -n "$api_code" ]]; then
     axiom_lookup_note error
     return 1
+  fi
+  if [[ "$path" == *"/v2/edge-deployments/axiom" ]]; then
+    if ! printf '%s' "$body" | jq -e 'type == "object" and (.axiom | type == "array")' >/dev/null 2>&1; then
+      axiom_lookup_note error
+      return 1
+    fi
+  elif [[ "$path" == *"/v2/datasets" ]]; then
+    if ! printf '%s' "$body" | jq -e 'type == "array"' >/dev/null 2>&1; then
+      axiom_lookup_note error
+      return 1
+    fi
   fi
   axiom_lookup_note ok
 
@@ -191,8 +217,9 @@ axiom_dataset_from_path() {
   python3 -c 'import sys, urllib.parse; print(urllib.parse.unquote(sys.argv[1]))' "$encoded"
 }
 
-# Prints "edge<TAB>base" or "legacy<TAB>base" lines. Hosted failures print a hint
-# and return 1 instead of falling back to /v1/datasets/_apl.
+# Prints "edge<TAB>base" lines. A URL outside Axiom cloud is that configured URL.
+# Hosted failures print a hint and return 1 instead of falling back to
+# /v1/datasets/_apl.
 axiom_query_bases() {
   local apl="${1:-}"
   local explicit="${2:-}"
@@ -201,7 +228,7 @@ axiom_query_bases() {
   edge_url="${edge_url%/}"
 
   if ! axiom_is_hosted "$base"; then
-    printf 'legacy\t%s\n' "$base"
+    printf 'edge\t%s\n' "$base"
     return 0
   fi
 

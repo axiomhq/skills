@@ -122,10 +122,9 @@ function pickEdge(
 
 async function resolveAplQueryUrl(config: AxiomConfig, apl: string): Promise<string> {
   const base = config.url.replace(/\/$/, "");
-  const legacy = `${base}/v1/datasets/_apl?format=tabular`;
   const edgePath = "/v1/query/_apl?format=tabular";
   const scope = cloudScope(base);
-  if (!scope) return legacy;
+  if (!scope) return `${base}${edgePath}`;
   if (hostOf(base).includes(".edge.")) {
     return `${base}${edgePath}`;
   }
