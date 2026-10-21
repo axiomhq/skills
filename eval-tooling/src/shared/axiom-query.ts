@@ -5,6 +5,8 @@
  * Used by eval scorers to verify generated queries actually work.
  */
 
+/// <reference types="node" />
+
 export interface AxiomQueryResult {
   success: boolean;
   rowCount: number;
@@ -20,6 +22,147 @@ interface AxiomConfig {
   url: string;
   token: string;
   orgId?: string;
+}
+
+const QUOTED_DATASET = /\[\s*(['"])((?:\\.|(?!\1).)+)\1\s*\]/g;
+const RESERVED_DATASETS = new Set([
+  "stitch-events",
+  "stitch-service-map-rollup",
+]);
+
+function hostOf(url: string): string {
+  const authority = url.replace(/^https?:\/\//, "").split(/[/?#]/)[0] ?? "";
+  return (authority.split(":")[0] ?? "").toLowerCase();
+}
+
+function cloudScope(url: string): string | undefined {
+  const host = hostOf(url);
+  if (
+    host === "api.axiom.co" ||
+    host === "app.axiom.co" ||
+    host.endsWith(".edge.axiom.co")
+  ) {
+    return "axiom.co";
+  }
+  if (/^(api|app)\.([a-z0-9-]+\.)?axiomtestlabs\.co$/.test(host)) {
+    return host.replace(/^(api|app)\./, "");
+  }
+  const edge = host.match(/\.edge\.(.+)$/);
+  if (edge?.[1] && host.endsWith(".axiomtestlabs.co")) {
+    return edge[1];
+  }
+  return undefined;
+}
+
+function managementBase(url: string): string {
+  const trimmed = url.replace(/\/$/, "");
+  const match = trimmed.match(/^https:\/\/.+\.edge\.(.+)$/);
+  if (match) {
+    return `https://api.${match[1]}`;
+  }
+  return trimmed;
+}
+
+function quotedDatasets(apl: string): string[] {
+  const names: string[] = [];
+  for (const match of apl.matchAll(QUOTED_DATASET)) {
+    const name = match[2]?.replace(/\\(['"\\])/g, "$1").trim();
+    if (name && !names.includes(name)) {
+      names.push(name);
+    }
+  }
+  return names;
+}
+
+function pickEdge(
+  regions: { axiom?: { domain?: string; environmentDefault?: boolean; id?: string }[] },
+  datasets: { edgeDeployment?: string; name?: string }[],
+  apl: string
+): string | undefined {
+  const regionMap = new Map<string, string>();
+  let defaultRegion: string | undefined;
+  for (const region of regions.axiom ?? []) {
+    if (!region.id || !region.domain) continue;
+    const domain = region.domain.replace(/\/$/, "");
+    regionMap.set(region.id, domain.includes("://") ? domain : `https://${domain}`);
+    if (region.environmentDefault) defaultRegion = region.id;
+  }
+  const byName = new Map(datasets.map((dataset) => [dataset.name, dataset]));
+  const names = quotedDatasets(apl);
+  let sawKnownDataset = false;
+  for (const name of names) {
+    const dataset = byName.get(name);
+    if (!dataset) continue;
+    sawKnownDataset = true;
+    const domain = dataset.edgeDeployment
+      ? regionMap.get(dataset.edgeDeployment)
+      : undefined;
+    if (domain) return domain;
+    break;
+  }
+  if (!sawKnownDataset && names.some((name) => RESERVED_DATASETS.has(name))) {
+    const counts = new Map<string, number>();
+    for (const dataset of datasets) {
+      if (!dataset.edgeDeployment) continue;
+      counts.set(dataset.edgeDeployment, (counts.get(dataset.edgeDeployment) ?? 0) + 1);
+    }
+    let home: string | undefined;
+    let homeCount = 0;
+    for (const [region, count] of counts) {
+      if (count > homeCount) {
+        home = region;
+        homeCount = count;
+      }
+    }
+    if (home) return regionMap.get(home);
+  }
+  if (defaultRegion) return regionMap.get(defaultRegion);
+  return regionMap.values().next().value;
+}
+
+async function resolveAplQueryUrl(config: AxiomConfig, apl: string): Promise<string> {
+  const base = config.url.replace(/\/$/, "");
+  const legacy = `${base}/v1/datasets/_apl?format=tabular`;
+  const edgePath = "/v1/query/_apl?format=tabular";
+  const scope = cloudScope(base);
+  if (!scope) return legacy;
+  if (hostOf(base).includes(".edge.")) {
+    return `${base}${edgePath}`;
+  }
+
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    Authorization: `Bearer ${config.token}`,
+  };
+  if (config.orgId) headers["X-Axiom-Org-Id"] = config.orgId;
+  const api = managementBase(base);
+  const [regionsResponse, datasetsResponse] = await Promise.all([
+    fetch(`${api}/v2/edge-deployments/axiom`, { headers }),
+    fetch(`${api}/v2/datasets`, { headers }),
+  ]);
+  if (!regionsResponse.ok) {
+    const configured = process.env.AXIOM_PLAY_EDGE_URL?.replace(/\/$/, "");
+    if (configured && cloudScope(configured.includes("://") ? configured : `https://${configured}`) === scope) {
+      const edge = configured.includes("://") ? configured : `https://${configured}`;
+      return `${edge.replace(/\/$/, "")}${edgePath}`;
+    }
+    throw new Error(
+      "hosted APL queries must use the regional edge POST /v1/query/_apl endpoint"
+    );
+  }
+  const regions = (await regionsResponse.json()) as {
+    axiom?: { domain?: string; environmentDefault?: boolean; id?: string }[];
+  };
+  const datasets = datasetsResponse.ok
+    ? ((await datasetsResponse.json()) as { edgeDeployment?: string; name?: string }[])
+    : [];
+  const edge = pickEdge(regions, Array.isArray(datasets) ? datasets : [], apl);
+  if (!edge || cloudScope(edge) !== scope) {
+    throw new Error(
+      "hosted APL queries must use the regional edge POST /v1/query/_apl endpoint"
+    );
+  }
+  return `${edge}${edgePath}`;
 }
 
 function getAxiomPlaygroundConfig(): AxiomConfig | null {
@@ -192,9 +335,7 @@ export async function executeAplQuery(
       body.endTime = options.endTime;
     }
 
-    const response = await fetch(
-      `${config.url}/v1/datasets/_apl?format=tabular`,
-      {
+    const response = await fetch(await resolveAplQueryUrl(config, cleanQuery), {
         method: "POST",
         headers,
         body: JSON.stringify(body),

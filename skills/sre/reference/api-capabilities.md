@@ -2,8 +2,8 @@
 
 Summary of all operations available via Axiom API with a personal access token (PAT).
 
-**Base URL:** `https://api.axiom.co` (for all endpoints except ingestion)  
-**Ingest URL:** Use edge deployment domain (e.g., `https://us-east-1.aws.edge.axiom.co`)
+**Management API:** `https://api.axiom.co` (datasets, monitors, notifiers, annotations)  
+**Query and ingest:** the deployment's regional edge (for example `https://us-east-1.aws.edge.axiom.co`). Tokens with query cost limits must query `POST /v1/query/_apl` on that edge.
 
 **Authentication:**
 - PAT: `Authorization: Bearer $PAT` + `x-axiom-org-id: $ORG_ID`
@@ -15,8 +15,8 @@ Summary of all operations available via Axiom API with a personal access token (
 
 | Operation | Endpoint | Description |
 |-----------|----------|-------------|
-| Run APL query | `POST /v1/datasets/_apl?format=tabular` | Execute APL query with tabular output |
-| Run APL query (legacy) | `POST /v1/datasets/_apl?format=legacy` | Execute APL query with legacy output |
+| Run APL query | `POST /v1/query/_apl?format=tabular` on the regional edge | Execute APL. Required for tokens with query cost limits |
+| Run APL query (legacy API) | `POST /v1/datasets/_apl?format=tabular` on `api.axiom.co` | Legacy path. Rejects tokens with query cost limits with HTTP 430 |
 | Run query (legacy) | `POST /v1/datasets/{dataset_name}/query` | Legacy query endpoint with filter/aggregation model |
 
 **Query parameters:** `apl`, `startTime`, `endTime`, `cursor`, `includeCursor`, `queryOptions`, `variables`

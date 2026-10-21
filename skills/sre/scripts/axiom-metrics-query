@@ -68,6 +68,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Load config from unified config file
 # shellcheck disable=SC1090
 eval "$("$SCRIPT_DIR/config" axiom "$DEPLOYMENT")"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib-query-edge"
+
+# First resolved base. Self-hosted stays on AXIOM_URL; hosted uses the dataset edge.
+query_base_for() {
+  local apl="$1"
+  local dataset="${2:-}"
+  local mode="" base=""
+  while IFS=$'\t' read -r mode base; do
+    if [[ -n "$base" ]]; then
+      printf '%s' "$base"
+      return 0
+    fi
+  done < <(axiom_query_bases "$apl" "$dataset")
+  return 1
+}
 
 RESP_HEADERS=$(mktemp)
 RESP_BODY=$(mktemp)
@@ -78,14 +94,15 @@ trap cleanup EXIT
 
 # --spec: fetch MPL language specification via OPTIONS and exit
 if [[ "$FETCH_SPEC" == true ]]; then
+  SPEC_BASE=$(query_base_for "") || exit 1
   HTTP_CODE=$(curl -sS -o "$RESP_BODY" -D "$RESP_HEADERS" -w "%{http_code}" \
-    -X OPTIONS "$AXIOM_URL/v1/query/_metrics" \
+    -X OPTIONS "$SPEC_BASE/v1/query/_metrics" \
     -H "Authorization: Bearer $AXIOM_TOKEN" \
     -H "X-Axiom-Org-Id: $AXIOM_ORG_ID")
 
   if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
     msg=$(jq -r '.message // empty' "$RESP_BODY" 2>/dev/null)
-    trace=$(grep -i '^x-axiom-trace-id:' "$RESP_HEADERS" | tail -1 | awk '{print $2}' | tr -d '\r')
+    trace=$(grep -i '^x-axiom-trace-id:' "$RESP_HEADERS" | tail -1 | awk '{print $2}' | tr -d '\r' || true)
     echo "error: ${msg:-http $HTTP_CODE}" >&2
     if [[ -n "$trace" ]]; then
       echo "trace_id: $trace" >&2
@@ -131,9 +148,15 @@ APL=$(cat)
 APL_JSON=$(printf '%s' "$APL" | jq -Rs .)
 START_JSON=$(printf '%s' "$START_TIME" | jq -Rs .)
 END_JSON=$(printf '%s' "$END_TIME" | jq -Rs .)
+METRICS_DATASET=$(printf '%s' "$APL" | sed -n 's/^[[:space:]]*\([A-Za-z_][A-Za-z0-9_.-]*\):.*/\1/p')
+if [[ -n "$METRICS_DATASET" ]]; then
+  METRICS_BASE=$(query_base_for "" "$METRICS_DATASET") || exit 1
+else
+  METRICS_BASE=$(query_base_for "") || exit 1
+fi
 
 HTTP_CODE=$(curl -sS -o "$RESP_BODY" -D "$RESP_HEADERS" -w "%{http_code}" \
-  -X POST "$AXIOM_URL/v1/query/_metrics?format=metrics-v1" \
+  -X POST "$METRICS_BASE/v1/query/_metrics?format=metrics-v1" \
   -H "Authorization: Bearer $AXIOM_TOKEN" \
   -H "X-Axiom-Org-Id: $AXIOM_ORG_ID" \
   -H "Content-Type: application/json" \
@@ -141,7 +164,7 @@ HTTP_CODE=$(curl -sS -o "$RESP_BODY" -D "$RESP_HEADERS" -w "%{http_code}" \
 
 if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
   msg=$(jq -r '.message // empty' "$RESP_BODY" 2>/dev/null)
-  trace=$(grep -i '^x-axiom-trace-id:' "$RESP_HEADERS" | tail -1 | awk '{print $2}' | tr -d '\r')
+  trace=$(grep -i '^x-axiom-trace-id:' "$RESP_HEADERS" | tail -1 | awk '{print $2}' | tr -d '\r' || true)
   echo "error: ${msg:-http $HTTP_CODE}" >&2
   if [[ -n "$trace" ]]; then
     echo "trace_id: $trace" >&2
@@ -150,7 +173,7 @@ if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
 fi
 
 if [[ "$PRINT_TRACE" == true ]]; then
-  trace=$(grep -i '^x-axiom-trace-id:' "$RESP_HEADERS" | tail -1 | awk '{print $2}' | tr -d '\r')
+  trace=$(grep -i '^x-axiom-trace-id:' "$RESP_HEADERS" | tail -1 | awk '{print $2}' | tr -d '\r' || true)
   if [[ -n "$trace" ]]; then
     echo "trace_id: $trace" >&2
   fi

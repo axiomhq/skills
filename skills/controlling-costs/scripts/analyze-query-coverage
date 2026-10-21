@@ -89,7 +89,7 @@ echo ""
 
 # Preflight: Use audit dataset for volume estimate (no scan of actual dataset)
 echo "--- Preflight: Checking volume via $AUDIT_DATASET ---"
-VOLUME_JSON=$("$AXIOM_API" "$DEPLOYMENT" POST "/v1/datasets/_apl?format=tabular" "{
+VOLUME_JSON=$("$AXIOM_API" "$DEPLOYMENT" POST "/v1/query/_apl?format=tabular" "{
   \"apl\": \"['$AUDIT_DATASET'] | where action == 'usageCalculated' | where ['properties.dataset'] == '$DATASET' | where _time > ago(24h) | summarize total_bytes = sum(toreal(['properties.hourly_ingest_bytes'])), hours = dcount(bin(_time, 1h)) | extend gb_per_day = round(total_bytes / hours * 24 / 1000000000, 1) | project gb_per_day\"
 }" 2>&1)
 
@@ -118,7 +118,7 @@ AST_PARSER="$SCRIPT_DIR/lib/ast-parser.jq"
 
 # Fetch and parse queries - deduplicate first to reduce volume, then parse unique queries
 echo "Fetching query history from axiom-history..."
-PARSED_QUERIES=$("$AXIOM_API" "$DEPLOYMENT" POST "/v1/datasets/_apl?format=tabular" "{
+PARSED_QUERIES=$("$AXIOM_API" "$DEPLOYMENT" POST "/v1/query/_apl?format=tabular" "{
   \"apl\": \"['axiom-history'] | where _time > ago(${QUERY_DAYS}d) | where kind == 'apl' | where dataset == '$DATASET' | summarize count = count() by query_text = ['query.apl'] | extend parsed = parse_apl(query_text) | project parsed, count\",
   \"limit\": 10000
 }" 2>&1)
@@ -166,7 +166,7 @@ if [[ -z "$FIELD" ]]; then
     
     # Phase 4: Column Pruning - Fetch schema via random sample (captures varied record shapes)
     echo "Fetching dataset schema..."
-    SCHEMA_JSON=$("$AXIOM_API" "$DEPLOYMENT" POST "/v1/datasets/_apl?format=tabular" "{
+    SCHEMA_JSON=$("$AXIOM_API" "$DEPLOYMENT" POST "/v1/query/_apl?format=tabular" "{
       \"apl\": \"['$DATASET'] | where _time > ago(${INGEST_DAYS}d) | sample 0.01 | getschema | project ColumnName\",
       \"limit\": 50000
     }" 2>&1)
@@ -388,7 +388,7 @@ run_sample_query() {
     START_MINUTES=$1
     END_MINUTES=$2
     SAMPLE_ID=$3
-    "$AXIOM_API" "$DEPLOYMENT" POST "/v1/datasets/_apl?format=tabular" "{
+    "$AXIOM_API" "$DEPLOYMENT" POST "/v1/query/_apl?format=tabular" "{
       \"apl\": \"['$DATASET'] | where _time > ago(${START_MINUTES}m) and _time <= ago(${END_MINUTES}m) | summarize count = count() by value = tostring(['$FIELD']) | take 500\"
     }" 2>/dev/null > "$SAMPLE_DIR/sample_${SAMPLE_ID}.json"
 }
