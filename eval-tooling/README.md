@@ -47,10 +47,10 @@ pnpm install
 pnpm check
 
 # Run SPL-to-APL eval
-pnpm eval:spl-to-apl
+pnpm eval:axiom-spl-to-apl
 
 # Run with specific harness type
-pnpm eval:spl-to-apl --flag.harnessType=tool-simulation
+pnpm eval:axiom-spl-to-apl --flag.harnessType=tool-simulation
 ```
 
 ## Adding a New Skill Eval
@@ -59,4 +59,4 @@ pnpm eval:spl-to-apl --flag.harnessType=tool-simulation
 2. Create `cases.ts` with test cases
 3. Create `<skill>.eval.ts` using the harness
 
-See `skills/spl-to-apl/.meta/` for an example.
+See `skills/axiom-spl-to-apl/.meta/` for an example.
