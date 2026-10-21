@@ -215,6 +215,10 @@ check_stat_query "MPL --unit h names the result unit" $'set custom_unit="h";\n`m
     --mpl '`m`:active | map / 3600' --dataset m --unit h
 check_stat_query "MPL --unit keeps a custom_unit the query sets" $'set custom_unit="min";\n`m`:active\n| map / 60' \
     --mpl $'set custom_unit="min";\n`m`:active | map / 60' --dataset m --unit h
+check_stat_query "MPL --unit keeps a custom_unit set after another set" $'set foo="x";\nset custom_unit="min";\n`m`:active\n| map / 60' \
+    --mpl $'set foo="x";\nset custom_unit="min";\n`m`:active | map / 60' --dataset m --unit h
+check_stat_query "MPL --unit ignores custom_unit in a metric name" $'set custom_unit="h";\n`m`:my_custom_unit_total\n| map / 3600' \
+    --mpl '`m`:my_custom_unit_total | map / 3600' --dataset m --unit h
 check_stat_query "APL --unit leaves the query alone" $'[\'logs\']\n| summarize avg(duration)' \
     --apl "['logs'] | summarize avg(duration)" --unit ms
 if "$SCRIPTS_DIR/chart-add" --type Statistic --id t --name T --mpl '`m`:cost' --dataset m --unit '$' > /dev/null 2>&1; then

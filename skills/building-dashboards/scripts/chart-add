@@ -238,8 +238,9 @@ case "$TYPE" in
         UNIT_JSON=$(unit_fields_statistic "$UNIT")
         # After `map` or a rate the response drops the metric's unit. Set it
         # so the Console formats the unit that unit-for decided on. `set`
-        # must come before any `param` line.
-        if [[ -n "$MPL" && -n "$UNIT" && "$UNIT" != "1" && "$MPL" != *custom_unit* ]]; then
+        # must come before any `param` line, so only a leading one counts.
+        set_unit_re='^([[:space:]]*[Ss]et[[:space:]][^;]*;)*[[:space:]]*[Ss]et[[:space:]]+custom_unit[[:space:]]*='
+        if [[ -n "$MPL" && -n "$UNIT" && "$UNIT" != "1" && ! "$MPL" =~ $set_unit_re ]]; then
             if [[ "$UNIT" == *[\"\\]* ]]; then
                 echo "Error: --unit must not contain a quote or a backslash" >&2
                 exit 1
