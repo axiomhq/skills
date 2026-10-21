@@ -67,6 +67,7 @@ while [[ $# -gt 0 ]]; do
     -o) body_path="$2"; shift 2 ;;
     -D) headers_path="$2"; shift 2 ;;
     -d) payload="$2"; shift 2 ;;
+    http*) echo "$1" >> "${AXIOM_QUERY_TEST_URL_LOG:?}"; shift ;;
     *) shift ;;
   esac
 done
@@ -83,6 +84,8 @@ export SRE_CONFIG="$TEST_DIR/config.toml"
 export PATH="$TEST_DIR:$PATH"
 export AXIOM_QUERY_TEST_CURL_LOG="$TEST_DIR/curl.log"
 export AXIOM_QUERY_TEST_PAYLOAD_LOG="$TEST_DIR/payload.json"
+export AXIOM_QUERY_TEST_URL_LOG="$TEST_DIR/url.log"
+export AXIOM_EDGE_URL="https://edge.axiom.test"
 
 run_query() {
   local command="$1" query="$2"
@@ -133,6 +136,55 @@ assert_eq "allows absolute window" "0" "$QUERY_STATUS"
 assert_eq "calls curl for absolute window" "1" "$(wc -l < "$AXIOM_QUERY_TEST_CURL_LOG" | tr -d ' ')"
 assert_payload "sends explicit startTime" '.startTime' '2026-03-06T10:00:00Z'
 assert_payload "sends explicit endTime" '.endTime' '2026-03-06T10:30:00Z'
+
+echo
+echo "=== axiom-query edge endpoint tests ==="
+
+cat > "$TEST_DIR/axiom-api" <<'EOF'
+#!/usr/bin/env bash
+echo "called" >> "${AXIOM_QUERY_TEST_API_LOG:?}"
+printf '%s\n' '[{"name":"logs","edgeDeployment":"cloud.eu-central-1.aws"},{"name":"legacy","edgeDeployment":null}]'
+EOF
+chmod +x "$TEST_DIR/axiom-api"
+export AXIOM_QUERY_TEST_API_LOG="$TEST_DIR/api.log"
+export TMPDIR="$TEST_DIR"
+EDGE_QUERY_URL="https://eu-central-1.aws.edge.axiom.co/v1/query/_apl?format=tabular"
+
+reset_logs() { : > "$AXIOM_QUERY_TEST_CURL_LOG"; : > "$AXIOM_QUERY_TEST_URL_LOG"; : > "$AXIOM_QUERY_TEST_API_LOG"; }
+api_calls() { wc -l < "$AXIOM_QUERY_TEST_API_LOG" | tr -d ' '; }
+
+reset_logs
+run_query "\"$TEST_DIR/axiom-query\" test --since 15m --raw" "['logs'] | take 1"
+assert_eq "queries the AXIOM_EDGE_URL override" "https://edge.axiom.test/v1/query/_apl?format=tabular" "$(tail -1 "$AXIOM_QUERY_TEST_URL_LOG")"
+assert_eq "skips the dataset lookup with an override" "0" "$(api_calls)"
+
+unset AXIOM_EDGE_URL
+
+reset_logs
+run_query "\"$TEST_DIR/axiom-query\" test --since 15m --raw" "['logs'] | take 1"
+assert_eq "resolves the edge host for the dataset" "$EDGE_QUERY_URL" "$(tail -1 "$AXIOM_QUERY_TEST_URL_LOG")"
+assert_eq "looks up the dataset once" "1" "$(api_calls)"
+
+run_query "\"$TEST_DIR/axiom-query\" test --since 15m --raw" "['logs'] | take 2"
+assert_eq "serves the second query from the cache" "1" "$(api_calls)"
+assert_eq "uses the cached edge host" "$EDGE_QUERY_URL" "$(tail -1 "$AXIOM_QUERY_TEST_URL_LOG")"
+
+touch -t 202001010000 "$TEST_DIR/axiom-query-edge/test__logs"
+run_query "\"$TEST_DIR/axiom-query\" test --since 15m --raw" "['logs'] | take 3"
+assert_eq "refreshes an expired cache entry" "2" "$(api_calls)"
+
+reset_logs
+run_query "\"$TEST_DIR/axiom-query\" test --since 15m --raw" "['legacy'] | take 1"
+assert_eq "rejects a dataset without an edge deployment" "1" "$QUERY_STATUS"
+assert_contains "prints the missing edge deployment error" "no edge deployment found for dataset 'legacy'" "$QUERY_STDERR"
+assert_no_curl "does not call curl without an edge deployment"
+assert_eq "does not cache a failed lookup" "no" "$([[ -f "$TEST_DIR/axiom-query-edge/test__legacy" ]] && echo yes || echo no)"
+
+reset_logs
+run_query "\"$TEST_DIR/axiom-query\" test --since 15m --raw" "union logs, legacy | take 1"
+assert_eq "rejects a query without a leading dataset" "1" "$QUERY_STATUS"
+assert_contains "prints the missing dataset error" "could not find the dataset in the query" "$QUERY_STDERR"
+assert_no_curl "does not call curl without a dataset"
 
 echo
 echo "==========================="

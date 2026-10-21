@@ -148,9 +148,43 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Queries go to the edge host of the dataset; AXIOM_EDGE_URL overrides the lookup.
+EDGE_URL="${AXIOM_EDGE_URL:-}"
+if [[ -z "$EDGE_URL" ]]; then
+  DATASET=$(printf '%s' "$APL" | sed -nE "s/^[^\[]*\[['\"]([^'\"]+)['\"]\].*/\1/p" | head -1)
+  if [[ -z "$DATASET" ]]; then
+    echo "error: could not find the dataset in the query; start it with ['dataset'] or set AXIOM_EDGE_URL" >&2
+    exit 1
+  fi
+  CACHE_DIR="${TMPDIR:-/tmp}/axiom-query-edge"
+  CACHE_FILE="$CACHE_DIR/${DEPLOYMENT//[^A-Za-z0-9._-]/_}__${DATASET//[^A-Za-z0-9._-]/_}"
+  CACHE_TTL=3600
+  if [[ -f "$CACHE_FILE" ]]; then
+    if [[ "$(uname)" == "Darwin" ]]; then
+      CACHE_AGE=$(( $(date +%s) - $(stat -f %m "$CACHE_FILE") ))
+    else
+      CACHE_AGE=$(( $(date +%s) - $(stat -c %Y "$CACHE_FILE") ))
+    fi
+    if [[ "$CACHE_AGE" -lt "$CACHE_TTL" ]]; then
+      EDGE_URL=$(cat "$CACHE_FILE")
+    fi
+  fi
+  if [[ -z "$EDGE_URL" ]]; then
+    EDGE_DEPLOYMENT=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET /v2/datasets 2>/dev/null \
+      | jq -r --arg name "$DATASET" '.[] | select(.name == $name) | .edgeDeployment // empty' 2>/dev/null || true)
+    if [[ -z "$EDGE_DEPLOYMENT" ]]; then
+      echo "error: no edge deployment found for dataset '$DATASET'; set AXIOM_EDGE_URL to override" >&2
+      exit 1
+    fi
+    EDGE_URL="https://${EDGE_DEPLOYMENT#cloud.}.edge.axiom.co"
+    mkdir -p "$CACHE_DIR" && echo "$EDGE_URL" > "$CACHE_FILE"
+  fi
+fi
+QUERY_URL="$EDGE_URL/v1/query/_apl?format=tabular"
+
 # Execute query and pipe to formatter
 HTTP_CODE=$(curl -sS -o "$RESP_BODY" -D "$RESP_HEADERS" -w "%{http_code}" \
-  -X POST "$AXIOM_URL/v1/datasets/_apl?format=tabular" \
+  -X POST "$QUERY_URL" \
   -H "Authorization: Bearer $AXIOM_TOKEN" \
   -H "X-Axiom-Org-Id: $AXIOM_ORG_ID" \
   -H "Content-Type: application/json" \
