@@ -1,5 +1,44 @@
 # Changelog
 
+## [1.2.0](https://github.com/axiomhq/skills/compare/v1.1.2...v1.2.0) (2026-10-24)
+
+
+### Features
+
+* prefix remaining skills with axiom- ([a392cdb](https://github.com/axiomhq/skills/commit/a392cdb775b3514fd3e2acb4da75f603d1385ebc))
+* prefix remaining skills with axiom- ([6fcac1f](https://github.com/axiomhq/skills/commit/6fcac1f6613e5842d53e8f7acf59783a1a6d1be2))
+
+
+### Fixes
+
+* **building-dashboards:** avoid duplicate formatted metric units ([c97a587](https://github.com/axiomhq/skills/commit/c97a587b03361e1f6ab5b2971c00a34535f2b898))
+* **building-dashboards:** emit Statistic units the Console renders ([85ab2a3](https://github.com/axiomhq/skills/commit/85ab2a374eda6868880c3c78208b9871737f18d8))
+* **building-dashboards:** flag every LogStream operator the Console cannot stream ([3210413](https://github.com/axiomhq/skills/commit/3210413f95b936e77607988306ab18e3062a6b75))
+* **building-dashboards:** match what the Console renders and the API accepts ([b2176a1](https://github.com/axiomhq/skills/commit/b2176a1af451fa198c54034826e904856537c7d0))
+* **building-dashboards:** name the MPL Statistic result unit with custom_unit ([c9bfabb](https://github.com/axiomhq/skills/commit/c9bfabbf0530fd0f8887c01176b74a11ebe73905))
+* **building-dashboards:** only skip custom_unit for a leading set statement ([0d9b306](https://github.com/axiomhq/skills/commit/0d9b30625406b94a431964bb1cf9ebe831328547))
+* **building-dashboards:** reject roundTo on a Statistic before create ([ea064cb](https://github.com/axiomhq/skills/commit/ea064cb29a9140502f08d7c9e8b3ec6d8c3f13cd))
+* **building-dashboards:** restore default chart sizes, raise Pie to 4x5 ([9105993](https://github.com/axiomhq/skills/commit/9105993e9cb0b83d0d30f5b1ef6aafc4acf5b160))
+* **building-dashboards:** stop declaring $__interval in mpl-validate-chart ([00617f1](https://github.com/axiomhq/skills/commit/00617f163914c2ef72adb996cc86c316d7aa419f))
+* **building-dashboards:** stop requiring take in LogStream queries ([405bca5](https://github.com/axiomhq/skills/commit/405bca5d20b12eaffd978910b60493676dbaebfa))
+* **building-dashboards:** use the Console's chart sizes in layout-pack ([3105400](https://github.com/axiomhq/skills/commit/310540026d079a0a1778125e97a37adca2d88af4))
+* emit dashboard sections from the building-dashboards skill ([192670f](https://github.com/axiomhq/skills/commit/192670f9ffb5519aee99bc0fdc0307a77455e5b4))
+* emit dashboard sections from the building-dashboards skill ([ef913cf](https://github.com/axiomhq/skills/commit/ef913cfe10a45b24e401f684182e7520453f889e))
+* open pull requests for automated skill updates ([9f00143](https://github.com/axiomhq/skills/commit/9f00143bc31bbe8c35c8fd19059ddae7e4593d77))
+* prevent stale and failed eval baseline updates ([a49853a](https://github.com/axiomhq/skills/commit/a49853ae65c757fc589589493ace4084d24eea3b))
+* reject chart sectionId when the dashboard has no sections ([b03fea0](https://github.com/axiomhq/skills/commit/b03fea03de57a2c24e90386c94d39c59b3c20350))
+* route hosted APL queries to the regional edge ([ebcbd50](https://github.com/axiomhq/skills/commit/ebcbd5046bb09f867b292efdba4d7513f45744e2))
+* route hosted APL queries to the regional edge ([c1924d7](https://github.com/axiomhq/skills/commit/c1924d75c8596c575ccf32f83ce14e7129b99100))
+* send every APL query to /v1/query/_apl ([f63e997](https://github.com/axiomhq/skills/commit/f63e997e928927bb64858a0cec8cf3ee7e2da2b8))
+* serialize baseline updates per skill ([d14945a](https://github.com/axiomhq/skills/commit/d14945a64b4e5ab77712f4067b8b5caea1e471a3))
+
+
+### Documentation
+
+* **building-dashboards:** use example names in comments and tests ([5e3081d](https://github.com/axiomhq/skills/commit/5e3081d4d2914940c2f76b42d0ddfbd24757edc1))
+* remove cost claims from plugin descriptions ([36cd208](https://github.com/axiomhq/skills/commit/36cd208a298f54ca80adcc92ea3f06b7b207b030))
+* remove cost claims from plugin descriptions ([38a769f](https://github.com/axiomhq/skills/commit/38a769f05144efcbb4cb2940e4a99f8cfded3d07))
+
 ## [1.1.2](https://github.com/axiomhq/skills/compare/v1.1.1...v1.1.2) (2026-10-07)
 
 
