@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Prepares an Amp orb: tools used by skill scripts and CI tests, plus eval-tooling deps.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+missing=()
+for pkg in jq curl bc; do
+  command -v "$pkg" >/dev/null || missing+=("$pkg")
+done
+if ((${#missing[@]})); then
+  echo "==> apt-get install ${missing[*]}"
+  sudo apt-get update -qq
+  sudo apt-get install -y -qq "${missing[@]}"
+fi
+
+echo "==> pnpm install (eval-tooling)"
+# Build scripts (esbuild, protobufjs) stay skipped as in CI; newer pnpm fails on them by default.
+time pnpm --dir eval-tooling install --frozen-lockfile --ignore-scripts
