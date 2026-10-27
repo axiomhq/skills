@@ -18,3 +18,6 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+
+# Amp
+.amp/portals/*
