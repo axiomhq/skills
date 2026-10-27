@@ -18,7 +18,7 @@ grep -o '^\[deployments\.[^]]*\]' ~/.axiom.toml 2>/dev/null
 | Found | Do |
 |-------|----|
 | None, and no Axiom MCP connection | Follow the `axiom-agent-created-orgs` skill to provision a temporary org, then continue here with its org id as the deployment. |
-| None, but Axiom MCP is connected | Ask once: create an API token with ingest permission in that org and add it to `~/.axiom.toml`, or use a new temporary org. MCP alone cannot ingest. |
+| None, but Axiom MCP is connected | Ask once: create an API token in that org and add it to `~/.axiom.toml`, or use a new temporary org. For a new dataset the token needs dataset create, ingest, and query permissions. MCP alone cannot ingest. |
 | One | Use it. Say which org you are writing to before you write. |
 | Several | Ask once: which deployment, or a new temporary org. |
 
@@ -42,7 +42,14 @@ edge=$(curl "${H[@]}" -H 'Content-Type: application/json' -X POST "$url/v2/datas
 ```
 
 - `dataset license limit exceeded` (HTTP 400) means the org has no dataset slots left. Ask whether to reuse an existing dataset or use another org.
-- `entity exists` (HTTP 409) means the name is taken. For a "new dataset" request, pick another name. To add to the existing one, read its edge URL: `curl "${H[@]}" "$url/v2/datasets/<dataset>" | jq -r .edgeDeploymentUrl`.
+- `entity exists` (HTTP 409) means the name is taken. For a "new dataset" request, pick another name.
+- `token does not have access to resource: datasets with action: create` (HTTP 403) means the token can't create datasets. Ask the user to create the dataset or use a token that can, or send to an existing dataset.
+
+To send to an existing dataset, skip the create call and read its edge URL instead:
+
+```bash
+edge=$(curl "${H[@]}" "$url/v2/datasets/<dataset>" | jq -r .edgeDeploymentUrl)
+```
 
 ## 3. Ingest
 
@@ -69,4 +76,4 @@ curl "${H[@]}" -H 'Content-Type: application/json' -X POST "$edge/v1/query/_apl?
   -d "{\"apl\": \"['<dataset>'] | count\"}" | jq '.tables[0].columns'
 ```
 
-New events can take a few seconds to show up. Report the org, dataset, and event count. If the org is temporary, also give the claim URL and expiry as `axiom-agent-created-orgs` describes.
+New events can take a few seconds to show up. If the query returns HTTP 403, the token can't query; report the `ingested` count from step 3 instead. Report the org, dataset, and event count. If the org is temporary, also give the claim URL and expiry as `axiom-agent-created-orgs` describes.
