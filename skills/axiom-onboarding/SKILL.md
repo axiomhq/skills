@@ -17,6 +17,8 @@ Before changing code, read the current pages relevant to the detected stack:
 - [Axiom edge deployments](https://axiom.co/docs/reference/edge-deployments.md)
 - [Axiom tokens](https://axiom.co/docs/reference/tokens.md)
 - [Axiom ingestion limits](https://axiom.co/docs/reference/limits.md)
+- [Create dataset API](https://axiom.co/docs/restapi/endpoints/createDataset.md)
+- [MPL introduction](https://axiom.co/docs/mpl/introduction.md)
 - [OpenTelemetry documentation](https://opentelemetry.io/docs/)
 - [OpenTelemetry library instrumentation](https://opentelemetry.io/docs/concepts/instrumentation/libraries/)
 - [OpenTelemetry recording errors](https://opentelemetry.io/docs/specs/semconv/general/recording-errors/)
@@ -34,9 +36,9 @@ For each runnable service:
 4. Export each enabled signal to the correct Axiom dataset.
 5. Add a small number of code-derived business signals.
 6. Run the service's own checks and exercise a real operation.
-7. Query Axiom for fresh signal-specific evidence and verify correlation.
+7. Query Axiom and reach verification level 4 for every enabled signal.
 
-Do not claim “Axiom ingestion verified” from successful startup, valid configuration, a 2xx response, or exporter diagnostics alone.
+Do not claim “Axiom ingestion verified” from successful startup, valid configuration, a 2xx response, or exporter diagnostics alone. Level 5 is a production sign-off, not the requirement for finishing onboarding.
 
 ## Phase 1: Preflight
 
@@ -116,27 +118,56 @@ Never:
 
 Use the repository's existing deployment secret mechanism. If it has none, add variable names and documented placeholders, not secret values, and tell the user what must be configured.
 
+Choose the deployment with the decision table in `axiom-ingest`. Do not use `axiom-ingest` to create these datasets or send telemetry: its create call omits `kind` and therefore creates an events dataset.
+
 ### Signal datasets
 
-For each environment, residency, and tenant-access boundary, use a compatible organization and edge deployment with one correlation group and a dedicated dataset for each enabled signal:
+For each environment, residency, and tenant-access boundary, create three datasets on the same edge. Names are 1–128 characters and contain only ASCII letters, digits, and `-`.
 
-| Signal | Dataset kind | OTLP path | Routing header |
+| Signal | `kind` | OTLP path | Dataset header |
 |---|---|---|---|
-| Logs | Events | `/v1/logs` | `x-axiom-dataset` |
-| Traces | Events | `/v1/traces` | `x-axiom-dataset` |
-| Metrics | Metrics | `/v1/metrics` | `x-axiom-metrics-dataset` |
+| Logs | `otel:logs:v1` | `/v1/logs` | `x-axiom-dataset` |
+| Traces | `otel:traces:v1` | `/v1/traces` | `x-axiom-dataset` |
+| Metrics | `otel:metrics:v1` | `/v1/metrics` | `x-axiom-metrics-dataset` |
 
-Every request also requires `Authorization: Bearer <API_TOKEN>`, sourced from the deployment secret mechanism.
+List existing datasets before creating any. Reuse one only when its `kind` already matches. A 409 means the name exists; check its kind instead of creating another name blindly.
 
-Keep every span of a distributed trace within one compatible traces dataset. Distinguish services with `service.name`; do not create a traces dataset per microservice.
+```bash
+skills/axiom-building-dashboards/scripts/metrics/datasets <deployment>
+```
 
-Use the actual edge assigned to the datasets. Do not infer it from the developer's location or rely on an SDK's default region.
+Load the deployment the way `axiom-ingest` does, without printing the token. Create each missing dataset with `POST /v2/datasets`:
 
-Configure each signal independently. A shared `OTEL_EXPORTER_OTLP_HEADERS` value is insufficient because metrics use a different dataset header.
+```bash
+curl "${H[@]}" -H 'Content-Type: application/json' -X POST "$url/v2/datasets" \
+  -d '{"name":"<prefix>-logs","kind":"otel:logs:v1","description":"<why>"}'
+```
 
-Prefer OTLP over HTTP/protobuf. SDK exporters commonly take full signal URLs; Collector `otlphttp` exporters commonly take a base endpoint and append the signal path. Check the installed exporter's current semantics and ensure `/v1/{signal}` appears exactly once.
+Repeat with `otel:traces:v1` and `otel:metrics:v1`. Read `edgeDeploymentUrl` from each response. All three URLs must match. `dataset license limit exceeded` means stop and ask which existing datasets to reuse. A temporary organization has very little dataset capacity, so create only these three.
 
-Current product documentation is authoritative if examples disagree. In particular, use `x-axiom-metrics-dataset` for metrics and separate logs, traces, and metrics datasets.
+There is no documented correlation-group API. After the datasets exist, tell the user to open **Datasets → Correlations → New correlation group** and select them. Logs must carry `trace_id` and `span_id` for that navigation to work.
+
+Keep every span of one distributed trace in the one traces dataset. Distinguish services with `service.name`.
+
+### Exporter configuration
+
+Every signal request also sends `Authorization: Bearer <API_TOKEN>` from the deployment secret mechanism. Configure the three signals separately. A shared `OTEL_EXPORTER_OTLP_HEADERS` value sends metrics to the wrong header.
+
+In `OTEL_EXPORTER_OTLP_*_HEADERS`, separate headers with commas and use `=`, not HTTP colon syntax:
+
+```bash
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://EDGE/v1/logs
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://EDGE/v1/traces
+OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://EDGE/v1/metrics
+OTEL_EXPORTER_OTLP_LOGS_HEADERS=Authorization=Bearer ${AXIOM_TOKEN},x-axiom-dataset=${LOGS_DATASET}
+OTEL_EXPORTER_OTLP_TRACES_HEADERS=Authorization=Bearer ${AXIOM_TOKEN},x-axiom-dataset=${TRACES_DATASET}
+OTEL_EXPORTER_OTLP_METRICS_HEADERS=Authorization=Bearer ${AXIOM_TOKEN},x-axiom-metrics-dataset=${METRICS_DATASET}
+```
+
+In SDK or Collector code, use normal header names and values: `Authorization: Bearer <token>` and `x-axiom-dataset: <name>`. Collector `otlphttp` takes the edge base URL and appends the signal path. SDK exporters usually take the full signal URL. Read the installed exporter and make `/v1/{signal}` appear exactly once.
+
+`EDGE` is the dataset's `edgeDeploymentUrl` without a trailing slash. Do not use `api.axiom.co` for OTLP, and do not accept an SDK's default region.
 
 ## Phase 4: Instrument each service
 
@@ -223,8 +254,8 @@ Verify in increasing levels of evidence and report the highest level reached for
 1. **Configured**: one bootstrap, correct resources, secrets externalized, correct signal endpoints/headers, valid Collector pipelines, and repository checks pass.
 2. **Shape verified**: an in-memory exporter or local OTLP receiver sees expected spans, logs, metrics, resource attributes, and bounded dimensions.
 3. **Pipeline verified**: exporter or Collector diagnostics show accepted and sent data with no unexplained rejection, drop, queue-full, or permanent failure. Inspect OTLP partial-success responses.
-4. **Axiom verified**: bounded queries find a fresh unique marker in enabled logs/traces datasets and a fresh expected value change for each enabled metric, all with the expected `service.name`.
-5. **Production handoff verified**: log and trace IDs correlate, cross-service propagation works where applicable, final pre-shutdown telemetry arrives, restart behavior is sane, and rollback is documented.
+4. **Axiom verified**: bounded queries find a fresh unique marker in enabled logs and traces datasets and a fresh expected value change for each enabled metric, all with the expected `service.name`. This completes onboarding.
+5. **Production sign-off**: log and trace IDs correlate, cross-service propagation works where applicable, final pre-shutdown telemetry arrives, restart behavior is sane, and rollback is documented. Do this when the user asks for a production sign-off.
 
 ### Canary procedure
 
@@ -236,11 +267,40 @@ For every service:
 4. Exercise one instrumented request, job, or CLI operation carrying the marker as a safe span/log attribute.
 5. Keep the process alive through its export interval or invoke graceful flush.
 6. Inspect exporter/Collector diagnostics and partial-success responses.
-7. Query logs and traces with APL for the marker. Query metrics with MPL for a known bounded metric, expected dimensions, and a fresh timestamp or value change; never add the random marker as a metric attribute.
+7. Query logs and traces with APL through `queryDataset`. Query metrics with MPL through `queryMetrics`. Never send MPL or a metrics dataset to `queryDataset`.
 8. Confirm resource identity, expected signal shape, no unexplained metric overflow, and log-to-trace correlation.
-9. Exercise graceful shutdown and verify telemetry emitted immediately before exit.
 
-Use actual discovered field, span, and metric names. If recent event data appears absent, compare `_time` and `_sysTime` to detect clock skew. Retry backend queries for a short bounded interval; never loop indefinitely.
+Logs and traces, after substituting the real dataset, service, marker field, and marker:
+
+```apl
+['<logs-or-traces>']
+| where _time > ago(15m)
+| where ['service.name'] == '<service>' and ['<marker-field>'] == '<marker>'
+| take 5
+```
+
+Metrics, after listing the real metric name. Resource attributes arrive as tags:
+
+```mpl
+`<metrics-dataset>`:`<metric.name>`[15m..]
+| where `service.name` == "<service>"
+| align to 1m using count
+```
+
+If the metrics query names the wrong metric or tag, read [MPL](https://axiom.co/docs/mpl/introduction.md) and the dataset's metric list. Do not add the random marker as a metric attribute.
+
+### When export fails
+
+| Evidence | Fix |
+|---|---|
+| Logs or traces arrive, metrics do not | The metrics request used `x-axiom-dataset` or an events dataset. Use `x-axiom-metrics-dataset` and `otel:metrics:v1`. |
+| 401 or 403 | The token, organization, dataset scope, or edge does not match. A token from another region or organization is not valid here. |
+| HTTP 200 with `partial_success` | Read the rejected-point reasons. A 200 does not mean every metric point was stored. |
+| 413 or a batch drop | The metrics batch exceeds the documented uncompressed limit. Lower the Collector or SDK batch size. |
+| 400 and a record-size error | A single log or span is too large. Remove the oversized attribute or body. |
+| Nothing appears, but export succeeded | Compare `_time` and `_sysTime`, then retry the query for a short bounded interval. |
+
+Use the actual field, span, and metric names. Retry a missing backend result for a short bounded interval; never loop indefinitely. For a production sign-off, also exercise graceful shutdown and verify telemetry emitted immediately before exit.
 
 If query credentials are unavailable, report “pipeline verified, backend unverified.” If any enabled signal is missing, onboarding remains incomplete for that service.
 
