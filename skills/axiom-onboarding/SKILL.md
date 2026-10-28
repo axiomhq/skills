@@ -145,7 +145,7 @@ curl "${H[@]}" -H 'Content-Type: application/json' -X POST "$url/v2/datasets" \
 
 Repeat with `otel:traces:v1` and `otel:metrics:v1`. Read `edgeDeploymentUrl` from each response. All three URLs must match. `dataset license limit exceeded` means stop and ask which existing datasets to reuse. A temporary organization has very little dataset capacity, so create only these three.
 
-There is no documented correlation-group API. After the datasets exist, tell the user to open **Datasets → Correlations → New correlation group** and select them. Logs must carry `trace_id` and `span_id` for that navigation to work.
+There is no documented correlation-group API. After the datasets exist, tell the user to open **Datasets → Correlations → New correlation group** and select them. Each log event needs top-level `trace_id` and `span_id`. Keep the spans in the traces dataset. If the logs dataset also has trace fields such as `parent_span_id`, the console searches the logs dataset for the trace and reports that it cannot find it.
 
 Keep every span of one distributed trace in the one traces dataset. Distinguish services with `service.name`.
 
@@ -168,6 +168,8 @@ OTEL_EXPORTER_OTLP_METRICS_HEADERS=Authorization=Bearer ${AXIOM_TOKEN},x-axiom-m
 In SDK or Collector code, use normal header names and values: `Authorization: Bearer <token>` and `x-axiom-dataset: <name>`. Collector `otlphttp` takes the edge base URL and appends the signal path. SDK exporters usually take the full signal URL. Read the installed exporter and make `/v1/{signal}` appear exactly once.
 
 `EDGE` is the dataset's `edgeDeploymentUrl` without a trailing slash. Do not use `api.axiom.co` for OTLP, and do not accept an SDK's default region.
+
+Some platforms accept only a base URL and then append `/v1/metrics`. Set that base to `https://EDGE/v1/ingest/<metrics-dataset>`. Axiom accepts the resulting `https://EDGE/v1/ingest/<metrics-dataset>/v1/metrics`. Do not also put `/v1/metrics` in the base. SDKs and Collectors that can set each signal URL keep the three endpoints above.
 
 ## Phase 4: Instrument each service
 
@@ -218,7 +220,7 @@ Use W3C `tracecontext,baggage` propagation. Do not put secrets, broad user data,
 Use framework auto-instrumentation as the baseline, then add only what the application needs:
 
 - Traces: HTTP/RPC, database, messaging, and critical business operations. Record exceptions and set error status when an operation fails.
-- Logs: keep the existing logger and add the current OTel bridge/appender so active `trace_id` and `span_id` are carried. Preserve standard severity fields.
+- Logs: keep the existing logger and add the current OTel bridge/appender so active `trace_id` and `span_id` are top-level fields. Preserve standard severity fields.
 - Metrics: counters for state transitions, histograms for latency or sizes, and gauges only for point-in-time values.
 
 Do not create wrapper APIs such as `sendAxiomSpan` or `recordAxiomMetric`. Application code uses native OpenTelemetry APIs so instrumentation stays portable.
