@@ -9,20 +9,7 @@ Add useful, portable OpenTelemetry instrumentation to every runnable service, ro
 
 ## Sources of truth
 
-Before changing code, read the current pages relevant to the detected stack:
-
-- [Axiom OpenTelemetry ingestion](https://axiom.co/docs/send-data/opentelemetry.md)
-- [Axiom sending methods and runtime guides](https://axiom.co/docs/send-data/methods.md)
-- [Axiom datasets](https://axiom.co/docs/reference/datasets.md)
-- [Axiom edge deployments](https://axiom.co/docs/reference/edge-deployments.md)
-- [Axiom tokens](https://axiom.co/docs/reference/tokens.md)
-- [Axiom ingestion limits](https://axiom.co/docs/reference/limits.md)
-- [Create dataset API](https://axiom.co/docs/restapi/endpoints/createDataset.md)
-- [MPL introduction](https://axiom.co/docs/mpl/introduction.md)
-- [OpenTelemetry documentation](https://opentelemetry.io/docs/)
-- [OpenTelemetry library instrumentation](https://opentelemetry.io/docs/concepts/instrumentation/libraries/)
-- [OpenTelemetry recording errors](https://opentelemetry.io/docs/specs/semconv/general/recording-errors/)
-- [OpenTelemetry instrumentation scope](https://opentelemetry.io/docs/concepts/instrumentation-scope/)
+Before changing code, read the current official pages relevant to the detected stack, linked in the phase-specific references below.
 
 Use current official Axiom, OpenTelemetry, language, and framework documentation for package names, compatible versions, bootstrap hooks, worker/fork behavior, logging bridges, and shutdown APIs. Do not guess or copy a stale setup recipe.
 
@@ -102,6 +89,8 @@ Start implementation with one representative service. Prove its telemetry shape 
 
 ## Phase 3: Configure Axiom
 
+Read [reference/axiom-setup.md](reference/axiom-setup.md) before creating or reusing datasets and configuring exporters. It covers deployment selection, signal routing, credentials in exporter configuration, and correlations.
+
 ### Organization and credentials
 
 Prefer an existing Axiom organization and deployment. If none is configured or available, load `axiom-agent-created-orgs` and provision at most one temporary organization for the task.
@@ -118,83 +107,11 @@ Never:
 
 Use the repository's existing deployment secret mechanism. If it has none, add variable names and documented placeholders, not secret values, and tell the user what must be configured.
 
-Choose the deployment with the decision table in `axiom-ingest`. Do not use `axiom-ingest` to create these datasets or send telemetry: its create call omits `kind` and therefore creates an events dataset.
-
-### Signal datasets
-
-For each environment, residency, and tenant-access boundary, create three datasets on the same edge. Names are 1–128 characters and contain only ASCII letters, digits, and `-`.
-
-| Signal | `kind` | OTLP path | Dataset header |
-|---|---|---|---|
-| Logs | `otel:logs:v1` | `/v1/logs` | `x-axiom-dataset` |
-| Traces | `otel:traces:v1` | `/v1/traces` | `x-axiom-dataset` |
-| Metrics | `otel:metrics:v1` | `/v1/metrics` | `x-axiom-metrics-dataset` |
-
-List existing datasets before creating any. Reuse one only when its `kind` already matches. A 409 means the name exists; check its kind instead of creating another name blindly.
-
-```bash
-skills/axiom-building-dashboards/scripts/metrics/datasets <deployment>
-```
-
-Load the deployment the way `axiom-ingest` does, without printing the token. Create each missing dataset with `POST /v2/datasets`:
-
-```bash
-curl "${H[@]}" -H 'Content-Type: application/json' -X POST "$url/v2/datasets" \
-  -d '{"name":"<prefix>-logs","kind":"otel:logs:v1","description":"<why>","edgeDeployment":"<edge>"}'
-```
-
-`<edge>` is the deployment chosen for this environment, such as `US East 1 (AWS)` or `EU Central 1 (AWS)`. Read [edge deployments](https://axiom.co/docs/reference/edge-deployments.md) when the name is not one of those. Repeat with `otel:traces:v1` and `otel:metrics:v1`. Each response's `edgeDeployment` and `edgeDeploymentUrl` must match that choice. A 400 for an unsupported edge means the name is wrong or the organization does not have that edge. The edge cannot be changed after creation. `dataset license limit exceeded` means stop and ask which existing datasets to reuse. A temporary organization has very little dataset capacity, so create only these three.
-
-There is no documented correlation-group API. After the datasets exist, tell the user to open **Datasets → Correlations → New correlation group** and select them. Each log event needs top-level `trace_id` and `span_id`. Keep the spans in the traces dataset. If the logs dataset also has trace fields such as `parent_span_id`, the console searches the logs dataset for the trace and reports that it cannot find it.
-
-Keep every span of one distributed trace in the one traces dataset. Distinguish services with `service.name`.
-
-### Exporter configuration
-
-Every signal request also sends `Authorization: Bearer <API_TOKEN>` from the deployment secret mechanism. Configure the three signals separately. A shared `OTEL_EXPORTER_OTLP_HEADERS` value sends metrics to the wrong header.
-
-In `OTEL_EXPORTER_OTLP_*_HEADERS`, separate headers with commas and use `=`, not HTTP colon syntax:
-
-```bash
-export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-export OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://EDGE/v1/logs
-export OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://EDGE/v1/traces
-export OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://EDGE/v1/metrics
-export OTEL_EXPORTER_OTLP_LOGS_HEADERS="Authorization=Bearer ${AXIOM_TOKEN},x-axiom-dataset=${LOGS_DATASET}"
-export OTEL_EXPORTER_OTLP_TRACES_HEADERS="Authorization=Bearer ${AXIOM_TOKEN},x-axiom-dataset=${TRACES_DATASET}"
-export OTEL_EXPORTER_OTLP_METRICS_HEADERS="Authorization=Bearer ${AXIOM_TOKEN},x-axiom-metrics-dataset=${METRICS_DATASET}"
-```
-
-Export and quote these assignments. Without `export`, a process started from that shell does not receive them. An unquoted `Bearer` value splits at the space, and the shell prints the token while trying to run it as a command.
-
-In SDK or Collector code, use normal header names and values: `Authorization: Bearer <token>` and `x-axiom-dataset: <name>`. Collector `otlphttp` takes the edge base URL and appends the signal path. SDK exporters usually take the full signal URL. Read the installed exporter and make `/v1/{signal}` appear exactly once.
-
-`EDGE` is the dataset's `edgeDeploymentUrl` without a trailing slash. Do not use `api.axiom.co` for OTLP, and do not accept an SDK's default region.
-
-Some platforms accept only a base URL and then append `/v1/metrics`. Set that base to `https://EDGE/v1/ingest/<metrics-dataset>`. Axiom accepts the resulting `https://EDGE/v1/ingest/<metrics-dataset>/v1/metrics`. Do not also put `/v1/metrics` in the base. SDKs and Collectors that can set each signal URL keep the three endpoints above.
-
 ## Phase 4: Instrument each service
 
 ### SDK ownership and startup
 
-Read the current guide for the detected runtime and follow its packages, bootstrap file, and startup hook. Do not copy an example from memory.
-
-| Runtime | Read before editing |
-|---|---|
-| Node.js | [OpenTelemetry Node.js](https://axiom.co/docs/guides/opentelemetry-nodejs.md) |
-| Next.js | [OpenTelemetry Next.js](https://axiom.co/docs/guides/opentelemetry-nextjs.md) |
-| Nuxt | [OpenTelemetry Nuxt.js](https://axiom.co/docs/guides/opentelemetry-nuxtjs.md) |
-| Python | [OpenTelemetry Python](https://axiom.co/docs/guides/opentelemetry-python.md) |
-| Django | [OpenTelemetry Django](https://axiom.co/docs/guides/opentelemetry-django.md) |
-| Go | [OpenTelemetry Go](https://axiom.co/docs/guides/opentelemetry-go.md) |
-| Java | [OpenTelemetry Java](https://axiom.co/docs/guides/opentelemetry-java.md) |
-| .NET | [OpenTelemetry .NET](https://axiom.co/docs/guides/opentelemetry-dotnet.md) |
-| Ruby | [OpenTelemetry Ruby](https://axiom.co/docs/guides/opentelemetry-ruby.md) |
-| Cloudflare Workers | [Workers OpenTelemetry](https://axiom.co/docs/guides/opentelemetry-cloudflare-workers.md) |
-| AWS Lambda | [AWS Lambda](https://axiom.co/docs/send-data/aws-lambda.md) |
-| Kubernetes or a Collector | [Kubernetes](https://axiom.co/docs/send-data/kubernetes.md) |
-
-For a runtime not listed, start at [methods for sending data](https://axiom.co/docs/send-data/methods.md), then the matching OpenTelemetry language page. Replace every `AXIOM_DOMAIN`, `API_TOKEN`, and `DATASET_NAME` in those guides with the edge URL, secret variable, and signal dataset from Phase 3. Their examples often show only traces and put the token in source; keep all enabled signals and the credential rules in this skill.
+Read [reference/runtime-guides.md](reference/runtime-guides.md) before editing each runtime. Follow its current guide for packages, bootstrap hooks, and platform-specific lifecycle behavior.
 
 - Runnable services own SDK initialization; shared libraries depend on OpenTelemetry APIs only.
 - Establish one provider/bootstrap path per process. Do not add a second global SDK over an existing one.
@@ -278,5 +195,7 @@ Do not create dashboards, monitors, alerts, or unrelated refactors during onboar
 
 ## Reference
 
+- [reference/axiom-setup.md](reference/axiom-setup.md) — datasets, regions, credentials in exporter configuration, endpoints, and correlations. Read at Phase 3.
+- [reference/runtime-guides.md](reference/runtime-guides.md) — runtime documentation and setup guidance. Read before editing each runtime at Phase 4.
 - `reference/spans.md` — span, event, and metric-attribute rules. Read before editing instrumentation.
 - `reference/verify.md` — canary, queries, and export failures. Read at Phase 5 and after each business signal.
