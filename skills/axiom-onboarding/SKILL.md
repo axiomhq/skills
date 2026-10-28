@@ -34,9 +34,9 @@ For each runnable service:
 2. Preserve or establish exactly one OpenTelemetry SDK bootstrap.
 3. Configure stable resource identity and context propagation.
 4. Export each enabled signal to the correct Axiom dataset.
-5. Add a small number of code-derived business signals.
-6. Run the service's own checks and exercise a real operation.
-7. Query Axiom and reach verification level 4 for every enabled signal.
+5. Run the service's own checks and exercise a real operation.
+6. Query Axiom and reach verification level 4 for every enabled signal.
+7. Add a small number of code-derived business signals, then confirm those signals are queryable.
 
 Do not claim “Axiom ingestion verified” from successful startup, valid configuration, a 2xx response, or exporter diagnostics alone. Level 5 is a production sign-off, not the requirement for finishing onboarding.
 
@@ -173,6 +173,25 @@ In SDK or Collector code, use normal header names and values: `Authorization: Be
 
 ### SDK ownership and startup
 
+Read the current guide for the detected runtime and follow its packages, bootstrap file, and startup hook. Do not copy an example from memory.
+
+| Runtime | Read before editing |
+|---|---|
+| Node.js | [OpenTelemetry Node.js](https://axiom.co/docs/guides/opentelemetry-nodejs.md) |
+| Next.js | [OpenTelemetry Next.js](https://axiom.co/docs/guides/opentelemetry-nextjs.md) |
+| Nuxt | [OpenTelemetry Nuxt.js](https://axiom.co/docs/guides/opentelemetry-nuxtjs.md) |
+| Python | [OpenTelemetry Python](https://axiom.co/docs/guides/opentelemetry-python.md) |
+| Django | [OpenTelemetry Django](https://axiom.co/docs/guides/opentelemetry-django.md) |
+| Go | [OpenTelemetry Go](https://axiom.co/docs/guides/opentelemetry-go.md) |
+| Java | [OpenTelemetry Java](https://axiom.co/docs/guides/opentelemetry-java.md) |
+| .NET | [OpenTelemetry .NET](https://axiom.co/docs/guides/opentelemetry-dotnet.md) |
+| Ruby | [OpenTelemetry Ruby](https://axiom.co/docs/guides/opentelemetry-ruby.md) |
+| Cloudflare Workers | [Workers OpenTelemetry](https://axiom.co/docs/guides/opentelemetry-cloudflare-workers.md) |
+| AWS Lambda | [AWS Lambda](https://axiom.co/docs/send-data/aws-lambda.md) |
+| Kubernetes or a Collector | [Kubernetes](https://axiom.co/docs/send-data/kubernetes.md) |
+
+For a runtime not listed, start at [methods for sending data](https://axiom.co/docs/send-data/methods.md), then the matching OpenTelemetry language page. Replace every `AXIOM_DOMAIN`, `API_TOKEN`, and `DATASET_NAME` in those guides with the edge URL, secret variable, and signal dataset from Phase 3. Their examples often show only traces and put the token in source; keep all enabled signals and the credential rules in this skill.
+
 - Runnable services own SDK initialization; shared libraries depend on OpenTelemetry APIs only.
 - Establish one provider/bootstrap path per process. Do not add a second global SDK over an existing one.
 - Initialize before instrumented libraries load, using the framework's documented hook.
@@ -187,7 +206,8 @@ Set:
 - `service.name`: stable logical name shared by replicas;
 - `service.namespace`: common system or product name when useful;
 - `service.version`: release, build, or commit identifier;
-- `deployment.environment.name`: such as `production`, `staging`, or `development`.
+- `deployment.environment.name`: such as `production`, `staging`, or `development`;
+- `vcs.repository.url.full` on server processes: the repository's full remote URL. Read it from the repository remote and omit it when that remote is unknown.
 
 Detect or generate `service.instance.id` per running instance; never copy one value across replicas.
 
@@ -203,106 +223,35 @@ Use framework auto-instrumentation as the baseline, then add only what the appli
 
 Do not create wrapper APIs such as `sendAxiomSpan` or `recordAxiomMetric`. Application code uses native OpenTelemetry APIs so instrumentation stays portable.
 
-### Span and event design
-
-Follow the current [semantic conventions](https://opentelemetry.io/docs/specs/semconv/) before inventing attribute names. Obtain each tracer, meter, and logger with an instrumentation-scope name and version: a library's fully qualified name, or the application module such as `CheckoutService`. Do not use `service.name` as the scope name.
-
-Create a span only for an operation that has duration and diagnostic value, especially public operations, handlers, and calls that cross a process or can fail. Use a span event for a point-in-time checkpoint, state change, or exception. Use a span attribute for a property of the whole operation. Use a normal log for unstructured diagnostics.
-
-For each custom span:
-
-- Set one span kind: `SERVER`, `CLIENT`, `PRODUCER`, `CONSUMER`, or `INTERNAL`.
-- Name it `{action} {target}`, such as `GET /orders/{id}` or `send orders_queue`. Keep the name low-cardinality, include only values also stored as attributes, and use a documented fallback or truncation when a value is missing or too long.
-- Cover the logical operation. Leave physical network retries and serialization to the library that performs them, recording extra detail as events rather than nested spans.
-- Make the span current for its duration so child spans and logs inherit its context, then end it on every exit path.
-- Put attributes needed by a sampler on the span at creation. Compute expensive or verbose attributes only when the span is recording.
-- Leave span status unset when the operation succeeds. On an unhandled failure, set status to `Error`, set `error.type`, record the exception, and use a non-sensitive status description. Do not record an error that was retried or handled inside the operation. Do not treat every protocol status, such as HTTP 404, as an error without operation context.
-
-Keep the SDK's parent-based sampler so an upstream sampling decision propagates. Use parent-based, always-on while proving a new integration. For high-volume production, choose a documented parent-based ratio or gateway tail sampling; do not sample each service independently. Attributes added after span creation cannot affect the sampling decision.
+Read `reference/spans.md` before adding or changing a span, span event, log attribute, or metric.
 
 ### Shutdown
 
 Install bounded lifecycle handling appropriate to the runtime. Short-lived CLIs, jobs, and tests must flush before normal exit and shut providers down once at process termination. For reusable serverless processes, force-flush at invocation boundaries only when the runtime requires it; do not shut down a provider after every invocation. Do not claim delivery guarantees for crashes, `SIGKILL`, or platform freezes.
 
-## Phase 5: Add business telemetry
+## Phase 5: Verify the enabled signals
 
-Read the code and select one to three critical workflows per service. Instrument only operations whose outcome answers an operational or product question.
-
-For each proposed metric, establish:
-
-- name, unit, and instrument type;
-- exact recording point;
-- question it answers;
-- allowed attributes and finite value sets;
-- plausible series count;
-- sensitive or unbounded values explicitly excluded.
-
-Good dimensions are bounded values such as `outcome`, `payment_provider`, or `job_type`. Do not use raw URLs, user/session/request/trace IDs, emails, timestamps, free text, arbitrary headers, or entity IDs as metric attributes or span names. Use route templates and bounded enums.
-
-Inspect auto-instrumented as well as custom metric streams. Remove unsafe attributes with Views where supported, configure an appropriate SDK cardinality limit, and verify that `otel.metric.overflow=true` is absent or its impact is explicitly understood.
-
-Put entity identifiers only in traces or structured logs when they are necessary, non-sensitive, and approved. Use trace/log correlation rather than trace IDs as metric labels.
-
-Do not capture raw bodies, prompts, tool content, SQL parameters, authorization or cookie headers, URL query strings, file contents, stack locals, source code, payment/health data, or arbitrary serialized objects by default.
-
-Avoid duplicate network/framework spans already emitted by auto-instrumentation. Use span events or structured logs for additional detail.
-
-## Phase 6: Verify
+Prove logs, traces, and metrics are queryable before adding custom business telemetry.
 
 Verify in increasing levels of evidence and report the highest level reached for each service:
 
 1. **Configured**: one bootstrap, correct resources, secrets externalized, correct signal endpoints/headers, valid Collector pipelines, and repository checks pass.
 2. **Shape verified**: an in-memory exporter or local OTLP receiver sees expected spans, logs, metrics, resource attributes, and bounded dimensions.
 3. **Pipeline verified**: exporter or Collector diagnostics show accepted and sent data with no unexplained rejection, drop, queue-full, or permanent failure. Inspect OTLP partial-success responses.
-4. **Axiom verified**: bounded queries find a fresh unique marker in enabled logs and traces datasets and a fresh expected value change for each enabled metric, all with the expected `service.name`. This completes onboarding.
+4. **Axiom verified**: bounded queries find a fresh unique marker in enabled logs and traces datasets and a fresh expected value change for each enabled metric, all with the expected `service.name`. This proves the export path. Finish the service in Phase 6.
 5. **Production sign-off**: log and trace IDs correlate, cross-service propagation works where applicable, final pre-shutdown telemetry arrives, restart behavior is sane, and rollback is documented. Do this when the user asks for a production sign-off.
 
-### Canary procedure
+Read `reference/verify.md` and run that canary. Query logs and traces with APL through `queryDataset`. Query metrics with MPL through `queryMetrics`. Never send MPL or a metrics dataset to `queryDataset`. When a query is empty or export fails, use the queries and failure table there.
 
-For every service:
+If query credentials are unavailable, report “pipeline verified, backend unverified.” If any enabled signal is missing, onboarding remains incomplete for that service. Do not add custom business metrics while that is true.
 
-1. Generate a fresh random, non-sensitive marker.
-2. Run the normal build/test command.
-3. Start or invoke the real service through its documented command.
-4. Exercise one instrumented request, job, or CLI operation carrying the marker as a safe span/log attribute.
-5. Keep the process alive through its export interval or invoke graceful flush.
-6. Inspect exporter/Collector diagnostics and partial-success responses.
-7. Query logs and traces with APL through `queryDataset`. Query metrics with MPL through `queryMetrics`. Never send MPL or a metrics dataset to `queryDataset`.
-8. Confirm resource identity, expected signal shape, no unexplained metric overflow, and log-to-trace correlation.
+## Phase 6: Add business telemetry
 
-Logs and traces, after substituting the real dataset, service, marker field, and marker:
+Start this phase only after the representative service reaches level 4 for every enabled signal.
 
-```apl
-['<logs-or-traces>']
-| where _time > ago(15m)
-| where ['service.name'] == '<service>' and ['<marker-field>'] == '<marker>'
-| take 5
-```
+Read the code and select one to three critical workflows per service. Instrument only operations whose outcome answers an operational or product question. Follow `reference/spans.md` for attributes, cardinality, and what must stay out of telemetry.
 
-Metrics, after listing the real metric name. Resource attributes arrive as tags:
-
-```mpl
-`<metrics-dataset>`:`<metric.name>`[15m..]
-| where `service.name` == "<service>"
-| align to 1m using count
-```
-
-If the metrics query names the wrong metric or tag, read [MPL](https://axiom.co/docs/mpl/introduction.md) and the dataset's metric list. Do not add the random marker as a metric attribute.
-
-### When export fails
-
-| Evidence | Fix |
-|---|---|
-| Logs or traces arrive, metrics do not | The metrics request used `x-axiom-dataset` or an events dataset. Use `x-axiom-metrics-dataset` and `otel:metrics:v1`. |
-| 401 or 403 | The token, organization, dataset scope, or edge does not match. A token from another region or organization is not valid here. |
-| HTTP 200 with `partial_success` | Read the rejected-point reasons. A 200 does not mean every metric point was stored. |
-| 413 or a batch drop | The metrics batch exceeds the documented uncompressed limit. Lower the Collector or SDK batch size. |
-| 400 and a record-size error | A single log or span is too large. Remove the oversized attribute or body. |
-| Nothing appears, but export succeeded | Compare `_time` and `_sysTime`, then retry the query for a short bounded interval. |
-
-Use the actual field, span, and metric names. Retry a missing backend result for a short bounded interval; never loop indefinitely. For a production sign-off, also exercise graceful shutdown and verify telemetry emitted immediately before exit.
-
-If query credentials are unavailable, report “pipeline verified, backend unverified.” If any enabled signal is missing, onboarding remains incomplete for that service.
+Repeat the canary in `reference/verify.md` for each new signal and confirm it is queryable before moving to the next service.
 
 ## Phase 7: Hand off
 
@@ -322,3 +271,8 @@ Report:
 If a temporary organization was provisioned, follow `axiom-agent-created-orgs` for the claim URL, expiry, security warning, and deletion behavior. Never include its token.
 
 Do not create dashboards, monitors, alerts, or unrelated refactors during onboarding unless the user asks. Recommend the relevant Axiom skill as a separate next step after telemetry is verified.
+
+## Reference
+
+- `reference/spans.md` — span, event, and metric-attribute rules. Read before editing instrumentation.
+- `reference/verify.md` — canary, queries, and export failures. Read at Phase 5 and after each business signal.
