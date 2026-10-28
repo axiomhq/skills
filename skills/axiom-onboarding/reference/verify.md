@@ -28,13 +28,15 @@ Logs and traces, after substituting the real dataset, service, marker field, and
 
 Metrics cannot carry the random marker. Query once before exercising the operation and record the result. After the export interval, query again over a window that starts at that exercise. The second result must show the change that operation should produce. A count of samples over 15 minutes is not that proof: any other instance with the same `service.name` can add samples.
 
-Use the aggregation that matches the instrument: `sum` for a counter, a histogram aggregation for a histogram, and `last` or `avg` for a gauge. Resource attributes arrive as tags. Replace `sum` below when the instrument is not a counter:
+Read the metric's type and temporality from the dataset metric list. For a cumulative counter, compare the latest value with the baseline. Summing cumulative samples `10, 10, 11` yields `31` when the increase was `1`. For a delta counter, sum the samples in the window. For a histogram, use `interpolate_cumulative_histogram` or `interpolate_delta_histogram` to match its temporality. For a gauge, compare `last`. Resource attributes arrive as tags.
 
 ```mpl
 `<metrics-dataset>`:`<metric.name>`[5m..]
 | where `service.name` == "<service>"
-| align to 1m using sum
+| align to 1m using last
 ```
+
+Use `sum` instead of `last` only for a delta counter.
 
 If the metrics query names the wrong metric, tag, or aggregation, read [MPL](https://axiom.co/docs/mpl/introduction.md) and the dataset's metric list. Do not add the random marker as a metric attribute.
 

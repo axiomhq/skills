@@ -140,10 +140,10 @@ Load the deployment the way `axiom-ingest` does, without printing the token. Cre
 
 ```bash
 curl "${H[@]}" -H 'Content-Type: application/json' -X POST "$url/v2/datasets" \
-  -d '{"name":"<prefix>-logs","kind":"otel:logs:v1","description":"<why>"}'
+  -d '{"name":"<prefix>-logs","kind":"otel:logs:v1","description":"<why>","edgeDeployment":"<edge>"}'
 ```
 
-Repeat with `otel:traces:v1` and `otel:metrics:v1`. Read `edgeDeploymentUrl` from each response. All three URLs must match. `dataset license limit exceeded` means stop and ask which existing datasets to reuse. A temporary organization has very little dataset capacity, so create only these three.
+`<edge>` is the deployment chosen for this environment, such as `US East 1 (AWS)` or `EU Central 1 (AWS)`. Read [edge deployments](https://axiom.co/docs/reference/edge-deployments.md) when the name is not one of those. Repeat with `otel:traces:v1` and `otel:metrics:v1`. Each response's `edgeDeployment` and `edgeDeploymentUrl` must match that choice. A 400 for an unsupported edge means the name is wrong or the organization does not have that edge. The edge cannot be changed after creation. `dataset license limit exceeded` means stop and ask which existing datasets to reuse. A temporary organization has very little dataset capacity, so create only these three.
 
 There is no documented correlation-group API. After the datasets exist, tell the user to open **Datasets → Correlations → New correlation group** and select them. Each log event needs top-level `trace_id` and `span_id`. Keep the spans in the traces dataset. If the logs dataset also has trace fields such as `parent_span_id`, the console searches the logs dataset for the trace and reports that it cannot find it.
 
@@ -156,14 +156,16 @@ Every signal request also sends `Authorization: Bearer <API_TOKEN>` from the dep
 In `OTEL_EXPORTER_OTLP_*_HEADERS`, separate headers with commas and use `=`, not HTTP colon syntax:
 
 ```bash
-OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://EDGE/v1/logs
-OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://EDGE/v1/traces
-OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://EDGE/v1/metrics
-OTEL_EXPORTER_OTLP_LOGS_HEADERS=Authorization=Bearer ${AXIOM_TOKEN},x-axiom-dataset=${LOGS_DATASET}
-OTEL_EXPORTER_OTLP_TRACES_HEADERS=Authorization=Bearer ${AXIOM_TOKEN},x-axiom-dataset=${TRACES_DATASET}
-OTEL_EXPORTER_OTLP_METRICS_HEADERS=Authorization=Bearer ${AXIOM_TOKEN},x-axiom-metrics-dataset=${METRICS_DATASET}
+export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+export OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://EDGE/v1/logs
+export OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://EDGE/v1/traces
+export OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://EDGE/v1/metrics
+export OTEL_EXPORTER_OTLP_LOGS_HEADERS="Authorization=Bearer ${AXIOM_TOKEN},x-axiom-dataset=${LOGS_DATASET}"
+export OTEL_EXPORTER_OTLP_TRACES_HEADERS="Authorization=Bearer ${AXIOM_TOKEN},x-axiom-dataset=${TRACES_DATASET}"
+export OTEL_EXPORTER_OTLP_METRICS_HEADERS="Authorization=Bearer ${AXIOM_TOKEN},x-axiom-metrics-dataset=${METRICS_DATASET}"
 ```
+
+Export and quote these assignments. Without `export`, a process started from that shell does not receive them. An unquoted `Bearer` value splits at the space, and the shell prints the token while trying to run it as a command.
 
 In SDK or Collector code, use normal header names and values: `Authorization: Bearer <token>` and `x-axiom-dataset: <name>`. Collector `otlphttp` takes the edge base URL and appends the signal path. SDK exporters usually take the full signal URL. Read the installed exporter and make `/v1/{signal}` appear exactly once.
 
