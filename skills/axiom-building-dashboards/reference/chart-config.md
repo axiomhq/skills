@@ -123,7 +123,7 @@ scripts/axiom-api prod POST /annotations '{
   }'
 ```
 
-Or via GitHub Actions: `axiomhq/annotation-action@v0.1.0`.
+Or via GitHub Actions: `axiomhq/annotation-action@v0.2.0`.
 
 ## Comparison Period
 
