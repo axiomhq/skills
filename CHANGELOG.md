@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.1](https://github.com/axiomhq/skills/compare/v1.2.0...v1.2.1) (2026-10-29)
+
+
+### Fixes
+
+* **sre:** fail Axiom helpers on HTTP errors ([2cbcca2](https://github.com/axiomhq/skills/commit/2cbcca2965ea15649a378b5fa8611937853241c3))
+* **sre:** fail Axiom helpers on HTTP errors ([ec97058](https://github.com/axiomhq/skills/commit/ec97058876ded8d74ad417d7ce4ffd8b0c62120e)), closes [#111](https://github.com/axiomhq/skills/issues/111)
+
 ## [1.2.0](https://github.com/axiomhq/skills/compare/v1.1.2...v1.2.0) (2026-10-28)
 
 
