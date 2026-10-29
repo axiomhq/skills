@@ -1,4 +1,4 @@
-# axiom-agent-created-orgs
+# axiom-create-org
 
 Lets an agent provision a temporary Axiom organization with `POST https://api.axiom.co/v2/orgs/provision`, no account or token needed.
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Setup axiom-cost-control skill
+# Setup axiom-control-costs skill
 # Usage: scripts/setup
 #
 # This script:
 #   1. Checks for required tools (curl, jq, bc)
 #   2. Checks for ~/.axiom.toml configuration
-#   3. Checks for dependent skills (axiom-sre, axiom-building-dashboards)
+#   3. Checks for dependent skills (axiom-sre, axiom-build-dashboard)
 #   4. Makes scripts executable
 
 set -euo pipefail
@@ -13,7 +13,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "$SCRIPT_DIR/lib/skill-paths.sh"
 
-echo "=== axiom-cost-control Setup ==="
+echo "=== axiom-control-costs Setup ==="
 echo ""
 
 # --- Check required tools ---
@@ -53,7 +53,7 @@ echo ""
 echo "[3/4] Checking dependent skills..."
 
 AXIOM_QUERY="$(resolve_skill_script sre axiom-query "${AXIOM_QUERY:-}")"
-DASHBOARD_CREATE="$(resolve_skill_script axiom-building-dashboards dashboard-create "${DASHBOARD_CREATE:-}")"
+DASHBOARD_CREATE="$(resolve_skill_script axiom-build-dashboard dashboard-create "${DASHBOARD_CREATE:-}")"
 
 if [[ -x "$AXIOM_QUERY" ]]; then
     echo "✓ axiom-sre skill found"
@@ -64,10 +64,10 @@ else
 fi
 
 if [[ -x "$DASHBOARD_CREATE" ]]; then
-    echo "✓ axiom-building-dashboards skill found"
+    echo "✓ axiom-build-dashboard skill found"
 else
     echo "⚠ dashboard-create not found at $DASHBOARD_CREATE (optional, needed for deploy-dashboard)"
-    echo "  Install: amp skill install axiom-building-dashboards"
+    echo "  Install: amp skill install axiom-build-dashboard"
 fi
 
 # --- Check Axiom config ---

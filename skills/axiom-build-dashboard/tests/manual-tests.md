@@ -12,7 +12,7 @@ Before testing:
 
 1. Run setup (checks config):
    ```bash
-   cd skills/axiom-building-dashboards
+   cd skills/axiom-build-dashboard
    ./scripts/setup
    ```
 
@@ -33,7 +33,7 @@ Before testing:
 **Prompt:** "Help me build a dashboard"
 
 **Expected behavior:**
-- Skill should activate (look for axiom-building-dashboards patterns)
+- Skill should activate (look for axiom-build-dashboard patterns)
 - Agent should ask intake questions: audience, scope, datasets, signals
 
 **Validation:**
@@ -247,7 +247,7 @@ Verify metrics charts set BOTH `query.apl` (MPL pipeline) and `query.metricsData
 
 ### 7.1 dashboard-new
 ```bash
-cd skills/axiom-building-dashboards
+cd skills/axiom-build-dashboard
 ./scripts/dashboard-new "Test Dashboard" "synthetic_http" /tmp/test-new.json
 cat /tmp/test-new.json | jq .
 ```

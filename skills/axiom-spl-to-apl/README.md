@@ -55,4 +55,4 @@ Get your org_id from Settings → Organization. For the token, create a scoped *
 ## Related Skills
 
 - `axiom-sre` - For running translated queries (includes interactive setup)
-- `axiom-building-dashboards` - For creating dashboards from translated queries
+- `axiom-build-dashboard` - For creating dashboards from translated queries

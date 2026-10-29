@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests for TOML parsing logic used across building-dashboards scripts.
+# Tests for TOML parsing logic used across axiom-build-dashboard scripts.
 #
 # Covers extract_value (from axiom-api, dashboard-link) and
 # the grep-based deployment listing in setup.

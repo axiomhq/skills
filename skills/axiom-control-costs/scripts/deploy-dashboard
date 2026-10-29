@@ -79,8 +79,8 @@ DASHBOARD_JSON=$(cat "$TEMPLATE" | \
     sed "s/axiom-audit/$AUDIT_DATASET/g" | \
     jq --arg name "$DASHBOARD_NAME" '.name = $name | .owner = "X-AXIOM-EVERYONE"')
 
-# Create the dashboard using axiom-building-dashboards skill
-DASHBOARD_CREATE="$(resolve_skill_script axiom-building-dashboards dashboard-create "${DASHBOARD_CREATE:-}")"
+# Create the dashboard using axiom-build-dashboard skill
+DASHBOARD_CREATE="$(resolve_skill_script axiom-build-dashboard dashboard-create "${DASHBOARD_CREATE:-}")"
 
 if [[ -x "$DASHBOARD_CREATE" ]]; then
     # Write temp file for dashboard-create
@@ -89,8 +89,8 @@ if [[ -x "$DASHBOARD_CREATE" ]]; then
     RESULT=$("$DASHBOARD_CREATE" "$DEPLOYMENT" "$TMPFILE")
     rm -f "$TMPFILE"
 else
-    echo "Error: axiom-building-dashboards skill not found. Install it first:"
-    echo "  amp skill install axiom-building-dashboards"
+    echo "Error: axiom-build-dashboard skill not found. Install it first:"
+    echo "  amp skill install axiom-build-dashboard"
     exit 1
 fi
 

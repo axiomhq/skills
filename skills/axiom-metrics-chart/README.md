@@ -64,4 +64,4 @@ full reference and input schema.
 
 ## Related Skills
 
-- [`axiom-building-dashboards`](../axiom-building-dashboards/) - for persistent dashboards instead of ad-hoc terminal charts
+- [`axiom-build-dashboard`](../axiom-build-dashboard/) - for persistent dashboards instead of ad-hoc terminal charts

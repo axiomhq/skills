@@ -1,6 +1,6 @@
 # Cost Analysis Report Template
 
-Use this template when presenting findings from the axiom-controlling-costs workflow.
+Use this template when presenting findings from the axiom-control-costs workflow.
 
 ---
 
