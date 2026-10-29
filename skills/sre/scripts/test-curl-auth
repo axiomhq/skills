@@ -214,4 +214,46 @@ if "$SCRIPT_DIR/curl-auth" axiom test "https://eu-central-1.aws.edge.axiom.co/v1
 fi
 echo "OK: unrelated primary destinations rejected before requests"
 
+echo "=== HTTP errors fail the Axiom helpers ==="
+# A stub that always fails would pass without --fail-with-body. Fail only when
+# that flag is present, and still return the status code axiom-api reads.
+cat > "$MOCK_CURL" << 'EOF'
+#!/bin/bash
+fail=0
+write_code=0
+body_path=""
+body='{"code":404,"message":"dataset not found: no-such-dataset"}'
+args=("$@")
+for ((i=0; i<${#args[@]}; i++)); do
+  case "${args[$i]}" in
+    --fail-with-body) fail=1 ;;
+    -o) body_path="${args[$((i+1))]}" ;;
+    -w) write_code=1 ;;
+  esac
+done
+if [[ "$write_code" -eq 1 ]]; then
+  printf '%s' "$body" > "$body_path"
+  printf '404'
+else
+  printf '%s\n' "$body"
+fi
+if [[ "$fail" -eq 1 ]]; then
+  exit 22
+fi
+exit 0
+EOF
+chmod +x "$MOCK_CURL"
+
+set +e
+api_out=$("$SCRIPT_DIR/axiom-api" test GET "/v1/datasets/no-such-dataset" 2>"$TEST_DIR/api.err")
+api_status=$?
+discover_out=$("$SCRIPT_DIR/axiom-metrics-discover" test no-such-dataset metrics 2>"$TEST_DIR/discover.err")
+discover_status=$?
+set -e
+[[ "$api_status" -eq 22 ]] || { echo "FAIL: axiom-api HTTP error exited $api_status"; exit 1; }
+[[ "$api_out" == *'"code": 404'* || "$api_out" == *'"code":404'* ]] || { echo "FAIL: axiom-api hid the error body: $api_out"; exit 1; }
+[[ "$discover_status" -eq 22 ]] || { echo "FAIL: axiom-metrics-discover HTTP error exited $discover_status"; exit 1; }
+[[ "$discover_out" == *"dataset not found: no-such-dataset"* ]] || { echo "FAIL: axiom-metrics-discover hid the error body: $discover_out"; exit 1; }
+echo "OK: Axiom HTTP errors keep their body and exit 22"
+
 echo "=== All tests passed ==="
