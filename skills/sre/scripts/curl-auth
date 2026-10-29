@@ -172,7 +172,7 @@ case "$TOOL" in
         ;;
     
     axiom)
-        curl "${CURL_ARGS[@]}" \
+        curl "${CURL_ARGS[@]}" --fail-with-body \
             -H "Authorization: Bearer $AXIOM_TOKEN" \
             -H "X-Axiom-Org-Id: $AXIOM_ORG_ID" \
             -H "Content-Type: application/json" \

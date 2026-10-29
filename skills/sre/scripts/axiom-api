@@ -76,7 +76,7 @@ if [[ "$ENDPOINT" == /v1/query/* || "$ENDPOINT" == /v1/datasets/_apl* ]]; then
       continue
     fi
     cat "$RESP_BODY"
-    exit 0
+    exit 22
   done
 fi
 
