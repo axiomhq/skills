@@ -13,7 +13,7 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 | [axiom-controlling-costs](skills/axiom-controlling-costs/) | Analyze query patterns to find unused data and optimize Axiom costs |
 | [axiom-metrics-chart](skills/axiom-metrics-chart/) | Render saved metrics v2/v3 JSON as line charts; zero-dependency ASCII by default, optional gnuplot PNG/SVG/sixel |
 | [axiom-ingest](skills/axiom-ingest/) | Send data to a new or existing dataset, provisioning a temporary org when none is configured |
-| [axiom-agent-created-orgs](skills/axiom-agent-created-orgs/) | Provision a temporary Axiom org via API, store its one-time token, and hand off the claim URL |
+| [axiom-create-org](skills/axiom-create-org/) | Provision a temporary Axiom org via API, store its one-time token, and hand off the claim URL |
 
 ## Requirements
 

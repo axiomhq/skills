@@ -1,9 +1,9 @@
 ---
-name: axiom-agent-created-orgs
+name: axiom-create-org
 description: Provision a temporary Axiom organization with one unauthenticated API call, store its one-time token securely, and hand the claim URL to the user. Use when an agent needs an Axiom org and the user has none configured, or asks for a new or throwaway one.
 ---
 
-# axiom-agent-created-orgs
+# axiom-create-org
 
 `POST https://api.axiom.co/v2/orgs/provision` creates a real Axiom organization and returns a full-access API token. The org is deleted after 24 hours unless a human opens its claim URL.
 
