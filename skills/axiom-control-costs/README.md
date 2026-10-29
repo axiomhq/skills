@@ -1,4 +1,4 @@
-# axiom-controlling-costs
+# axiom-control-costs
 
 Analyzes Axiom query patterns to find unused data, then builds dashboards and monitors for cost optimization.
 
@@ -18,7 +18,7 @@ npx skills add axiomhq/skills
 ## Prerequisites
 
 - `axiom-sre` skill (for API access)
-- `axiom-building-dashboards` skill (for dashboard deployment)
+- `axiom-build-dashboard` skill (for dashboard deployment)
 - Access to `axiom-audit` and `axiom-history` datasets
 - Tools: `jq`, `bc`
 

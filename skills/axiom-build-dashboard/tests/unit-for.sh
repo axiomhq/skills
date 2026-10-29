@@ -2,7 +2,7 @@
 # tests/unit-for.sh — golden tests for scripts/metrics/unit-for
 #
 # Run from anywhere:
-#   skills/axiom-building-dashboards/tests/unit-for.sh
+#   skills/axiom-build-dashboard/tests/unit-for.sh
 
 set -euo pipefail
 

@@ -1,4 +1,4 @@
-# axiom-building-dashboards
+# axiom-build-dashboard
 
 Designs and builds Axiom dashboards via API. Covers chart types, APL patterns, SmartFilters, layout, and configuration options.
 

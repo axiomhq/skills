@@ -8,9 +8,9 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 | ---------------------------------------------- | ---------------------------------------------- |
 | [axiom-sre](skills/sre/)                       | Hypothesis-driven SRE investigation with Axiom |
 | [axiom-spl-to-apl](skills/axiom-spl-to-apl/)               | Translate Splunk SPL queries to Axiom APL      |
-| [axiom-building-dashboards](skills/axiom-building-dashboards/) | Design and build Axiom dashboards from intent, templates, Splunk migrations, and metrics/MPL chart payloads |
+| [axiom-build-dashboard](skills/axiom-build-dashboard/) | Design and build Axiom dashboards from intent, templates, Splunk migrations, and metrics/MPL chart payloads |
 | [axiom-alerting](skills/axiom-alerting/) | Unified monitor + notifier management for Axiom alerting via the v2 API |
-| [axiom-controlling-costs](skills/axiom-controlling-costs/) | Analyze query patterns to find unused data and optimize Axiom costs |
+| [axiom-control-costs](skills/axiom-control-costs/) | Analyze query patterns to find unused data and optimize Axiom costs |
 | [axiom-metrics-chart](skills/axiom-metrics-chart/) | Render saved metrics v2/v3 JSON as line charts; zero-dependency ASCII by default, optional gnuplot PNG/SVG/sixel |
 | [axiom-ingest](skills/axiom-ingest/) | Send data to a new or existing dataset, provisioning a temporary org when none is configured |
 | [axiom-create-org](skills/axiom-create-org/) | Provision a temporary Axiom org via API, store its one-time token, and hand off the claim URL |
@@ -19,7 +19,7 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 
 - **jq** - JSON processor (`brew install jq` or `apt install jq`)
 - **curl** - HTTP client (usually pre-installed)
-- **bc** - Calculator, needed by axiom-controlling-costs (`brew install bc` or `apt install bc`)
+- **bc** - Calculator, needed by axiom-control-costs (`brew install bc` or `apt install bc`)
 - **timeout** or **gtimeout** - Required by SRE scripts (`brew install coreutils` on macOS)
 
 ## MCP Server
@@ -87,7 +87,7 @@ To update, run `gemini extensions update axiom`, then restart Gemini CLI. See th
 npx skills add axiomhq/skills
 ```
 
-This installs all skills. Skills have dependencies on each other (e.g., `axiom-controlling-costs` depends on `axiom-sre` and `axiom-building-dashboards`), so installing all is recommended.
+This installs all skills. Skills have dependencies on each other (e.g., `axiom-control-costs` depends on `axiom-sre` and `axiom-build-dashboard`), so installing all is recommended.
 
 For SRE, run `scripts/init` from the installed skill directory; its location depends on your agent or plugin installer. From a checkout of this repository:
 

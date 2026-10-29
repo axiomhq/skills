@@ -19,12 +19,12 @@ jobs:
           persist-credentials: false
       - name: Test dashboards
         run: |
-          for test in skills/axiom-building-dashboards/tests/*.sh; do
+          for test in skills/axiom-build-dashboard/tests/*.sh; do
             bash "$test"
           done
-          bash skills/axiom-building-dashboards/scripts/test-toml-parsing
+          bash skills/axiom-build-dashboard/scripts/test-toml-parsing
       - name: Test cost analysis
-        run: bash skills/axiom-controlling-costs/scripts/test-ast-parser
+        run: bash skills/axiom-control-costs/scripts/test-ast-parser
       - name: Test SRE
         run: |
           for test in skills/sre/scripts/test-*; do

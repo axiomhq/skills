@@ -1,5 +1,5 @@
 ---
-name: axiom-controlling-costs
+name: axiom-control-costs
 description: Analyzes Axiom query patterns to find unused data, then builds dashboards and monitors for cost optimization. Use when asked to reduce Axiom costs, find unused columns or field values, identify data waste, or track ingest spend.
 ---
 
@@ -12,10 +12,10 @@ Dashboards, monitors, and waste identification for Axiom usage optimization.
 1. Load required skills:
    ```
    skill: axiom-sre
-   skill: axiom-building-dashboards
+   skill: axiom-build-dashboard
    ```
    
-   Building-dashboards provides: `dashboard-list`, `dashboard-get`, `dashboard-create`, `dashboard-update`, `dashboard-delete`
+   axiom-build-dashboard provides: `dashboard-list`, `dashboard-get`, `dashboard-create`, `dashboard-update`, `dashboard-delete`
 
 2. Find the audit dataset. Try `axiom-audit` first:
    ```apl

@@ -87,7 +87,7 @@ To add a horizontal contract line to time series:
 
 ### Adjusting Time Range
 
-Default: 30 days. Adjust via the dashboard `timeWindowStart`/`timeWindowEnd` (top-level fields) or the dashboard time picker. Per-panel time override is UI-only — there is no API field for it. (`overrideDashboardTimeRange` is not a real chart-create option: it is silently dropped on data charts and rejected on `Note`. See [axiom-building-dashboards § Fields Rejected on Create](../../axiom-building-dashboards/reference/chart-config.md#fields-rejected-on-create-cross-chart).)
+Default: 30 days. Adjust via the dashboard `timeWindowStart`/`timeWindowEnd` (top-level fields) or the dashboard time picker. Per-panel time override is UI-only — there is no API field for it. (`overrideDashboardTimeRange` is not a real chart-create option: it is silently dropped on data charts and rejected on `Note`. See [axiom-build-dashboard § Fields Rejected on Create](../../axiom-build-dashboard/reference/chart-config.md#fields-rejected-on-create-cross-chart).)
 
 ### Color Scheme
 

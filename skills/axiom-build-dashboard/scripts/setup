@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Setup building-dashboards skill
+# Setup axiom-build-dashboard skill
 # Usage: scripts/setup
 #
 # This script:
@@ -11,7 +11,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "=== building-dashboards Setup ==="
+echo "=== axiom-build-dashboard Setup ==="
 echo ""
 
 # --- Check required tools ---
