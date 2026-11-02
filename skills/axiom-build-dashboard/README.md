@@ -6,7 +6,7 @@ Designs and builds Axiom dashboards via API. Covers chart types, APL patterns, S
 
 - **Dashboard Design** - Blueprint structure: at-a-glance stats, trends, breakdowns, evidence
 - **Chart Types** - Statistic, TimeSeries, Table, Pie, LogStream, Heatmap, SmartFilter, Note
-- **APL + Metrics/MPL Patterns** - Golden signals, percentiles, error rates, and metrics chart queries via `query.apl`
+- **APL + Metrics/MPL Patterns** - Golden signals, percentiles, error rates, and metrics chart queries via `query.apl`, plus several queries on one TimeSeries via `queries`
 - **Layout Composition** - Grid-based layouts, plus collapsible sections via `dashboard-assemble --section`
 - **Deployment** - Scripts to validate, create, update, and manage dashboards
 

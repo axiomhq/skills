@@ -50,7 +50,7 @@ jq '
 ' grafana-dashboard.json
 ```
 
-**Multi-target panels are normal.** A single panel can have several `targets` (e.g. one for `total`, one for `errors`, so the panel can compute a ratio in Grafana's transform layer). Iterate `targets[]`, not `targets[0]`. Translate every entry. Dropping the second target loses half the panel.
+**Multi-target panels are normal.** A single panel can have several `targets` (e.g. one for `total`, one for `errors`, so the panel can compute a ratio in Grafana's transform layer). Iterate `targets[]`, not `targets[0]`. Translate every entry. Dropping the second target loses half the panel. When the targets are overlaid on the panel, each becomes one entry in the chart's `queries[]`, named from its `legendFormat`; see [chart-config.md § Multiple Queries](./chart-config.md#timeseries--multiple-queries). When they feed a transform, compute the derived value in MPL or defer.
 
 **Nested rows.** Grafana groups panels under "row" panels with their own `panels` array. If your dashboard uses rows, recurse:
 
@@ -201,7 +201,7 @@ Symptom: agent runs `metrics-info`, picks metrics that "look right", ships those
 Symptom: `http_requests_total` not found → tries `http_requests`, `http_request_count`, … **Fix:** apply OTel rename rules deterministically (drop `_total`), validate once with `metrics-info`, escalate.
 
 ### Multi-target panels translated as one
-Symptom: a panel with `total` + `errors` targets becomes a single MPL pipeline. **Fix:** iterate `targets[]`; translate every entry. Combine in MPL or split into two panels if Grafana used transforms.
+Symptom: a panel with `total` + `errors` targets becomes a single MPL pipeline. **Fix:** iterate `targets[]`; translate every entry into its own `queries[]` entry on the chart, `name` from `legendFormat` ([chart-config.md § Multiple Queries](./chart-config.md#timeseries--multiple-queries)). Only when Grafana combined the targets in a transform, compute the derived value in one MPL pipeline, or defer with a `Note`.
 
 ### Substituting a different quantity when blocked
 Symptom: ratio can't be computed → agent ships a related quantity Y labelled "Y replaces X". Never acceptable. **Fix:** defer the panel with a Note documenting the blocker. See [SKILL.md § Compute or Defer](../SKILL.md#compute-or-defer).

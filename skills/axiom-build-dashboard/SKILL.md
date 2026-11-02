@@ -109,6 +109,7 @@ Trends over time — "what changed?"
 - Choose the `align` function by what each interval should show.
 - Group by low-cardinality tags only (≤10 series per chart).
 - Embed the unit in `--name` (`"P95 Latency (ms)"`, `"Memory (MiB)"`); scale magnitudes in MPL (`| map / 1048576` for bytes → MiB).
+- Overlay pipelines that one query cannot produce together (p95 and p99, replicas vs HPA max) with `queries[]` on one chart: one `chart-add` run per pipeline, then merge. See [chart-config.md § Multiple Queries](./reference/chart-config.md#timeseries--multiple-queries).
 
 #### 3. Breakdowns (TimeSeries or Table panels)
 Per-entity detail — "where should I look?"
@@ -158,7 +159,7 @@ Common blockers: MPL parser limits, missing tag with no reverse-tag equivalent, 
 | Type          | When                                                | Key constraint                                                       |
 |---------------|-----------------------------------------------------|----------------------------------------------------------------------|
 | Statistic     | Single KPI, current value                           | Query must return one row.                                           |
-| TimeSeries    | Trends over time, percentile overlays               | `bin_auto(_time)`; `percentiles_array()` for multi-percentile.       |
+| TimeSeries    | Trends over time, percentile overlays               | `bin_auto(_time)`; `percentiles_array()` for multi-percentile. Several pipelines on one chart via `queries`; see [chart-config.md § Multiple Queries](./reference/chart-config.md#timeseries--multiple-queries). |
 | Table         | Top-N lists, breakdowns                             | Bound with `top N`; control columns via `project`.                   |
 | Pie           | Share-of-total for ≤6 categories                    | Aggregate to ≤6 slices; never high-cardinality.                      |
 | LogStream     | Raw event inspection                                | No row limit (`take`, `limit`, `top`), aggregation, or join. The Console adds its own sort and limit. Select fields with `project-keep`, keep `_time`, and filter hard. |
@@ -174,7 +175,7 @@ Per-type APL recipes: `reference/chart-cookbook.md`.
 
 ## Chart Configuration
 
-`chart-add` covers the common path (type, id, name, query, dataset, unit, sparkline). For options it doesn't expose — `aggChartOpts` variants on TimeSeries, `tableSettings.columns` on Table/LogStream, `hideHeader`, etc. — start from a `chart-add` output and merge the extra fields with `jq`. See `reference/chart-config.md` for the full option set, and the rejected-field list before merging anything bespoke.
+`chart-add` covers the common path (type, id, name, query, dataset, unit, sparkline). For options it doesn't expose — `aggChartOpts` variants on TimeSeries, several queries on one TimeSeries (`queries`), `tableSettings.columns` on Table/LogStream, `hideHeader`, etc. — start from a `chart-add` output and merge the extra fields with `jq`. See `reference/chart-config.md` for the full option set, and the rejected-field list before merging anything bespoke.
 
 ---
 
@@ -351,6 +352,7 @@ Compose with `chart-add` + `layout-pack` + `dashboard-assemble`. Pre-built templ
 | Grafana migration filters/groups on the wrong subset | Read `expr` without `description`, or vice versa | Project all five panel fields before authoring; see [reference/grafana-migration.md](./reference/grafana-migration.md). |
 | PromQL metric name not found | Skipped OTel rename rules | Drop `_total`, decompose histograms, normalise units; validate with `listMetrics`. Labels need reverse-tag discovery. See [grafana-migration.md § Name Mapping](./reference/grafana-migration.md#name-mapping-promql--otel-ingest). |
 | MPL chart aggregates across a dimension PromQL filtered/grouped on | Dropped a selector or `by(...)` during translation | Every `{label=…}` → `where`; every `by(…)` → `group by`. See [reference/promql-to-mpl.md](./reference/promql-to-mpl.md). |
+| Two related series need different pipelines (p95 and p99 histograms, replicas vs HPA max) | Forced into one query, or split across two panels | Put each pipeline in `queries[]` on one TimeSeries, one `chart-add` run per query, then merge with `jq`. See [chart-config.md § Multiple Queries](./reference/chart-config.md#timeseries--multiple-queries). |
 | Panel shipped a different quantity than asked | Substituted instead of deferring | Replace with a `Note` documenting the blocker. See [Compute or Defer](#compute-or-defer). |
 | 403 "creating private dashboards" | API tokens only create shared dashboards | Leave `owner` as `dashboard-assemble`'s default (`X-AXIOM-EVERYONE`). |
 | 400 `invalid_dashboard` while adding sections | Chart JSON invented `sections` or `sectionId` | Pass `--section` / `--section-collapsed` to `dashboard-assemble`. Do not probe the API. |
@@ -359,7 +361,7 @@ Compose with `chart-add` + `layout-pack` + `dashboard-assemble`. Pre-built templ
 
 ## Reference
 
-- `reference/chart-config.md` — All chart configuration options (JSON)
+- `reference/chart-config.md` — All chart configuration options (JSON), including several queries on one TimeSeries
 - `reference/metrics-mpl.md` — Metrics/MPL chart contract and discovery scripts
 - `reference/smartfilter.md` — SmartFilter/FilterBar full configuration
 - `reference/chart-cookbook.md` — APL patterns per chart type

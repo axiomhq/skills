@@ -223,6 +223,33 @@ Verify metrics charts set BOTH `query.apl` (MPL pipeline) and `query.metricsData
 - [ ] Pipeline order matches intended execution order
 - [ ] Dotted identifiers are backtick-escaped in MPL
 
+### 5.8 TimeSeries - Multiple Queries on One Chart
+
+Verify the agent puts pipelines that cannot share one query into `queries[]` on a single TimeSeries, instead of forcing one query or splitting into two panels.
+
+**Prompt:**
+"Create one TimeSeries chart that overlays p95 and p99 of `otel-metrics:http_request_duration_seconds` for `service.name=api`, bucketed by region."
+
+**Expected chart shape:**
+```json
+{
+  "type": "TimeSeries",
+  "query": { "name": "p95", "apl": "<p95 pipeline>", "metricsDataset": "otel-metrics" },
+  "queries": [
+    { "name": "p95", "apl": "<p95 pipeline>", "metricsDataset": "otel-metrics" },
+    { "name": "p99", "apl": "<p99 pipeline>", "metricsDataset": "otel-metrics" }
+  ]
+}
+```
+
+**Validation:**
+- [ ] Agent runs `chart-add` once per pipeline (same `--id` and `--name`) and merges with `jq`, rather than hand-writing the chart
+- [ ] Every `queries[]` entry has a distinct `name`
+- [ ] `query` equals `queries[0]`, including `name`
+- [ ] Each entry carries `metricsDataset` (MPL) and its own `set custom_unit` if a unit applies
+- [ ] No inline time range in any entry
+- [ ] Agent does not invent a secondary-axis field; it points to the Console for axis assignment
+
 ---
 
 ## Test 6: Layout Recommendations
