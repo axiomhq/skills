@@ -21,6 +21,8 @@ Reference for metrics-backed chart queries. Authoring through `chart-add --mpl '
 | `query.mpl` | — | Rejected on create. GET returns it on existing UI-authored charts; ignore. |
 | `query.metricsMetric`, `metricsFilter`, `metricsTransformations` | — | UI/editor metadata. Not needed for hand-authored or `chart-add` output. |
 
+Several MPL pipelines on one `TimeSeries` go in `queries[]`, one entry per pipeline with the same `apl` + `metricsDataset` shape plus a legend `name`; `query` stays a copy of the first entry. Shape and `jq` recipe: [chart-config.md § Multiple Queries](./chart-config.md#timeseries--multiple-queries).
+
 ## Authoring Checklist
 
 Use Axiom MCP for discovery and queries. For separately configured deployments, the bundled `scripts/metrics/` helpers provide discovery and `mpl-validate-chart`; keep discovery, validation, and dashboard creation in the same organization.
