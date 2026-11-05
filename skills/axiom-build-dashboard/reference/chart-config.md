@@ -149,7 +149,6 @@ Verified by reading live dashboards back through `dashboard-get` (November 2026)
       {"name": "message", "width": 400}
     ],
     "settings": {
-      "fontSize": "12px",
       "highlightSeverity": true,
       "showRaw": true,
       "showEvent": true,
@@ -164,7 +163,6 @@ Verified by reading live dashboards back through `dashboard-get` (November 2026)
 | Field | Effect |
 |---|---|
 | `columns` | Column order and widths (`{name, width}` objects). |
-| `fontSize` | CSS string (e.g. `"12px"`). |
 | `highlightSeverity` | Color rows by log level. |
 | `showRaw` / `showEvent` / `showTimestamp` | Toggle built-in columns. |
 | `wrapLines` | Wrap long lines. |
