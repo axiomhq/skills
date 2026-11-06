@@ -1,9 +1,9 @@
 ---
-name: axiom-onboarding
+name: axiom-setup-observability
 description: Instruments every runnable app and service in a repository with OpenTelemetry and sends correlated logs, traces, and metrics to Axiom. Use when asked to add Axiom observability, onboard an application to Axiom, configure OTLP export, or instrument a repository with OpenTelemetry.
 ---
 
-# Axiom Onboarding
+# Axiom setup observability
 
 Add useful, portable OpenTelemetry instrumentation to every runnable service, route it to Axiom safely, and prove the data is queryable. Onboarding is incomplete until every discovered service is instrumented, explicitly deferred, or reported as blocked.
 

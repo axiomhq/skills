@@ -1,4 +1,4 @@
-# axiom-onboarding
+# axiom-setup-observability
 
 Adds production-grade OpenTelemetry observability to every discovered deployable process boundary and verifies that supported and enabled logs, traces, and metrics reach Axiom.
 
