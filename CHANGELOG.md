@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.2](https://github.com/axiomhq/skills/compare/v1.2.1...v1.2.2) (2026-11-07)
+
+
+### Documentation
+
+* **build-dashboard:** document multiple queries on one TimeSeries chart ([1f6f8a3](https://github.com/axiomhq/skills/commit/1f6f8a346967085267ca2c3fba6a076c5ad8a180))
+* **build-dashboard:** document multiple queries on one TimeSeries chart ([c6229c7](https://github.com/axiomhq/skills/commit/c6229c719c7b74ec322eda90c746d63d99f82885))
+
 ## [1.2.1](https://github.com/axiomhq/skills/compare/v1.2.0...v1.2.1) (2026-10-29)
 
 
