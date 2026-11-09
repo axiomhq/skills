@@ -6,7 +6,7 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 
 | Skill                                          | Description                                    |
 | ---------------------------------------------- | ---------------------------------------------- |
-| [axiom-sre](skills/sre/)                       | Hypothesis-driven SRE investigation with Axiom |
+| [axiom-sre](skills/axiom-sre/)                       | Hypothesis-driven SRE investigation with Axiom |
 | [axiom-spl-to-apl](skills/axiom-spl-to-apl/)               | Translate Splunk SPL queries to Axiom APL      |
 | [axiom-build-dashboard](skills/axiom-build-dashboard/) | Design and build Axiom dashboards from intent, templates, Splunk migrations, and metrics/MPL chart payloads |
 | [axiom-alerting](skills/axiom-alerting/) | Unified monitor + notifier management for Axiom alerting via the v2 API |
@@ -71,6 +71,22 @@ Reload Cursor and authorize Axiom when prompted. To update an existing install, 
 
 Teams and Enterprise admins can also import `axiomhq/skills` through **Plugins & MCPs → Add Marketplace → Import from Repo** in the Cursor dashboard. See [Cursor's plugin guide](https://cursor.com/docs/plugins).
 
+### Amp
+
+Clone into Amp's system plugin directory. The directory name becomes the plugin name, so the skills appear as `axiom:axiom-sre`, `axiom:axiom-build-dashboard`, and so on:
+
+```bash
+git clone https://github.com/axiomhq/skills.git ~/.config/amp/plugins/axiom
+```
+
+Amp plugins can't declare MCP servers, so add the Axiom MCP server separately:
+
+```bash
+amp mcp add axiom https://mcp.axiom.co/mcp
+```
+
+Restart Amp and authorize Axiom when prompted. To update, run `git -C ~/.config/amp/plugins/axiom pull --ff-only`, then run `plugins: reload` from the command palette. See [Amp's plugin guide](https://ampcode.com/docs/customize/plugins).
+
 ### Gemini CLI
 
 ```bash
@@ -92,10 +108,10 @@ This installs all skills. Skills have dependencies on each other (e.g., `axiom-c
 For SRE, run `scripts/init` from the installed skill directory; its location depends on your agent or plugin installer. From a checkout of this repository:
 
 ```bash
-./skills/sre/scripts/init
+./skills/axiom-sre/scripts/init
 ```
 
-This initializes SRE configuration and memory under `~/.config/axiom-sre/`. Edit the generated `config.toml` to add your deployments, then run the initializer again. See [SRE setup](skills/sre/README.md#setup) for configuration and migration from `~/.axiom.toml`.
+This initializes SRE configuration and memory under `~/.config/axiom-sre/`. Edit the generated `config.toml` to add your deployments, then run the initializer again. See [SRE setup](skills/axiom-sre/README.md#setup) for configuration and migration from `~/.axiom.toml`.
 
 ## Configuration
 

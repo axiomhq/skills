@@ -13,10 +13,10 @@ Expert SRE investigator for incidents and debugging. Uses hypothesis-driven meth
 
 ```bash
 # Amp
-amp skill add axiomhq/skills/sre
+amp skill add axiomhq/skills/axiom-sre
 
 # npx (Claude Code, Cursor, Codex, and more)
-npx skills add axiomhq/skills -s sre
+npx skills add axiomhq/skills -s axiom-sre
 ```
 
 ## Prerequisites
