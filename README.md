@@ -6,7 +6,7 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 
 | Skill                                          | Description                                    |
 | ---------------------------------------------- | ---------------------------------------------- |
-| [axiom-sre](skills/sre/)                       | Hypothesis-driven SRE investigation with Axiom |
+| [axiom-sre](skills/axiom-sre/)                       | Hypothesis-driven SRE investigation with Axiom |
 | [axiom-spl-to-apl](skills/axiom-spl-to-apl/)               | Translate Splunk SPL queries to Axiom APL      |
 | [axiom-build-dashboard](skills/axiom-build-dashboard/) | Design and build Axiom dashboards from intent, templates, Splunk migrations, and metrics/MPL chart payloads |
 | [axiom-alerting](skills/axiom-alerting/) | Unified monitor + notifier management for Axiom alerting via the v2 API |
@@ -92,10 +92,10 @@ This installs all skills. Skills have dependencies on each other (e.g., `axiom-c
 For SRE, run `scripts/init` from the installed skill directory; its location depends on your agent or plugin installer. From a checkout of this repository:
 
 ```bash
-./skills/sre/scripts/init
+./skills/axiom-sre/scripts/init
 ```
 
-This initializes SRE configuration and memory under `~/.config/axiom-sre/`. Edit the generated `config.toml` to add your deployments, then run the initializer again. See [SRE setup](skills/sre/README.md#setup) for configuration and migration from `~/.axiom.toml`.
+This initializes SRE configuration and memory under `~/.config/axiom-sre/`. Edit the generated `config.toml` to add your deployments, then run the initializer again. See [SRE setup](skills/axiom-sre/README.md#setup) for configuration and migration from `~/.axiom.toml`.
 
 ## Configuration
 

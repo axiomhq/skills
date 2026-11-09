@@ -26,7 +26,7 @@ The install command above includes both skills. Scripts find them automatically.
 
 ## Configuration
 
-Configure SRE for query/API access using its [setup instructions](../sre/README.md#setup). SRE uses `~/.config/axiom-sre/config.toml`.
+Configure SRE for query/API access using its [setup instructions](../axiom-sre/README.md#setup). SRE uses `~/.config/axiom-sre/config.toml`.
 
 Dashboard helpers and the cost-control setup check also use `~/.axiom.toml`; add the same deployment name there:
 

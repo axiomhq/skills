@@ -38,7 +38,7 @@ org_id = "your-org-id"
 - **`org_id`** - The organization ID. Get it from Settings → Organization.
 - **`token`** - Use an advanced API token with minimal privileges.
 
-**Tip:** This skill uses `~/.axiom.toml`. The SRE skill has a separate [initializer and configuration](../sre/README.md#setup).
+**Tip:** This skill uses `~/.axiom.toml`. The SRE skill has a separate [initializer and configuration](../axiom-sre/README.md#setup).
 
 The bundled `scripts/metrics/` helpers support separately configured deployments.
 Requests must stay on the configured HTTP(S) origin, except for routing between

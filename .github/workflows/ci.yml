@@ -27,10 +27,10 @@ jobs:
         run: bash skills/axiom-control-costs/scripts/test-ast-parser
       - name: Test SRE
         run: |
-          for test in skills/sre/scripts/test-*; do
+          for test in skills/axiom-sre/scripts/test-*; do
             bash "$test"
           done
-          python3 skills/sre/scripts/memory-test
+          python3 skills/axiom-sre/scripts/memory-test
       - name: Test metrics charts
         run: python3 skills/axiom-metrics-chart/scripts/test_metrics_chart.py
       - name: Package plugin
