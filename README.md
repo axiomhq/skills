@@ -71,6 +71,22 @@ Reload Cursor and authorize Axiom when prompted. To update an existing install, 
 
 Teams and Enterprise admins can also import `axiomhq/skills` through **Plugins & MCPs → Add Marketplace → Import from Repo** in the Cursor dashboard. See [Cursor's plugin guide](https://cursor.com/docs/plugins).
 
+### Amp
+
+Clone into Amp's system plugin directory. The directory name becomes the plugin name, so the skills appear as `axiom:axiom-sre`, `axiom:axiom-build-dashboard`, and so on:
+
+```bash
+git clone https://github.com/axiomhq/skills.git ~/.config/amp/plugins/axiom
+```
+
+Amp plugins can't declare MCP servers, so add the Axiom MCP server separately:
+
+```bash
+amp mcp add axiom https://mcp.axiom.co/mcp
+```
+
+Restart Amp and authorize Axiom when prompted. To update, run `git -C ~/.config/amp/plugins/axiom pull --ff-only`, then run `plugins: reload` from the command palette. See [Amp's plugin guide](https://ampcode.com/docs/customize/plugins).
+
 ### Gemini CLI
 
 ```bash
