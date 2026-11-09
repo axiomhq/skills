@@ -8,9 +8,12 @@ Adds production-grade OpenTelemetry observability to every discovered deployable
 - Safe integration with existing OpenTelemetry and observability vendors
 - Signal-specific OTLP/HTTP routing to correlated Axiom datasets
 - Stable service identity, context propagation, and trace-correlated logs
-- Low-cardinality business spans and metrics derived from application code
+- Optional business spans and metrics derived from application code, when requested after baseline verification
 - Local, pipeline, backend-ingestion, correlation, restart, and shutdown verification
 - Per-service evidence, blockers, rollback instructions, and temporary-org handoff
+- Saved observability context for future agents and instrumentation reviews
+
+Setup is complete when useful baseline telemetry is queried back from Axiom for every enabled signal and the repository's observability context is saved. Custom business instrumentation is an optional follow-up. The context goes in existing observability documentation or `docs/observability.md` and records setup, conventions, verification evidence, and operational steps without secrets.
 
 ## Safety Model
 

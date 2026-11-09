@@ -23,7 +23,9 @@ For each runnable service:
 4. Export each enabled signal to the correct Axiom dataset.
 5. Run the service's own checks and exercise a real operation.
 6. Query Axiom and reach verification level 4 for every enabled signal.
-7. Add a small number of code-derived business signals, then confirm those signals are queryable.
+7. Save reusable observability context for future agents and instrumentation reviews.
+
+Setup is complete when useful baseline telemetry reaches level 4 for every enabled signal and the observability context is saved. Adding custom business telemetry is an optional follow-up, not a setup requirement. Preserve working instrumentation and keep changes focused on gaps needed for setup and verification.
 
 Do not claim “Axiom ingestion verified” from successful startup, valid configuration, a 2xx response, or exporter diagnostics alone. Level 5 is a production sign-off, not the requirement for finishing onboarding.
 
@@ -138,7 +140,7 @@ Use W3C `tracecontext,baggage` propagation. Do not put secrets, broad user data,
 
 Use framework auto-instrumentation as the baseline, then add only what the application needs:
 
-- Traces: HTTP/RPC, database, messaging, and critical business operations. Record exceptions and set error status when an operation fails.
+- Traces: HTTP/RPC, database, and messaging instrumentation. Add custom business-operation spans only in optional Phase 6. Record exceptions and set error status when an operation fails.
 - Logs: keep the existing logger and add the current OTel bridge/appender so active `trace_id` and `span_id` are top-level fields. Preserve standard severity fields.
 - Metrics: counters for state transitions, histograms for latency or sizes, and gauges only for point-in-time values.
 
@@ -159,22 +161,38 @@ Verify in increasing levels of evidence and report the highest level reached for
 1. **Configured**: one bootstrap, correct resources, secrets externalized, correct signal endpoints/headers, valid Collector pipelines, and repository checks pass.
 2. **Shape verified**: an in-memory exporter or local OTLP receiver sees expected spans, logs, metrics, resource attributes, and bounded dimensions.
 3. **Pipeline verified**: exporter or Collector diagnostics show accepted and sent data with no unexplained rejection, drop, queue-full, or permanent failure. Inspect OTLP partial-success responses.
-4. **Axiom verified**: bounded queries find a fresh unique marker in enabled logs and traces datasets and a fresh expected value change for each enabled metric, all with the expected `service.name`. This proves the export path. Finish the service in Phase 6.
+4. **Axiom verified**: bounded queries find a fresh unique marker in enabled logs and traces datasets and a fresh expected value change for each enabled metric, all with the expected `service.name`. This proves the export path. Unless business instrumentation was requested, proceed to Phase 7.
 5. **Production sign-off**: log and trace IDs correlate, cross-service propagation works where applicable, final pre-shutdown telemetry arrives, restart behavior is sane, and rollback is documented. Do this when the user asks for a production sign-off.
 
 Read `reference/verify.md` and run that canary. Query logs and traces with APL through `queryDataset`. Query metrics with MPL through `queryMetrics`. Never send MPL or a metrics dataset to `queryDataset`. When a query is empty or export fails, use the queries and failure table there.
 
 If query credentials are unavailable, report “pipeline verified, backend unverified.” If any enabled signal is missing, onboarding remains incomplete for that service. Do not add custom business metrics while that is true.
 
-## Phase 6: Add business telemetry
+## Phase 6: Optional business telemetry
 
-Start this phase only after the representative service reaches level 4 for every enabled signal.
+Run this phase only when the user requests business instrumentation or accepts it as a follow-up. Otherwise, skip to Phase 7 and offer an instrumentation review as a next step. For each service, start only after that service reaches level 4 for every enabled baseline signal.
 
 Read the code and select one to three critical workflows per service. Instrument only operations whose outcome answers an operational or product question. Follow `reference/spans.md` for attributes, cardinality, and what must stay out of telemetry.
 
 Repeat the canary in `reference/verify.md` for each new signal and confirm it is queryable before moving to the next service.
 
 ## Phase 7: Hand off
+
+### Save observability context
+
+Update the repository's existing observability documentation, or create `docs/observability.md` if there is no established location. Keep it concise and useful to future agents reviewing instrumentation; preserve unrelated existing content. Record:
+
+- service inventory, runtime, SDK bootstrap locations, and existing vendors;
+- service identity and environment/version sources;
+- enabled signals, export route or Collector configuration, Axiom deployment and datasets;
+- span naming and attribute conventions, propagation and log correlation, and metric cardinality rules used by the application;
+- required secret variable names, never their values;
+- commands to exercise a real operation and query its telemetry, with the verification date, environment, highest level reached per signal, and any blockers;
+- deployment/restart and rollback steps.
+
+Distinguish observed behavior from recommendations and keep local verification separate from production sign-off. Do not save tokens, authorization headers, sensitive payloads, or temporary-organization claim URLs in this file. Save partial results and blockers when setup cannot be completed.
+
+### Report results
 
 Report:
 
@@ -187,7 +205,8 @@ Report:
 - existing vendors preserved;
 - required secret variable names and deployment/restart steps;
 - unresolved privacy, compliance, export, or runtime blockers;
-- exact rollback steps.
+- exact rollback steps;
+- path to the saved observability context.
 
 If a temporary organization was provisioned, follow `axiom-agent-created-orgs` for the claim URL, expiry, security warning, and deletion behavior. Never include its token.
 

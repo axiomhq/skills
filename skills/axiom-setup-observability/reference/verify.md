@@ -1,6 +1,6 @@
 # Verify signals in Axiom
 
-Read this during Phase 5, and again after each business signal added in Phase 6.
+Read this during Phase 5, and again after each business signal added in optional Phase 6 when requested.
 
 Query logs and traces with APL through `queryDataset`. Query metrics with MPL through `queryMetrics`. Never send MPL or a metrics dataset to `queryDataset`.
 
