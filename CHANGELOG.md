@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.3.0](https://github.com/axiomhq/skills/compare/v1.2.1...v1.3.0) (2026-11-10)
+
+
+### Features
+
+* add Amp plugin distribution ([2990804](https://github.com/axiomhq/skills/commit/2990804548b90eb827ae7a6848350f0fd194d484))
+* add Amp plugin distribution ([c8de0f8](https://github.com/axiomhq/skills/commit/c8de0f8b48e5062414e1631f7ed1f3c9e273b456))
+
+
+### Fixes
+
+* clarify skill commands and preserve chart arguments ([03d39ed](https://github.com/axiomhq/skills/commit/03d39ed59306149ab101a668c542d67fbf7bf196))
+* clarify skill commands and preserve chart arguments ([2e1b065](https://github.com/axiomhq/skills/commit/2e1b06594a222863995ead2c88af94d5bb792b47))
+* rename sre skill directory to axiom-sre ([794439c](https://github.com/axiomhq/skills/commit/794439c0c778c028b9d5d219b975aef9038d8623))
+
+
+### Documentation
+
+* **build-dashboard:** document multiple queries on one TimeSeries chart ([1f6f8a3](https://github.com/axiomhq/skills/commit/1f6f8a346967085267ca2c3fba6a076c5ad8a180))
+* **build-dashboard:** document multiple queries on one TimeSeries chart ([c6229c7](https://github.com/axiomhq/skills/commit/c6229c719c7b74ec322eda90c746d63d99f82885))
+
 ## [1.2.1](https://github.com/axiomhq/skills/compare/v1.2.0...v1.2.1) (2026-10-29)
 
 
