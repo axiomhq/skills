@@ -14,6 +14,7 @@ printf '%s\n' "$2" > "$STUB_DATASET"
 STUB
 cat > "$TEST_DIR/axiom-api" <<'STUB'
 #!/bin/bash
+printf '%s\n' "$1" > "$STUB_BODY.deployment"
 printf '%s\n' "$4" > "$STUB_BODY"
 echo '{}'
 STUB
@@ -33,6 +34,9 @@ query='`m`:cpu | align to $__interval using avg'
 "$TEST_DIR/mpl-validate-chart" test "$query" > /dev/null
 check "mpl-validate-chart sends the query as written" "$(jq -r .apl "$STUB_BODY")" "$query"
 check "mpl-validate-chart sends no params" "$(jq -c '.params // null' "$STUB_BODY")" null
+
+"$TEST_DIR/mpl-validate-chart" -- -w "$query" > /dev/null
+check "a deployment after -- stays positional" "$(cat "$STUB_BODY.deployment")" -w
 
 "$TEST_DIR/metrics-query" test $'set custom_unit="h";\n`m`:cpu | align to 1h using avg' now-1h now > /dev/null
 check "metrics-query reads the dataset after a set line" "$(cat "$STUB_DATASET")" m
