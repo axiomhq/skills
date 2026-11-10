@@ -35,7 +35,7 @@
 #     '2025-06-01T00:00:00Z' '2025-06-02T00:00:00Z'
 #   metrics-query prod '`otel-metrics`:`http.server.duration` | align to 5m using avg' now-1h now
 #   # With parameters $svc: string and $window: Duration:
-#   metrics-query -p svc='"frontend"' -p window='5m' prod \
+#   metrics-query --param=svc='"frontend"' --param=window=5m prod \
 #     'param $svc: string; param $window: Duration; `otel-metrics`:`http.server.duration` | where `service.name` == $svc | align to $window using avg' \
 #     now-1h now
 
@@ -152,7 +152,7 @@ if [[ -n "$PIXEL_PER_POINT" && ! "$PIXEL_PER_POINT" =~ ^[1-9][0-9]*$ ]]; then
 fi
 
 # Extract dataset name from MPL: `dataset`:`metric` ... or dataset:`metric` ...
-# Strip leading `param <name>: <type>;` and `set <name>=<value>;` statements
+# Strip leading MPL statements such as `param $svc: string;` and `set custom_unit="ms";`
 # first so their `:` does not get mistaken for the dataset:metric separator.
 PIPELINE="$MPL"
 while [[ "$PIPELINE" =~ ^[[:space:]]*([Pp]aram|[Ss]et)[[:space:]] ]]; do

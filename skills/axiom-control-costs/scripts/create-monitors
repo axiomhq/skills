@@ -6,7 +6,7 @@
 #   2. Per-Dataset Spike (robust z-score) - statistical attribution of which dataset changed
 #   3. Query Cost Spike (robust z-score) - statistical detection of query cost changes
 #
-# Usage: create-monitors -d <deployment> -a <audit-dataset> -c <contract-bytes> [options]
+# Usage: create-monitors -d DEPLOYMENT -a DATASET -c LIMIT [options]
 
 set -euo pipefail
 
@@ -43,7 +43,7 @@ MIN_BASELINE_DAYS="14"          # Require 14+ days of baseline data for growth d
 
 usage() {
     cat << 'EOF'
-Usage: create-monitors -d <deployment> -a <audit-dataset> -c <contract> [options]
+Usage: create-monitors -d DEPLOYMENT -a DATASET -c LIMIT [options]
 
 Create 3 cost control monitors.
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Authenticated curl wrapper - handles multiple auth methods
-# Usage: curl-auth <tool> <deployment> [options] <url> [curl-args...]
+# Usage: curl-auth TOOL DEPLOYMENT [options] URL [curl-args...]
 #
 # Options:
-#   -X <method>   HTTP method (GET, POST, etc.)
-#   -d <data>     Request body (implies -X POST and Content-Type: application/json)
+#   -X METHOD     HTTP method (defaults to GET)
+#   -d JSON       JSON request body. Use -X POST to send a POST request.
 #
 # Auth priority:
 #   1. access_command (e.g., cloudflared access curl)
@@ -51,11 +51,11 @@ URL="${1:-}"
 shift 1 2>/dev/null || true
 
 if [[ -z "$TOOL" || -z "$DEPLOYMENT" || -z "$URL" ]]; then
-    echo "Usage: curl-auth <tool> <deployment> [options] <url> [curl-args...]" >&2
+    echo "Usage: curl-auth TOOL DEPLOYMENT [options] URL [curl-args...]" >&2
     echo "" >&2
     echo "Options:" >&2
-    echo "  -X <method>   HTTP method (GET, POST)" >&2
-    echo "  -d <data>     Request body (JSON)" >&2
+    echo "  -X METHOD     HTTP method (defaults to GET)" >&2
+    echo "  -d JSON       JSON request body. Use -X POST to send a POST request." >&2
     exit 1
 fi
 

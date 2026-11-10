@@ -6,8 +6,8 @@
 #
 # - APL vs MPL are distinct languages with distinct validation, and the
 #   flags reflect that:
-#     --apl '<APL pipeline>'        → events/logs query (no dataset arg)
-#     --mpl '<MPL pipeline>' --dataset <name>  → metrics query
+#     --apl APL                     → events/logs query (no dataset arg)
+#     --mpl MPL --dataset DATASET   → metrics query
 #   Internally both land in `query.apl` (the API field is shared); MPL
 #   additionally gets `query.metricsDataset`, which is what tells the
 #   backend to interpret the string as MPL.
@@ -21,7 +21,7 @@
 #
 # - Statistic gets `customUnits`, a suffix the Console appends after its
 #   own formatting. It never gets the `unit` enum, which the Console
-#   ignores. For --mpl, the query also gets `set custom_unit="<unit>";`
+#   ignores. For an MPL chart in ms, the query gets `set custom_unit="ms";`
 #   so the Console formats the result in that unit, also after `map` or a
 #   rate, and scripts/metrics/unit-for drops the suffix when the Console
 #   has a formatter for the unit (USD, s, By, %, ...). For --apl, unit-for
@@ -47,16 +47,16 @@
 #   here. Until then, set thresholds via the UI.
 #
 # Usage:
-#   chart-add --type <type> --id <id> --name <name> [type-specific opts]
+#   chart-add --type TYPE --id ID --name NAME [type-specific opts]
 #
 # Types: Note, Statistic, TimeSeries, Table, Pie, LogStream, Heatmap
 #
 # Per-type required flags:
-#   Note:       --text <markdown>
-#   All others: exactly one of --apl <APL> or --mpl <MPL> --dataset <name>
+#   Note:       --text MARKDOWN
+#   All others: exactly one of --apl APL or --mpl MPL --dataset DATASET
 #
 # Common optional flags (data charts only):
-#   --unit <string>      Unit string ("%", "ms", "req/s", etc.). With
+#   --unit UNIT          Unit string ("%", "ms", "req/s", etc.). With
 #                        --mpl, pass the unit of the query result as a
 #                        UCUM code (USD, not $). A Statistic sets it with
 #                        custom_unit and maps it via unit-for. An APL
@@ -81,12 +81,12 @@
 #   chart-add --type TimeSeries --id rps --name "Read Requests (req/s)" \
 #       --mpl '...MPL...' --dataset example-metrics --unit "req/s"
 #
-# Composing a dashboard:
-#   chart-add --type Note ... > /tmp/c1.json
-#   chart-add --type Statistic ... > /tmp/c2.json
-#   layout-pack c1:Note c2:Statistic > /tmp/layout.json
-#   dashboard-assemble --name "..." --datasets ds --layout /tmp/layout.json \
-#                      /tmp/c1.json /tmp/c2.json > /tmp/dashboard.json
+# Composing a dashboard in an empty directory:
+#   chart-add --type Note --id intro --name Scope --text "Request logs" > intro.json
+#   chart-add --type Statistic --id requests --name Requests --apl "['logs'] | count" > requests.json
+#   layout-pack intro:Note requests:Statistic > layout.json
+#   dashboard-assemble --name Requests --datasets logs --layout layout.json \
+#                      intro.json requests.json > dashboard.json
 
 set -euo pipefail
 
