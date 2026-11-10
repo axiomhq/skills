@@ -152,12 +152,12 @@ case "$TYPE" in
     Statistic|TimeSeries|Table|Pie|LogStream|Heatmap)
         [[ -n "$TEXT" ]] && { echo "Error: --text is only valid for Note" >&2; exit 1; }
         if [[ -z "$APL" && -z "$MPL" ]]; then
-            echo "Error: $TYPE requires exactly one of --apl <APL pipeline> or --mpl <MPL pipeline>" >&2
+            echo "Error: $TYPE requires exactly one of --apl or --mpl" >&2
             exit 1
         fi
         # MPL requires --dataset (the metrics dataset name); APL forbids it.
         if [[ -n "$MPL" && -z "$DATASET" ]]; then
-            echo "Error: --mpl requires --dataset <name> (the metrics dataset; sets query.metricsDataset, which is what flags the chart as MPL on the backend)" >&2
+            echo "Error: --mpl requires --dataset with the name of the metrics dataset" >&2
             exit 1
         fi
         if [[ -n "$APL" && -n "$DATASET" ]]; then
