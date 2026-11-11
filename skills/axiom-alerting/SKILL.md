@@ -79,7 +79,7 @@ Notifier scripts:
    - For email, use `scripts/notifier-create` with the JSON format shown below.
    - For other channels, ask the user to enter credentials in the Console. After they save the notifier, list notifiers again for its ID.
      - With MCP connected to the selected deployment and org, call `createNotifier` with the name and an empty channel config, such as `"properties": {"slack": {}}`. If MCP opens **Notifiers**, choose **New notifier**. If it returns the list URL, append `?notifierId=new` and share it.
-     - With scripts, run `../axiom-build-dashboard/scripts/dashboard-link <deployment> --notifier new` from this skill's directory. If no link is available, direct the user to **Notifiers → New notifier** in their Console.
+     - With scripts, run `../axiom-build-dashboard/scripts/dashboard-link --notifier new` from this skill's directory for prod. For staging or dev, put the deployment name before `--notifier`. If no link is available, direct the user to **Notifiers → New notifier** in their Console.
 4. Create or update the monitor with `notifierIds` attached.
 5. Validate with `scripts/monitor-history <deployment> <id> <startTime> <endTime>`.
 6. If behavior is noisy or silent, tune `threshold`, `rangeMinutes`, `intervalMinutes`, and N-of-M trigger fields.
