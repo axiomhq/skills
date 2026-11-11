@@ -66,7 +66,7 @@ Notifier scripts:
 
 ## Recommended Workflow
 
-1. Create notifier first.
+1. Reuse a saved notifier when possible.
 2. Create monitor and set `notifierIds`.
 3. Validate monitor behavior with `monitor-history`.
 4. Iterate monitor thresholds and schedule.
@@ -75,7 +75,9 @@ Notifier scripts:
 
 1. Run `scripts/setup`.
 2. List existing notifiers with `scripts/notifier-list <deployment>` and reuse one if appropriate.
-3. If no suitable notifier exists, create one with `scripts/notifier-create`.
+3. If no saved notifier is suitable:
+   - For email, use `scripts/notifier-create` with the JSON format shown below.
+   - For any other channel, ask the user to set it up on the **Notifiers** page in the Axiom Console and enter any credentials there. After they save it, list notifiers again to get its ID.
 4. Create or update the monitor with `notifierIds` attached.
 5. Validate with `scripts/monitor-history <deployment> <id> <startTime> <endTime>`.
 6. If behavior is noisy or silent, tune `threshold`, `rangeMinutes`, `intervalMinutes`, and N-of-M trigger fields.
@@ -183,9 +185,7 @@ AnomalyDetection:
 }
 ```
 
-## Minimal Valid Notifier Examples
-
-Email:
+## Email Notifier Example
 
 ```json
 {
@@ -193,33 +193,6 @@ Email:
   "properties": {
     "email": {
       "emails": ["oncall@example.com"]
-    }
-  }
-}
-```
-
-Slack:
-
-```json
-{
-  "name": "Oncall Slack",
-  "properties": {
-    "slack": {
-      "slackUrl": "https://hooks.slack.com/services/T.../B.../XXX"
-    }
-  }
-}
-```
-
-Custom webhook:
-
-```json
-{
-  "name": "Oncall Custom Webhook",
-  "properties": {
-    "customWebhook": {
-      "url": "https://api.example.com/alerts",
-      "body": "{\"action\":\"{{.Action}}\",\"monitorID\":\"{{.MonitorID}}\"}"
     }
   }
 }
@@ -247,15 +220,14 @@ Custom webhook:
   - Confirm deployment in `.axiom.toml`.
   - Re-list objects and use exact IDs:
     - `scripts/monitor-list <deployment> --json`
-    - `scripts/notifier-list <deployment> --json`
+    - `scripts/notifier-list <deployment>`
 
-`400 Bad Request` on notifier create/update:
+`400 Bad Request` on email notifier create/update:
 - Cause: invalid notifier payload shape.
 - Fix:
   - Use one notifier channel inside `properties`.
   - For email, use `emails` (not `recipients`).
-  - Validate against a known-good example and retry:
-    - `scripts/notifier-create <deployment> <json-file>`
+  - Check the email example above and retry the same operation.
 
 `400 Bad Request` on monitor create/update:
 - Cause: invalid monitor schema, operator/type mismatch, or invalid query fields.
@@ -284,8 +256,6 @@ Too many alerts (noisy monitor):
 Notifier exists but no delivery:
 - Cause: destination config invalid (URL/key/channel/email list), or destination-side rejection.
 - Fix:
-  - Fetch notifier and verify destination fields:
-    - `scripts/notifier-get <deployment> <id>`
-  - Recreate/update notifier with corrected properties:
-    - `scripts/notifier-update <deployment> <id> <json-file>`
+  - For email, check the addresses and use `scripts/notifier-update` to correct them.
+  - For other channels, ask the user to check the destination on the **Notifiers** page in the Axiom Console.
   - Confirm monitor references correct notifier IDs.

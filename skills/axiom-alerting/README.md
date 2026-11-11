@@ -6,7 +6,7 @@ Unified Axiom alerting skill for managing monitors and notifiers via the Axiom v
 
 - Monitor lifecycle: list, get, history, create, update, delete
 - Notifier lifecycle: list, get, create, update, delete
-- End-to-end workflow: create notifier, wire `notifierIds` into monitor, validate behavior
+- End-to-end workflow: reuse a saved notifier, wire `notifierIds` into the monitor, validate behavior
 
 ## Requirements
 
@@ -40,7 +40,7 @@ skills/axiom-alerting/scripts/monitor-list prod
 ## Common Commands
 
 ```bash
-# Create notifier from JSON
+# Create an email notifier from JSON. Set up other channels in the Axiom Console.
 skills/axiom-alerting/scripts/notifier-create prod ./notifier.json
 
 # Create monitor from JSON
