@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Tests for TOML parsing logic used across axiom-build-dashboard scripts.
 #
-# Covers axiom-api config parsing, deployment listing in setup, and Console links.
+# Covers extract_value (from axiom-api, dashboard-link) and
+# the grep-based deployment listing in setup.
 #
 # Usage: scripts/test-toml-parsing
 
@@ -23,7 +24,7 @@ assert_eq() {
     fi
 }
 
-# --- extract_value (from axiom-api) ---
+# --- extract_value (shared by axiom-api, dashboard-link) ---
 # Extracts a value from ~/.axiom.toml for a given deployment.
 # We inline the awk logic here to test it in isolation.
 run_extract_value() {
@@ -266,14 +267,12 @@ LISTED=$(run_list_deployments "$TMPDIR_TEST/indented.toml")
 assert_eq "lists prod (indented)"     "prod"     "$(echo "$LISTED" | head -1)"
 assert_eq "lists staging (indented)"  "staging"  "$(echo "$LISTED" | tail -1)"
 
-echo ""
-echo "=== Console notifier links ==="
-console_link="$(dirname "$0")/console-link"
 cp "$TMPDIR_TEST/standard.toml" "$TMPDIR_TEST/.axiom.toml"
+link="$(dirname "$0")/dashboard-link"
 assert_eq "new notifier" "https://app.axiom.co/org-prod-123/notifiers?notifierId=new" \
-    "$(HOME="$TMPDIR_TEST" "$console_link" prod notifier new)"
+    "$(HOME="$TMPDIR_TEST" "$link" prod --notifier new)"
 assert_eq "saved notifier on staging" "https://app.staging.axiom.co/org-staging-456/notifiers?notifierId=a%2Fb%26c" \
-    "$(HOME="$TMPDIR_TEST" "$console_link" staging notifier 'a/b&c')"
+    "$(HOME="$TMPDIR_TEST" "$link" staging --notifier 'a/b&c')"
 
 echo ""
 echo "==========================="

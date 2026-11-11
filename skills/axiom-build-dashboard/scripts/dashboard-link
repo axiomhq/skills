@@ -1,10 +1,84 @@
 #!/usr/bin/env bash
+# Generate a Console link to a dashboard or notifier.
+#
+# Usage: dashboard-link <deployment> <dashboard-id>
+#        dashboard-link <deployment> --notifier <id|new>
+#
+# Examples:
+#   dashboard-link prod EHYTHcQmO0ZZCK0zdw
+#   dashboard-link staging abc123
+
 set -euo pipefail
 
-if [[ -z "${1:-}" || -z "${2:-}" ]]; then
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+DEPLOYMENT="${1:-}"
+DASHBOARD_ID="${2:-}"
+
+if [[ -z "$DEPLOYMENT" || -z "$DASHBOARD_ID" ]]; then
     echo "Usage: dashboard-link <deployment> <dashboard-id>" >&2
     exit 1
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "$SCRIPT_DIR/console-link" "$1" dashboard "$2"
+CONFIG_FILE="$HOME/.axiom.toml"
+if [[ ! -f "$CONFIG_FILE" ]]; then
+    echo "Error: $CONFIG_FILE not found" >&2
+    exit 1
+fi
+
+# Parse TOML for deployment config
+extract_value() {
+    local key="$1"
+    awk -v deployment="$DEPLOYMENT" -v key="$key" '
+        /^[[:space:]]*\[/ {
+            sub(/^[[:space:]]*/, "")
+            in_deployment = (index($0, "[deployments." deployment "]") == 1)
+        }
+        in_deployment {
+            gsub(/^[[:space:]]+/, "")
+            if ($1 == key) {
+                sub(/^[^=]*=[[:space:]]*/, "")
+                if (match($0, /^"[^"]*"/)) {
+                    $0 = substr($0, RSTART+1, RLENGTH-2)
+                } else {
+                    sub(/[[:space:]]*#.*$/, "")
+                }
+                print
+                exit
+            }
+        }
+    ' "$CONFIG_FILE"
+}
+
+URL=$(extract_value "url")
+ORG_ID=$(extract_value "org_id")
+
+if [[ -z "$URL" || -z "$ORG_ID" ]]; then
+    echo "Error: Could not find deployment '$DEPLOYMENT' in $CONFIG_FILE" >&2
+    exit 1
+fi
+
+# Convert the API host to its Console host.
+APP_URL="${URL/api./app.}"
+if [[ "$DASHBOARD_ID" == --notifier ]]; then
+    id="${3:?Usage: dashboard-link <deployment> --notifier <id|new>}"
+    base="${APP_URL%/}"
+    if [[ "$base" == https://cloud.axiom.co ]]; then
+        base=https://app.axiom.co
+    fi
+    if [[ ! "$base" =~ ^https://app\.([a-zA-Z0-9-]+\.)*(axiom\.co|axiomtestlabs\.co)$ ]]; then
+        echo "Open Notifiers in the Console for this deployment." >&2
+        exit 1
+    fi
+    exec jq -nr --arg base "$base" --arg org "$ORG_ID" --arg id "$id" \
+        '"\($base)/\($org | @uri)/notifiers?notifierId=\($id | @uri)"'
+fi
+
+# Resolve short ID for the UI URL
+LINK_ID=$("$SCRIPT_DIR/axiom-api" "$DEPLOYMENT" GET "/dashboards/uid/$DASHBOARD_ID" | jq -r '.id // empty')
+if [[ -z "$LINK_ID" ]]; then
+    echo "Error: Could not resolve dashboard ID '$DASHBOARD_ID'" >&2
+    exit 1
+fi
+
+echo "${APP_URL}/${ORG_ID}/dashboards/${LINK_ID}"

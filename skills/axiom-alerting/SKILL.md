@@ -77,10 +77,9 @@ Notifier scripts:
 2. List existing notifiers with `scripts/notifier-list <deployment>` and reuse one if appropriate.
 3. If no saved notifier is suitable:
    - For email, use `scripts/notifier-create` with the JSON format shown below.
-   - For other channels, ask the user to enter any credentials in the Console.
-     - With Axiom MCP connected to the selected deployment and org, call `createNotifier` with the name and an empty channel config, e.g. `{"name":"On-call Slack","properties":{"slack":{}}}` in `notifierJson`. If MCP opens **Notifiers**, ask the user to choose **New notifier**. If it offers a link to the list, append `?notifierId=new` to open the form directly.
-     - With scripts, run `../axiom-build-dashboard/scripts/console-link <deployment> notifier new` from this skill's directory and share its output. If the helper is unavailable or cannot resolve the deployment, direct the user to **Notifiers** in their Console.
-     - After the user saves the notifier, list notifiers again to get its ID.
+   - For other channels, ask the user to enter credentials in the Console. After they save the notifier, list notifiers again for its ID.
+     - With MCP connected to the selected deployment and org, call `createNotifier` with the name and an empty channel config, such as `"properties": {"slack": {}}`. If MCP opens **Notifiers**, choose **New notifier**. If it returns the list URL, append `?notifierId=new` and share it.
+     - With scripts, run `../axiom-build-dashboard/scripts/dashboard-link <deployment> --notifier new` from this skill's directory. If no link is available, direct the user to **Notifiers → New notifier** in their Console.
 4. Create or update the monitor with `notifierIds` attached.
 5. Validate with `scripts/monitor-history <deployment> <id> <startTime> <endTime>`.
 6. If behavior is noisy or silent, tune `threshold`, `rangeMinutes`, `intervalMinutes`, and N-of-M trigger fields.
@@ -260,5 +259,5 @@ Notifier exists but no delivery:
 - Cause: destination config invalid (URL/key/channel/email list), or destination-side rejection.
 - Fix:
   - For email, check the addresses and use `scripts/notifier-update` to correct them.
-  - For other channels, share the saved notifier link from MCP or run `../axiom-build-dashboard/scripts/console-link <deployment> notifier <id>`. If neither is available, direct the user to **Notifiers** in their Console.
+  - For other channels, use the saved notifier link from MCP or run the same `--notifier` command with the saved ID in place of `new`. If no link is available, direct the user to **Notifiers** in their Console.
   - Confirm monitor references correct notifier IDs.
