@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+scripts=$(cd "$(dirname "$0")" && pwd)
+fixture=$(mktemp -d)
+trap 'rm -rf "$fixture"' EXIT
+export AXIOM_API="$fixture/axiom-api" REQUESTS="$fixture/requests"
+cat > "$AXIOM_API" <<'STUB'
+#!/usr/bin/env bash
+echo "$2" >> "$REQUESTS"
+if [[ "$2" == GET ]]; then
+    printf '%s' "$LIST_BODY"
+    exit "$LIST_STATUS"
+fi
+STUB
+chmod +x "$AXIOM_API"
+
+expect_requests() {
+    : > "$REQUESTS"
+    local status=0
+    HOME="$fixture" "$scripts/create-monitors" -d test -a audit -c 500GB --force > "$fixture/output" 2>&1 || status=$?
+    if [[ "$status" != "$1" || "$(cat "$REQUESTS")" != "$2" ]]; then
+        cat "$fixture/output" "$REQUESTS" >&2
+        exit 1
+    fi
+}
+
+LIST_STATUS=22 LIST_BODY='[]' expect_requests 1 GET
+LIST_STATUS=0 LIST_BODY='' expect_requests 1 GET
+LIST_STATUS=0 LIST_BODY='[{}]' expect_requests 1 GET
+LIST_STATUS=0 LIST_BODY='[]' expect_requests 0 $'GET\nPOST\nPOST\nPOST'
