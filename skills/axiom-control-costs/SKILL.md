@@ -185,7 +185,7 @@ dashboard-list <deployment> | grep -i cost
 dashboard-delete <deployment> <id>
 ```
 
-**Note:** Running `create-monitors` twice creates duplicates. Delete existing monitors first if re-deploying.
+`create-monitors` stops if it cannot list existing monitors. If it finds cost control monitors, use `--force` to replace them.
 
 ---
 
