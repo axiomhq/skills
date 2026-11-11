@@ -77,7 +77,7 @@ Notifier scripts:
 2. List existing notifiers with `scripts/notifier-list <deployment>` and reuse one if appropriate.
 3. If no saved notifier is suitable:
    - For email, use `scripts/notifier-create` with the JSON format shown below.
-   - For any other channel, ask the user to set it up on the **Notifiers** page in the Axiom Console and enter any credentials there. After they save it, list notifiers again to get its ID.
+   - For any other channel, ask the user to enter any credentials in the Axiom Console. When you know the org ID, send a **Create notifier** link using `https://app.axiom.co/<org-id>/notifiers?notifierId=new` with that ID and the deployment's Console host. Otherwise, direct them to **Notifiers**. After they save it, list notifiers again to get its ID.
 4. Create or update the monitor with `notifierIds` attached.
 5. Validate with `scripts/monitor-history <deployment> <id> <startTime> <endTime>`.
 6. If behavior is noisy or silent, tune `threshold`, `rangeMinutes`, `intervalMinutes`, and N-of-M trigger fields.
@@ -257,5 +257,5 @@ Notifier exists but no delivery:
 - Cause: destination config invalid (URL/key/channel/email list), or destination-side rejection.
 - Fix:
   - For email, check the addresses and use `scripts/notifier-update` to correct them.
-  - For other channels, ask the user to check the destination on the **Notifiers** page in the Axiom Console.
+  - For other channels, ask the user to check the destination in the Axiom Console. When you know both IDs, link to the saved notifier using its ID in place of `new` in the Console link above. Otherwise, direct them to **Notifiers**.
   - Confirm monitor references correct notifier IDs.
