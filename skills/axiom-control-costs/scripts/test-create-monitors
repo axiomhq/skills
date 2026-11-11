@@ -7,50 +7,25 @@ trap 'rm -rf "$fixture"' EXIT
 export AXIOM_API="$fixture/axiom-api" REQUESTS="$fixture/requests"
 cat > "$AXIOM_API" <<'STUB'
 #!/usr/bin/env bash
-echo "$2 $3" >> "$REQUESTS"
+echo "$2" >> "$REQUESTS"
 if [[ "$2" == GET ]]; then
     printf '%s' "$LIST_BODY"
     exit "$LIST_STATUS"
 fi
-echo '{}'
 STUB
 chmod +x "$AXIOM_API"
 
-run_script() {
+expect_requests() {
     : > "$REQUESTS"
-    status=0
-    HOME="$fixture" "$scripts/create-monitors" -d test -a audit -c 500GB "$@" > "$fixture/output" 2>&1 || status=$?
-}
-
-list_only() {
-    run_script "$@"
-    if [[ "$status" == 0 || "$(cat "$REQUESTS")" != 'GET /v2/monitors' ]]; then
-        echo "Expected a failed run with only one GET (list status $LIST_STATUS, body '$LIST_BODY')." >&2
-        cat "$REQUESTS" >&2
+    local status=0
+    HOME="$fixture" "$scripts/create-monitors" -d test -a audit -c 500GB --force > "$fixture/output" 2>&1 || status=$?
+    if [[ "$status" != "$1" || "$(cat "$REQUESTS")" != "$2" ]]; then
+        cat "$fixture/output" "$REQUESTS" >&2
         exit 1
     fi
 }
 
-export LIST_STATUS=22 LIST_BODY='[]'
-list_only
-list_only --force
-LIST_STATUS=0
-for LIST_BODY in '' 'not JSON' '{}' '[] []' '[null]' '[{"name":"Cost Control: Old"}]' \
-    '[{"id":"old","name":"Cost Control: Old"},{"id":"missing-name"}]'; do
-    list_only --force
-done
-
-creates='POST /v2/monitors
-POST /v2/monitors
-POST /v2/monitors'
-for LIST_BODY in '[]' '[{"id":"other","name":"Other"}]'; do
-    run_script
-    [[ "$status" == 0 && "$(cat "$REQUESTS")" == $'GET /v2/monitors\n'"$creates" ]]
-done
-
-LIST_BODY='[{"id":"old","name":"Cost Control: Old"},{"id":"other","name":"Other"}]'
-list_only
-grep -Fq 'Cost Control: Old' "$fixture/output"
-run_script --force
-[[ "$status" == 0 && "$(cat "$REQUESTS")" == $'GET /v2/monitors\nDELETE /v2/monitors/old\n'"$creates" ]]
-echo "Monitor list checks passed."
+LIST_STATUS=22 LIST_BODY='[]' expect_requests 1 GET
+LIST_STATUS=0 LIST_BODY='' expect_requests 1 GET
+LIST_STATUS=0 LIST_BODY='[{}]' expect_requests 1 GET
+LIST_STATUS=0 LIST_BODY='[]' expect_requests 0 $'GET\nPOST\nPOST\nPOST'

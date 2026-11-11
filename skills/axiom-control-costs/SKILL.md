@@ -117,6 +117,8 @@ Creates 3 monitors:
 2. **Per-Dataset Spike** — robust z-score detection, alerts per dataset with attribution
 3. **Query Cost Spike** — hardened z-score with 30d baseline, 5d exclusion gap, persistence-based gating (median_z > 3, p25_z > 2.5)
 
+If Axiom cannot return the monitor list, the script exits before changing anything. If any name starts with `Cost Control:`, the script lists the matches and stops. Use `--force` only to delete all matches and create the three monitors above.
+
 The spike monitors use `notifyByGroup: true` so each dataset triggers a separate alert.
 
 See `reference/monitor-strategy.md` for threshold derivation.
@@ -184,8 +186,6 @@ axiom-api <deployment> DELETE "/v2/monitors/<id>"
 dashboard-list <deployment> | grep -i cost
 dashboard-delete <deployment> <id>
 ```
-
-`create-monitors` stops if it cannot list existing monitors. If it finds cost control monitors, use `--force` to replace them.
 
 ---
 

@@ -130,8 +130,9 @@ echo ""
 # Check for existing monitors
 echo "Checking for existing Cost Control monitors..."
 if ! EXISTING_MONITORS=$("$AXIOM_API" "$DEPLOYMENT" GET "/v2/monitors" | jq -sce '
+    # The API returns one array, even when there are no monitors.
     select(length == 1) | .[0] | arrays
-    | select(all(.[]; (.name | type == "string") and (.id | type == "string" and length > 0)))
+    | select(all(.[]; .id | type == "string" and length > 0))
     | map(select(.name | startswith("Cost Control:")))
 '); then
     echo "Error: Could not read a valid monitor list for $DEPLOYMENT. No monitors were changed." >&2
