@@ -17,11 +17,15 @@ Read the current Axiom pages relevant to the setup:
 
 ## Organization and deployment
 
-Prefer an existing Axiom organization and deployment. If none is configured or available, load `axiom-agent-created-orgs` and provision at most one temporary organization for the task. Resolve sibling skills from their installed location, not from the customer repository's working directory. If a required skill is unavailable, use the linked official API documentation or report the missing capability; do not invent a relative executable path.
+Select the organization within the configuration chosen for this task:
 
+1. A config path and deployment supplied by the user or launch brief are authoritative. Resolve a relative config path before changing working directory. Read deployment names and credentials only from that file, and pass the same `--config` and `--deployment` to CLI commands. For the Python example below, explicitly set `AXIOM_CONFIG_PATH` to that selected absolute path and `AXIOM_DEPLOYMENT` to the selected alias.
+2. Use `~/.axiom.toml` only when no alternative config path was supplied. Within the selected file, use a named deployment exactly; otherwise use the sole deployment or clarify when several are plausible. Do not select an alias from another config file, even if its name matches.
+3. If the selected file is missing/unreadable, its named deployment is absent, or its credentials lack permissions, report the specific blocker. Do not fall back to the default config, another organization, or temporary provisioning. A connected management tool is usable only after confirming it targets the same selected organization and API.
 
+Provision at most one temporary organization via `axiom-agent-created-orgs` only when no organization/deployment was specified and the selected configuration has no deployment to use. A failed lookup or permission check is not evidence that the user has no organization. Resolve sibling skills from their installed location, not from the customer repository's working directory. If the skill is unavailable, use the linked official API documentation or report the missing capability; do not invent a relative executable path.
 
-Choose the deployment with the decision table in `axiom-ingest` when available. Otherwise inspect configured deployment names without printing credentials, prefer the user's named deployment, and clarify only when several plausible organizations exist. Do not copy its authenticated curl examples: header arguments conflict with this skill's credential rules. An Events dataset is appropriate for logs/traces; metrics require a Metrics dataset.
+Do not delegate deployment selection to another skill's default-config workflow. An Events dataset is appropriate for logs/traces; metrics require a Metrics dataset.
 
 ## Signal datasets
 
@@ -40,7 +44,7 @@ Prefer a connected dataset-management tool if it provides the necessary operatio
 Create each missing dataset with `POST /v2/datasets`. The API documents `axiom:events:v1` for Events; confirm the current Metrics kind before creation (`otel:metrics:v1`). If Python 3.11+ is unavailable, use an installed TOML parser or a connected tool rather than exposing secrets through shell arguments.
 
 ```bash
-# Set AXIOM_CONFIG_PATH when the launch brief supplies a custom --config path.
+# If --config was supplied, first export AXIOM_CONFIG_PATH with that exact absolute path.
 export AXIOM_DEPLOYMENT='<deployment-name>'
 python3 - <<'PY'
 import json
