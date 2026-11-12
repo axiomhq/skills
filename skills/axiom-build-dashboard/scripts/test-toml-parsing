@@ -267,6 +267,18 @@ LISTED=$(run_list_deployments "$TMPDIR_TEST/indented.toml")
 assert_eq "lists prod (indented)"     "prod"     "$(echo "$LISTED" | head -1)"
 assert_eq "lists staging (indented)"  "staging"  "$(echo "$LISTED" | tail -1)"
 
+cp "$TMPDIR_TEST/standard.toml" "$TMPDIR_TEST/.axiom.toml"
+printf '\n[deployments.dev]\norg_id = "org-dev-789"\n' >> "$TMPDIR_TEST/.axiom.toml"
+link="$(dirname "$0")/dashboard-link"
+assert_eq "new notifier defaults to prod" "https://app.axiom.co/org-prod-123/notifiers?notifierId=new" \
+    "$(HOME="$TMPDIR_TEST" "$link" --notifier new)"
+assert_eq "explicit prod notifier" "https://app.axiom.co/org-prod-123/notifiers?notifierId=new" \
+    "$(HOME="$TMPDIR_TEST" "$link" prod --notifier new)"
+assert_eq "saved notifier on staging" "https://app.staging.axiomtestlabs.co/org-staging-456/notifiers?notifierId=a%2Fb%26c" \
+    "$(HOME="$TMPDIR_TEST" "$link" staging --notifier 'a/b&c')"
+assert_eq "new notifier on dev" "https://app.dev.axiomtestlabs.co/org-dev-789/notifiers?notifierId=new" \
+    "$(HOME="$TMPDIR_TEST" "$link" dev --notifier new)"
+
 echo ""
 echo "==========================="
 echo "Results: $PASS passed, $FAIL failed"
