@@ -1,11 +1,17 @@
 ---
 name: axiom-setup-observability
-description: Instruments every runnable app and service in a repository with OpenTelemetry and sends correlated logs, traces, and metrics to Axiom. Use when asked to add Axiom observability, onboard an application to Axiom, configure OTLP export, or instrument a repository with OpenTelemetry.
+description: Instrument applications with OpenTelemetry and send the requested logs, traces, or metrics to Axiom. Use when asked to add Axiom observability, onboard an application to Axiom, configure OTLP export, or instrument a repository with OpenTelemetry.
 ---
 
 # Axiom setup observability
 
-Add useful, portable OpenTelemetry instrumentation to every runnable service, route it to Axiom safely, and prove the data is queryable. Onboarding is incomplete until every discovered service is instrumented, explicitly deferred, or reported as blocked.
+Add useful, portable OpenTelemetry instrumentation within the requested scope, route it to Axiom safely, and prove the data is queryable. Onboarding is incomplete until every in-scope service is instrumented, explicitly deferred, or reported as blocked.
+
+## Select the scope
+
+Honor named applications and signals. For whole-repository onboarding, include every deployable service; for a named app or an added signal, inspect shared startup and deployment configuration but modify only what that request needs. If the request does not name an app, use the current app or the repository's sole runnable service; clarify only when multiple plausible targets would materially change the work.
+
+Record enabled, preserved, unsupported, and deferred signals per service before creating datasets. For general observability setup, enable useful baseline signals supported by the runtime and existing architecture; explicitly report unsupported signals. A traces-only request does not require adding logs or metrics. Do not silently reduce the requested scope to make verification pass.
 
 ## Sources of truth
 
@@ -15,7 +21,7 @@ Use current official Axiom, OpenTelemetry, language, and framework documentation
 
 ## Completion contract
 
-For each runnable service:
+For each in-scope runnable service:
 
 1. Discover and name the process boundary.
 2. Preserve or establish exactly one OpenTelemetry SDK bootstrap.
@@ -41,7 +47,7 @@ Find the repository root and record existing changes without requiring a clean t
 - package scripts, documented start commands, and CI jobs;
 - existing OpenTelemetry SDKs, agents, collectors, logging integrations, and observability vendors.
 
-Never modify files outside the project root. Never commit, push, or open a pull request unless the user separately asks.
+Keep application edits inside the project root. Private temporary files and the selected Axiom skill's credential store (such as `~/.axiom.toml`) may live outside it, subject to host permissions; preserve existing configuration and keep credentials private. Never commit, push, or open a pull request unless the user separately asks.
 
 ### Establish the data boundary
 
@@ -71,9 +77,9 @@ Use an upstream Collector distribution with the required stable components. Do n
 
 Browser and mobile apps must export through a controlled first-party gateway or Collector endpoint, never directly to Axiom. Require TLS, authentication or attestation where available, origin restrictions, rate and payload limits, sampling, and server-side redaction. CORS alone is not an access control.
 
-## Phase 2: Map every runnable service
+## Phase 2: Map runnable services
 
-Enumerate deployable process boundaries, not merely package directories. Include web servers, APIs, workers, schedulers, background jobs, CLIs, mobile or browser apps, serverless functions, and edge functions. Exclude libraries, generated code, fixtures, and examples without runtime/deployment evidence.
+Enumerate deployable process boundaries within the selected scope, not merely package directories. Include web servers, APIs, workers, schedulers, background jobs, CLIs, mobile or browser apps, serverless functions, and edge functions. Exclude libraries, generated code, fixtures, and examples without runtime/deployment evidence. Identify related out-of-scope services when relevant to propagation, without expanding the implementation.
 
 For each candidate, record:
 
@@ -82,10 +88,11 @@ For each candidate, record:
 - startup and test/build commands;
 - deployment evidence;
 - existing telemetry and logger;
+- requested and enabled signals, plus unsupported/deferred signals and reasons;
 - proposed bootstrap location;
 - status: `instrument`, `preserve-and-extend`, `needs-confirmation`, or `blocked`.
 
-Show the inventory to the user, then continue without waiting unless an ambiguity materially changes or could break the implementation. Never silently skip a candidate.
+Show the inventory and selected scope to the user, then continue without waiting unless an ambiguity materially changes or could break the implementation. Never silently skip an in-scope candidate.
 
 Start implementation with one representative service. Prove its telemetry shape and export path, then apply the established pattern to the rest of the inventory.
 
@@ -95,7 +102,7 @@ Read [reference/axiom-setup.md](reference/axiom-setup.md) before creating or reu
 
 ### Organization and credentials
 
-Prefer an existing Axiom organization and deployment. If none is configured or available, load `axiom-agent-created-orgs` and provision at most one temporary organization for the task.
+Prefer an existing Axiom organization and deployment. If none is configured or available, load `axiom-agent-created-orgs` and provision at most one temporary organization for the task. Resolve sibling skills from their installed location, not from the customer repository's working directory. If a required skill is unavailable, use the linked official API documentation or report the missing capability; do not invent a relative executable path.
 
 Use a least-privilege API token scoped to ingest only into the intended datasets. Prefer an expiring API token over a personal access token.
 
@@ -120,6 +127,7 @@ Read [reference/runtime-guides.md](reference/runtime-guides.md) before editing e
 - Initialize before instrumented libraries load, using the framework's documented hook.
 - Handle pre-fork/post-fork, worker, serverless, and edge lifecycles according to current runtime documentation.
 - Preserve existing Sentry, Datadog, New Relic, logging transports, and other vendors unless the user asks to replace them.
+- Identify which SDK or vendor agent owns instrumentation hooks. Check current vendor/runtime compatibility before adding auto-instrumentation: one OTel provider does not prevent competing proprietary agents from patching the same libraries. Prefer a supported bridge or export path; if coexistence is unsupported, report the conflict rather than installing competing agents or removing a vendor silently.
 - Prefer Collector fan-out when one OTel pipeline must feed multiple backends.
 
 ### Resource and propagation contract
@@ -130,7 +138,7 @@ Set:
 - `service.namespace`: common system or product name when useful;
 - `service.version`: release, build, or commit identifier;
 - `deployment.environment.name`: such as `production`, `staging`, or `development`;
-- `vcs.repository.url.full` on server processes: the repository's full remote URL. Read it from the repository remote and omit it when that remote is unknown.
+- `vcs.repository.url.full` on server processes: a canonical browser-accessible HTTP(S) repository URL. Read the remote privately, normalize known SSH/SCP forms, strip user information, query strings, fragments, and the trailing `.git`, and never print or export the raw remote. For example, `git@github.com:org/repo.git` becomes `https://github.com/org/repo`. Omit the attribute if a safe canonical URL cannot be established.
 
 Detect or generate `service.instance.id` per running instance; never copy one value across replicas.
 
@@ -154,19 +162,19 @@ Install bounded lifecycle handling appropriate to the runtime. Short-lived CLIs,
 
 ## Phase 5: Verify the enabled signals
 
-Prove logs, traces, and metrics are queryable before adding custom business telemetry.
+Prove every enabled signal is queryable before adding custom business telemetry.
 
 Verify in increasing levels of evidence and report the highest level reached for each service:
 
 1. **Configured**: one bootstrap, correct resources, secrets externalized, correct signal endpoints/headers, valid Collector pipelines, and repository checks pass.
 2. **Shape verified**: an in-memory exporter or local OTLP receiver sees expected spans, logs, metrics, resource attributes, and bounded dimensions.
 3. **Pipeline verified**: exporter or Collector diagnostics show accepted and sent data with no unexplained rejection, drop, queue-full, or permanent failure. Inspect OTLP partial-success responses.
-4. **Axiom verified**: bounded queries find a fresh unique marker in enabled logs and traces datasets and a fresh expected value change for each enabled metric, all with the expected `service.name`. This proves the export path. Unless business instrumentation was requested, proceed to Phase 7.
-5. **Production sign-off**: log and trace IDs correlate, cross-service propagation works where applicable, final pre-shutdown telemetry arrives, restart behavior is sane, and rollback is documented. Do this when the user asks for a production sign-off.
+4. **Axiom verified**: bounded queries find a fresh unique marker in each enabled logs/traces dataset. If both are enabled, the canary log and span share trace/span IDs. For metrics, a deterministic representative metric changes as expected for this service instance and environment, and other enabled streams have valid shape and fresh samples where their recording behavior permits. This proves each enabled export path without requiring unrelated counters or gauges to change. Unless business instrumentation was requested, proceed to Phase 7.
+5. **Production sign-off**: cross-service propagation works where applicable, final pre-shutdown telemetry arrives, restart behavior is sane, and rollback is documented. Do this when the user asks for a production sign-off.
 
 Read `reference/verify.md` and run that canary. Query logs and traces with APL through `queryDataset`. Query metrics with MPL through `queryMetrics`. Never send MPL or a metrics dataset to `queryDataset`. When a query is empty or export fails, use the queries and failure table there.
 
-If query credentials are unavailable, report “pipeline verified, backend unverified.” If any enabled signal is missing, onboarding remains incomplete for that service. Do not add custom business metrics while that is true.
+If query credentials are unavailable, report the highest level actually demonstrated and “backend unverified.” Say “pipeline verified” only with level 3 evidence. If any enabled signal is missing, onboarding remains incomplete for that service. Do not add custom business metrics while that is true.
 
 ## Phase 6: Optional business telemetry
 

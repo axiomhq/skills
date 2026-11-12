@@ -10,6 +10,10 @@ Use current official language and framework documentation alongside these OpenTe
 - [OpenTelemetry library instrumentation](https://opentelemetry.io/docs/concepts/instrumentation/libraries/)
 - [OpenTelemetry recording errors](https://opentelemetry.io/docs/specs/semconv/general/recording-errors/)
 - [OpenTelemetry instrumentation scope](https://opentelemetry.io/docs/concepts/instrumentation-scope/)
+- [Datadog OpenTelemetry compatibility](https://docs.datadoghq.com/opentelemetry/compatibility/)
+- [New Relic OpenTelemetry APM compatibility](https://docs.newrelic.com/docs/opentelemetry/get-started/apm-monitoring/opentelemetry-apm-intro/)
+
+When a vendor agent is already installed, read its current runtime compatibility guidance before adding auto-instrumentation. Preserve the existing instrumentation owner unless a supported coexistence/export path is documented or a migration is requested. A Collector can fan out an existing OTel pipeline, but it does not resolve competing in-process runtime hooks.
 
 ## Choose the runtime guide
 

@@ -1,11 +1,12 @@
 # axiom-setup-observability
 
-Adds production-grade OpenTelemetry observability to every discovered deployable process boundary and verifies that supported and enabled logs, traces, and metrics reach Axiom.
+Adds OpenTelemetry observability to the requested applications or repository and verifies that supported and enabled logs, traces, and metrics reach Axiom. Named applications and traces-only requests keep that scope; whole-repository onboarding covers every discovered deployable process boundary.
 
 ## What This Skill Covers
 
 - Repository-wide discovery of deployable services, workers, jobs, CLIs, and functions
-- Safe integration with existing OpenTelemetry and observability vendors
+- Compatibility checks for existing OpenTelemetry SDKs and vendor agents
+- Explicit service/signal selection, without creating datasets for disabled signals
 - Signal-specific OTLP/HTTP routing to correlated Axiom datasets
 - Stable service identity, context propagation, and trace-correlated logs
 - Optional business spans and metrics derived from application code, when requested after baseline verification
@@ -22,6 +23,7 @@ Setup is complete when useful baseline telemetry is queried back from Axiom for 
 - Existing telemetry vendors and user configuration are preserved by default.
 - Sensitive content is excluded unless the user approves specific fields and a redaction strategy.
 - The skill does not claim success until telemetry is queried back from Axiom.
+- Missing query access is reported separately from the highest verification level actually demonstrated.
 
 ## Axiom Routing
 
@@ -37,6 +39,12 @@ Use separate correlated datasets for each enabled signal:
 - A least-privilege API token with ingest access to the destination datasets
 - Query access through Axiom MCP or configured API credentials for end-to-end verification
 - The target repository's normal package manager and build/test tools
+
+## Evaluation
+
+Nine fixture-based cases in `.meta/` cover API edge identifiers, scoped changes, existing SDK/vendor ownership, missing query access, public-client credentials, installed paths, safe repository URLs, and metric evidence. The existing changed-skill CI discovers `axiom-setup-observability.eval.ts`.
+
+From `eval-tooling`, run `pnpm exec axiom eval ../skills/axiom-setup-observability/.meta/axiom-setup-observability.eval.ts` with the repository's evaluation credentials. The shared harness proposes changes from fixture text; it does not edit/run customer applications or send telemetry. Its two semantic rubric scorers are exploratory and require human review/calibration before scores are trusted as a release gate. Runtime bootstrap/flush behavior and backend delivery still need representative application integration tests.
 
 ## Sources
 
