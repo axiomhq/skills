@@ -1,111 +1,44 @@
 # Provision missing Axiom resources
 
-Read this only when the requested signals lack destination datasets or an Axiom organization. Honor any supplied config path, deployment, datasets, edge, and environment; provision only missing pieces. An ingest-only onboarding token does not need management permissions. If creation requires unavailable privileges, report that gap rather than creating another organization or broadening the application token.
+Read this only for missing organizations or datasets. Supplied destinations skip provisioning. Preserve the selected environment and residency; an ingest-only token does not require management permissions unless resources actually need creating.
 
-## Sources of truth
+## Select the target
 
-Read the current Axiom pages relevant to the setup:
+Use the config path, deployment, organization, and credential source supplied by the user or launch brief. Resolve relative config paths before changing directory and retain the same `--config` and `--deployment` on CLI commands. Honor the CLI's effective `AXIOM_URL`, `AXIOM_TOKEN`, and `AXIOM_ORG_ID` overrides; reading raw TOML alone can select different credentials or an organization. Verify connected tools use the same target before writing. If no target was supplied, use the sole usable existing target or clarify when several are available.
 
-- [Axiom OpenTelemetry ingestion](https://axiom.co/docs/send-data/opentelemetry.md)
-- [Axiom sending methods and runtime guides](https://axiom.co/docs/send-data/methods.md)
-- [Axiom datasets](https://axiom.co/docs/reference/datasets.md)
-- [Axiom edge deployments](https://axiom.co/docs/reference/edge-deployments.md)
-- [Axiom tokens](https://axiom.co/docs/reference/tokens.md)
-- [Axiom ingestion limits](https://axiom.co/docs/reference/limits.md)
-- [Create dataset API](https://axiom.co/docs/restapi/endpoints/createDataset.md)
-- [MPL introduction](https://axiom.co/docs/mpl/introduction.md)
+Handle missing configuration according to intent:
 
-## Organization and deployment
+- **An existing target was explicitly selected:** if its required config is missing/unreadable, its deployment cannot be resolved, or its credentials fail, report the blocker. Do not switch to a personal/default organization or provision around the failure. Valid selected environment credentials can resolve a deployment without an implicit default file; an explicitly required config file still must exist.
+- **A custom config is valid but empty:** ask whether to configure an existing organization or create a temporary one in that file. Do not use another file. If the user already requested temporary provisioning, follow that request.
+- **No target or existing credential source is available:** an absent or empty implicit `~/.axiom.toml` is normal first-time setup. Follow `axiom-agent-created-orgs` to provision at most one temporary organization. An existing unreadable/malformed file is a configuration failure, not evidence of a new user.
 
-Select the organization within the configuration chosen for this task:
+An explicit request for a new temporary organization is separate from resolving an existing target. Preserve the chosen credential-storage path, existing content, and private permissions; check storage is usable before provisioning a one-time token. Adapt the temporary-org workflow rather than copying its default-file append into a custom-config task. Resolve that skill from its installed location, or use the [official provisioning documentation](https://axiom.co/docs/console/intelligence/agent-created-orgs) if unavailable. Never expose the returned token; provide its claim/expiry handoff as instructed.
 
-1. A config path and deployment supplied by the user or launch brief are authoritative. Resolve a relative config path before changing working directory. Read deployment names and credentials only from that file, and pass the same `--config` and `--deployment` to CLI commands. For the Python example below, explicitly set `AXIOM_CONFIG_PATH` to that selected absolute path and `AXIOM_DEPLOYMENT` to the selected alias.
-2. Use `~/.axiom.toml` only when no alternative config path was supplied. Within the selected file, use a named deployment exactly; otherwise use the sole deployment or clarify when several are plausible. Do not select an alias from another config file, even if its name matches.
-3. If the selected file is missing/unreadable, its named deployment is absent, or its credentials lack permissions, report the specific blocker. Do not fall back to the default config, another organization, or temporary provisioning. A connected management tool is usable only after confirming it targets the same selected organization and API.
+## Prepare only missing datasets
 
-Provision at most one temporary organization via `axiom-agent-created-orgs` only when no organization/deployment was specified and the selected configuration has no deployment to use. A failed lookup or permission check is not evidence that the user has no organization. Resolve sibling skills from their installed location, not from the customer repository's working directory. If the skill is unavailable, use the linked official API documentation or report the missing capability; do not invent a relative executable path.
+Read the current [dataset API](https://axiom.co/docs/restapi/endpoints/createDataset.md) and [OTLP ingestion guidance](https://axiom.co/docs/send-data/opentelemetry) before creating resources. List datasets in the selected organization and reuse compatible ones. Create one dedicated dataset per enabled signal and environment/access boundary, not a mandatory set of three.
 
-Do not delegate deployment selection to another skill's default-config workflow. An Events dataset is appropriate for logs/traces; metrics require a Metrics dataset.
+| Signal | Supported kind |
+|---|---|
+| Logs | `otel:logs:v1`, or compatible Events `axiom:events:v1` |
+| Traces | `otel:traces:v1`, or compatible Events `axiom:events:v1` |
+| Metrics | `otel:metrics:v1` |
 
-## Signal datasets
+All four kinds are documented API values. Preserve working signal-specific datasets and compatible Events datasets. Names use 1–128 ASCII letters, digits, and hyphens. Verify unfamiliar kinds or constraints against the current API.
 
-For each environment, residency, and tenant-access boundary, use one dedicated dataset per enabled signal on the same edge. Create only missing datasets for the selected signals. Use simple names of 1–128 ASCII letters, digits, and `-`.
+Use existing CLI/MCP capabilities where supported. For an unsupported operation, follow the official API with the same effective credential source and organization; do not invent CLI flags or maintain a second config-resolution workflow. Validate the final HTTPS management destination before attaching credentials, refuse credentialed redirects, and use private credential transport. Keep secret values out of chat, tracked files, command arguments, and logs; see [credential injection](axiom-setup.md#credential-injection). If management access is unavailable, report it rather than broadening the application's ingest token or silently using another credential.
 
-| Signal | `kind` | OTLP path | Dataset header |
-|---|---|---|---|
-| Logs | Events (`axiom:events:v1`) | `/v1/logs` | `x-axiom-dataset` |
-| Traces | Events (`axiom:events:v1`) | `/v1/traces` | `x-axiom-dataset` |
-| Metrics | `otel:metrics:v1` | `/v1/metrics` | `x-axiom-metrics-dataset` |
+Keep API edge identifiers separate from display labels and ingest URLs:
 
-List existing datasets before creating any. Reuse a compatible dataset only when its intended signal, edge, and access boundary match. Public documentation specifies Events for logs/traces and Metrics for metrics; do not require undocumented `otel:logs:v1` or `otel:traces:v1` kinds or reject an Events dataset solely for lacking them. Verify unfamiliar kind values against the current API or console. A 409 means the name exists; inspect it instead of creating another name blindly.
-
-Prefer a connected dataset-management tool if it provides the necessary operation. Otherwise, the following Python 3.11+ example reads the selected deployment privately and keeps tokens out of command arguments. It lists datasets by default; to create one, set non-secret `AXIOM_DATASET_NAME`, `AXIOM_DATASET_KIND`, and `AXIOM_EDGE_DEPLOYMENT` variables first. `AXIOM_EDGE_DEPLOYMENT` must contain an API identifier such as `cloud.us-east-1.aws`, never the display label `US East 1 (AWS)` or an HTTPS ingest URL. Use only the management URL verified for the selected Axiom deployment. Do not disable certificate verification or follow redirects with credentials.
-
-Create each missing dataset with `POST /v2/datasets`. The API documents `axiom:events:v1` for Events; confirm the current Metrics kind before creation (`otel:metrics:v1`). If Python 3.11+ is unavailable, use an installed TOML parser or a connected tool rather than exposing secrets through shell arguments.
-
-```bash
-# If --config was supplied, first export AXIOM_CONFIG_PATH with that exact absolute path.
-export AXIOM_DEPLOYMENT='<deployment-name>'
-python3 - <<'PY'
-import json
-import os
-from pathlib import Path
-import tomllib
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener
-
-class NoRedirect(HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
-
-config_path = Path(os.environ.get('AXIOM_CONFIG_PATH', str(Path.home() / '.axiom.toml')))
-with config_path.open('rb') as source:
-    deployment = tomllib.load(source)['deployments'][os.environ['AXIOM_DEPLOYMENT']]
-base = deployment['url'].rstrip('/')
-parsed = urlsplit(base)
-# Add another official management host only after verifying the deployment.
-if (parsed.scheme != 'https' or parsed.hostname != 'api.axiom.co'
-        or parsed.port not in (None, 443) or parsed.username is not None
-        or parsed.password is not None or parsed.path not in ('', '/')
-        or parsed.query or parsed.fragment):
-    raise SystemExit('Verify the management URL before attaching credentials')
-headers = {'Authorization': 'Bearer ' + deployment['token']}
-if deployment.get('org_id'):
-    headers['X-Axiom-Org-Id'] = deployment['org_id']
-body = None
-if os.environ.get('AXIOM_DATASET_NAME'):
-    body = json.dumps({
-        'name': os.environ['AXIOM_DATASET_NAME'],
-        'kind': os.environ['AXIOM_DATASET_KIND'],
-        'edgeDeployment': os.environ['AXIOM_EDGE_DEPLOYMENT'],
-    }).encode()
-    headers['Content-Type'] = 'application/json'
-request = Request(base + '/v2/datasets', data=body, headers=headers)
-try:
-    with build_opener(NoRedirect()).open(request, timeout=30) as response:
-        result = json.load(response)
-except HTTPError as error:
-    raise SystemExit(f'Dataset request failed: HTTP {error.code}') from None
-except URLError:
-    raise SystemExit('Dataset request failed: network or TLS error') from None
-# Print only dataset identity/routing, never request headers or raw responses.
-datasets = result if isinstance(result, list) else [result]
-for dataset in datasets:
-    print(json.dumps({key: dataset.get(key) for key in
-        ('name', 'kind', 'edgeDeployment', 'edgeDeploymentUrl')}))
-PY
-```
-
-Keep the API identifier, console display label, and ingest URL distinct:
-
-| Display label | API `edgeDeployment` identifier | Ingest/query base URL |
+| Display label | API `edgeDeployment` | Ingest/query origin |
 |---|---|---|
 | US East 1 (AWS) | `cloud.us-east-1.aws` | `https://us-east-1.aws.edge.axiom.co` |
 | EU Central 1 (AWS) | `cloud.eu-central-1.aws` | `https://eu-central-1.aws.edge.axiom.co` |
 
-Prefer the exact `edgeDeployment` returned by a compatible dataset or the organization's `defaultEdgeDeployment` (also returned by [organization provisioning](https://axiom.co/docs/console/intelligence/agent-created-orgs)). Confirm that it satisfies the requested residency. For another edge, discover its identifier from the API; do not invent one from a display label. Use the dataset response's `edgeDeploymentUrl` for OTLP export. Repeat creation only for the other enabled signals, then unset the creation variables before listing again. Each response's `edgeDeployment` must match the selected identifier and its `edgeDeploymentUrl` must route to that edge. A 400 for an unsupported edge means the identifier is wrong or the organization does not have that edge. The edge cannot be changed after creation. On a 403, report missing management permissions; do not broaden the application's ingest token. `dataset license limit exceeded` means stop and ask which compatible datasets to reuse. Temporary organizations have limited dataset capacity; reuse appropriate datasets and do not create unused signals.
+Prefer an existing dataset's `edgeDeployment` or the organization's `defaultEdgeDeployment` when it meets the requested residency; discover other IDs through the API. Pass the ID to creation, then verify the returned ID and `edgeDeploymentUrl`. The edge cannot be changed after creation. Use the returned full edge URL for export, following [signal routing](axiom-setup.md).
 
-Preserve an existing correlation group. If the datasets are not yet linked, there is no documented correlation-group API; when both logs and traces are enabled, tell the user to open **Datasets → Correlations → New correlation group** and select the enabled datasets. This console configuration is a handoff step, separate from proving matching IDs in ingested records. Each log event needs top-level `trace_id` and `span_id`. Keep the spans in the traces dataset. If the logs dataset also has trace fields such as `parent_span_id`, the console searches the logs dataset for the trace and reports that it cannot find it.
+Report the HTTP status and a safe actionable reason without dumping raw responses or headers: inspect an existing dataset on 409, verify the edge/kind/name for the corresponding 400 error, select a compatible existing dataset when capacity is exhausted, and report missing permissions on 403. Do not create another organization or retry unchanged requests to bypass these failures.
 
-Keep every span of one distributed trace in the one traces dataset. Distinguish services with `service.name`.
+## Link enabled signals
+
+Preserve existing correlation groups. When logs and traces are enabled but not linked, use the documented console correlation-group workflow and report any manual handoff; do not invent a group-creation API. Keep spans of one distributed trace in the same traces dataset and distinguish services with `service.name`. Matching ingested trace/span IDs are still required for verification; a console handoff alone is not proof of correlation.

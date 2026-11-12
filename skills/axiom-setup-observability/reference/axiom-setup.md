@@ -22,9 +22,17 @@ For correlated logs, preserve top-level `trace_id` and `span_id`; keep spans in 
 
 Every enabled signal request also sends `Authorization: Bearer <API_TOKEN>` from the deployment secret mechanism. Configure only enabled signals, separately. A shared dataset header in `OTEL_EXPORTER_OTLP_HEADERS` cannot route logs/traces and metrics correctly; use signal-specific dataset headers. Shared authorization alone is not a routing error.
 
-In `OTEL_EXPORTER_OTLP_*_HEADERS`, separate headers with commas and use `=`, not HTTP colon syntax. Follow the installed exporter's [OTLP environment header format](https://opentelemetry.io/docs/specs/otel/protocol/exporter/#specifying-headers-via-environment-variables), including percent-encoding spaces in values. The example uses `Bearer%20` for the authorization separator; SDK/Collector header maps instead use the literal `Bearer ` value.
+### Credential injection
 
-Set `AXIOM_EDGE_URL` to the dataset's verified full HTTPS `edgeDeploymentUrl`, including its scheme. The example assumes `AXIOM_TOKEN` is already supplied privately by the secret mechanism. Disable shell tracing before handling it; never paste its value into a command or tracked file. Keep only the enabled signal assignments.
+Prefer platform/CI secret-store bindings, an existing private local credential provider, or a protected mounted secret read by the SDK/Collector at runtime. Tracked examples/configuration contain only variable names or secret references. Never ask the user to paste a token into chat or copy a real token into a script, terminal command, or tracked file. If no private injection mechanism is configured, finish safe configuration/local checks and report the pending secret step.
+
+If the runtime uses environment-based OTLP headers, have the platform inject the secret-bearing values directly into the intended service/Collector process. Do not export expanded authorization headers in the agent's general shell. Environment variables are not a security boundary: child processes inherit them by default and environment dumps, shell tracing, CI output, debug exporters, or crash reports can reveal them. Disable tracing before retrieving secrets; do not run `env`, `printenv`, `set`, or header-dumping diagnostics in that scope. Do not rely on CI masking as the only protection. Run builds/unrelated tools outside the secret scope and pass a sanitized environment to children that do not need telemetry credentials, removing both the token variable and shared/per-signal OTLP header variables. Restrict that scope to the app process and children that genuinely need it.
+
+In `OTEL_EXPORTER_OTLP_*_HEADERS`, separate headers with commas and use `=`, not HTTP colon syntax. Follow the installed exporter's [OTLP environment header format](https://opentelemetry.io/docs/specs/otel/protocol/exporter/#specifying-headers-via-environment-variables), including percent-encoding spaces in values. The environment format uses `Bearer%20` for the authorization separator; SDK/Collector header maps instead use the literal `Bearer ` value.
+
+For environment-based SDK configuration, the platform secret store can supply each enabled header value in the form `Authorization=Bearer%20<secret>,x-axiom-dataset=<dataset>` (metrics uses `x-axiom-metrics-dataset`). This describes the format, not a shell command or a literal value to commit. SDK header maps can instead read the injected token/mounted secret at runtime and keep it in memory; do not export a second copy of the authorization header unnecessarily.
+
+The following shell example sets **non-secret routing only**. Set `AXIOM_EDGE_URL` to the verified full HTTPS `edgeDeploymentUrl`, including its scheme, and retain only enabled signals. Credential injection is handled separately as above.
 
 ```bash
 set +x
@@ -33,9 +41,6 @@ export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 export OTEL_EXPORTER_OTLP_LOGS_ENDPOINT="${AXIOM_EDGE_URL%/}/v1/logs"
 export OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="${AXIOM_EDGE_URL%/}/v1/traces"
 export OTEL_EXPORTER_OTLP_METRICS_ENDPOINT="${AXIOM_EDGE_URL%/}/v1/metrics"
-export OTEL_EXPORTER_OTLP_LOGS_HEADERS="Authorization=Bearer%20${AXIOM_TOKEN},x-axiom-dataset=${LOGS_DATASET}"
-export OTEL_EXPORTER_OTLP_TRACES_HEADERS="Authorization=Bearer%20${AXIOM_TOKEN},x-axiom-dataset=${TRACES_DATASET}"
-export OTEL_EXPORTER_OTLP_METRICS_HEADERS="Authorization=Bearer%20${AXIOM_TOKEN},x-axiom-metrics-dataset=${METRICS_DATASET}"
 ```
 
 Export and quote assignments so the child process receives them intact. Without `export`, a process started from that shell does not receive them.

@@ -22,7 +22,7 @@ Choose the path from the available context:
 
 Read [reference/axiom-setup.md](reference/axiom-setup.md) for per-signal endpoints and headers. Use the selected dataset edge, not the management API, for export.
 
-Keep ingest credentials private in the existing secret mechanism. Do not print tokens/authorization headers or put them in source, tracked env files, logs, snapshots, shell history, or command arguments. Validate the final HTTPS destination before attaching credentials. Use scoped ingest credentials for applications; keep management/query access separate. Without a secret mechanism, add variable names and placeholders rather than secret values.
+Inject ingest credentials through the platform/CI secret store or an existing private local credential provider, scoped to the application/Collector process. Never request or paste secret values in chat, source, tracked env files, logs, snapshots, shell history, or command arguments. Environment variables remain sensitive: avoid shell/CI dumps and unnecessary child-process inheritance; see [routing credential guidance](reference/axiom-setup.md#credential-injection). Validate the final HTTPS destination before attaching credentials. Keep scoped application ingest credentials separate from management/query access. Without a configured secret mechanism, add variable names/placeholders and report the pending injection step rather than writing a token value.
 
 ## 3. Instrument the enabled signals
 

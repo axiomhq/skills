@@ -26,6 +26,7 @@ The main workflow stays focused on discovery, instrumentation, verification, and
 ## Safety Model
 
 - Credentials stay in the deployment's secret mechanism and never enter source or browser bundles.
+- Secret-bearing OTLP headers are injected into the intended runtime, not exported in the agent's general shell; tracing, environment dumps, and unrelated child processes must not expose them.
 - Browser and mobile telemetry uses a controlled first-party gateway with abuse and privacy controls, never direct Axiom credentials.
 - Existing telemetry vendors and user configuration are preserved by default.
 - Sensitive content is excluded unless the user approves specific fields and a redaction strategy.
@@ -49,7 +50,7 @@ Use separate correlated datasets for each enabled signal:
 
 ## Evaluation
 
-Thirteen fixture-based cases in `.meta/` cover auto-instrumentation privacy, supplied/partial destinations, custom config preservation and missing-config refusal, API edge identifiers, scoped changes, existing SDK/vendor ownership, missing query access, public-client credentials, installed paths, safe repository URLs, and metric evidence. The existing changed-skill CI discovers `axiom-setup-observability.eval.ts`.
+Twenty fixture-based cases in `.meta/` cover credential injection, safe error reasons, effective CLI environment overrides, auto-instrumentation privacy, supplied/partial destinations, first-time provisioning versus explicit/empty/unreadable config handling, API edge identifiers, scoped changes, existing SDK/vendor ownership, missing query access, public-client credentials, installed paths, safe repository URLs, and metric evidence. The existing changed-skill CI discovers `axiom-setup-observability.eval.ts`.
 
 From `eval-tooling`, run `pnpm exec axiom eval ../skills/axiom-setup-observability/.meta/axiom-setup-observability.eval.ts` with the repository's evaluation credentials. The shared harness proposes changes from fixture text; it does not edit/run customer applications or send telemetry. Its two semantic rubric scorers are exploratory and require human review/calibration before scores are trusted as a release gate. Runtime bootstrap/flush behavior and backend delivery still need representative application integration tests.
 
