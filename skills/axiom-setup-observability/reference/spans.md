@@ -37,3 +37,8 @@ Put entity identifiers only in traces or structured logs when they are necessary
 Do not capture raw bodies, prompts, tool content, SQL parameters, authorization or cookie headers, URL query strings, file contents, stack locals, source code, payment/health data, or arbitrary serialized objects by default.
 
 Avoid duplicate network/framework spans already emitted by auto-instrumentation. Use span events or structured logs for additional detail.
+
+
+## Optional business instrumentation
+
+Only when requested, and after baseline telemetry is verified, select critical application workflows whose duration or outcome answers a concrete question. Enrich existing spans before adding new ones; apply metric attribute filters per instrument rather than applying an HTTP-only allowlist to every future business metric. Repeat the relevant checks in [verify.md](verify.md) for new instrumentation. This is an optional follow-up, not a condition for completing baseline setup.

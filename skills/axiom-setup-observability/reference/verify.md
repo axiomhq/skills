@@ -1,8 +1,21 @@
 # Verify signals in Axiom
 
-Read this during Phase 5, and again after each business signal added in optional Phase 6 when requested.
+Read this when verifying telemetry or diagnosing missing signals. Exercise only the enabled signals; read the local receiver and failure sections when needed.
 
 Query logs and traces with APL through `queryDataset`. Query metrics with MPL through `queryMetrics`. Never send MPL or a metrics dataset to `queryDataset`.
+
+## Evidence levels
+
+Use these labels when detailed status is useful or requested. Report only observed evidence per service and signal. A concise customer result need not enumerate the ladder.
+
+1. **Configured**: one bootstrap, correct resources, secrets externalized, correct signal endpoints/headers, valid Collector pipelines, and repository checks pass.
+2. **Shape verified**: an in-memory exporter or local OTLP receiver sees expected spans, logs, metrics, resource attributes, and bounded dimensions.
+3. **Pipeline verified**: exporter or Collector diagnostics show accepted and sent data with no unexplained rejection, drop, queue-full, or permanent failure. Inspect OTLP partial-success responses.
+4. **Axiom verified**: bounded queries find a fresh unique marker in each enabled logs/traces dataset. If both are enabled, the canary log and span share trace/span IDs. For metrics, a deterministic representative metric changes as expected for this service instance and environment, and other enabled streams have valid shape and fresh samples where their recording behavior permits. This proves each enabled export path without requiring unrelated counters or gauges to change.
+5. **Production sign-off**: cross-service propagation works where applicable, final pre-shutdown telemetry arrives, restart behavior is sane, and rollback is documented. Do this when the user asks for a production sign-off.
+
+
+An ingest-only token cannot query datasets. Use existing CLI/MCP query access to the same organization or separate query credentials. If neither is available, report backend unverified at the highest observed local/pipeline level; do not provision another organization or broaden the application token.
 
 ## Local shape check (level 2)
 

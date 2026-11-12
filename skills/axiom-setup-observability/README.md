@@ -16,6 +16,13 @@ Adds OpenTelemetry observability to the requested applications or repository and
 
 Setup is complete when useful baseline telemetry is queried back from Axiom for every enabled signal and the repository's observability context is saved. Custom business instrumentation is an optional follow-up. The context goes in existing observability documentation or `docs/observability.md` and records setup, conventions, verification evidence, and operational steps without secrets.
 
+## Setup Paths
+
+- **Destinations already supplied:** instrument and verify using those datasets, edge, secret variables, and selected deployment. Resource management permissions are not required.
+- **Destinations missing:** load `reference/provision.md` and prepare only missing resources. Preserve any supplied destinations and custom config path.
+
+The main workflow stays focused on discovery, instrumentation, verification, and concise handoff. Runtime details live in `reference/runtime-guides.md`; sensitive-data/Collector decisions and production sign-off live in `reference/deployment.md`; detailed evidence levels and troubleshooting live in `reference/verify.md`.
+
 ## Safety Model
 
 - Credentials stay in the deployment's secret mechanism and never enter source or browser bundles.
@@ -42,7 +49,7 @@ Use separate correlated datasets for each enabled signal:
 
 ## Evaluation
 
-Nine fixture-based cases in `.meta/` cover API edge identifiers, scoped changes, existing SDK/vendor ownership, missing query access, public-client credentials, installed paths, safe repository URLs, and metric evidence. The existing changed-skill CI discovers `axiom-setup-observability.eval.ts`.
+Twelve fixture-based cases in `.meta/` cover auto-instrumentation privacy, supplied/partial destinations, custom config preservation, API edge identifiers, scoped changes, existing SDK/vendor ownership, missing query access, public-client credentials, installed paths, safe repository URLs, and metric evidence. The existing changed-skill CI discovers `axiom-setup-observability.eval.ts`.
 
 From `eval-tooling`, run `pnpm exec axiom eval ../skills/axiom-setup-observability/.meta/axiom-setup-observability.eval.ts` with the repository's evaluation credentials. The shared harness proposes changes from fixture text; it does not edit/run customer applications or send telemetry. Its two semantic rubric scorers are exploratory and require human review/calibration before scores are trusted as a release gate. Runtime bootstrap/flush behavior and backend delivery still need representative application integration tests.
 
