@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.3.1](https://github.com/axiomhq/skills/compare/v1.3.0...v1.3.1) (2026-11-14)
+
+
+### Fixes
+
+* clarify chart-add query errors ([c31e496](https://github.com/axiomhq/skills/commit/c31e496bcb7de91e1acae4bc9849f4864f321b66))
+* clarify chart-add query errors ([b0634e2](https://github.com/axiomhq/skills/commit/b0634e236ab47ed82f58002206af4f86b4725304))
+* **costs:** stop when the monitor list cannot be read ([5e39ffd](https://github.com/axiomhq/skills/commit/5e39ffd77bcff0277d83ff6dbb8e186ed9263fb3))
+* **costs:** stop when the monitor list cannot be read ([119d18c](https://github.com/axiomhq/skills/commit/119d18c00e380c4abf219230eaae03dee03adb97))
+
+
+### Documentation
+
+* **build-dashboard:** remove stream fontSize setting ([bd3d648](https://github.com/axiomhq/skills/commit/bd3d648821b12ccbf7d0c74aecbf504cead1bfad))
+
 ## [1.3.0](https://github.com/axiomhq/skills/compare/v1.2.1...v1.3.0) (2026-11-10)
 
 
