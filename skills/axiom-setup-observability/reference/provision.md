@@ -1,6 +1,6 @@
 # Provision missing Axiom resources
 
-Read this only for missing organizations or datasets. Supplied destinations skip provisioning. Preserve the selected environment and residency; an ingest-only token does not require management permissions unless resources actually need creating.
+Read this for missing organizations, datasets, or ingest credentials/bindings. Skip creation of resources already supplied. Preserve the selected environment and residency; working ingest access does not require management permissions.
 
 ## Select the target
 
@@ -38,6 +38,16 @@ Keep API edge identifiers separate from display labels and ingest URLs:
 Prefer an existing dataset's `edgeDeployment` or the organization's `defaultEdgeDeployment` when it meets the requested residency; discover other IDs through the API. Pass the ID to creation, then verify the returned ID and `edgeDeploymentUrl`. The edge cannot be changed after creation. Use the returned full edge URL for export, following [signal routing](axiom-setup.md).
 
 Report the HTTP status and a safe actionable reason without dumping raw responses or headers: inspect an existing dataset on 409, verify the edge/kind/name for the corresponding 400 error, select a compatible existing dataset when capacity is exhausted, and report missing permissions on 403. Do not create another organization or retry unchanged requests to bypass these failures.
+
+## Configure private ingest access
+
+Reuse a suitable application ingest credential or secret binding when available. Otherwise, use the selected management identity to create a dataset-scoped API token when permitted; do not ask the user to create or paste it manually. CLI browser-login credentials are not application ingest tokens: the edge ingest API rejects unsupported credential types before checking scopes.
+
+Follow the current [create-token API](https://axiom.co/docs/restapi/endpoints/createToken.md): `POST /v2/tokens`, with `datasetCapabilities` mapping each enabled destination dataset to `{"ingest":["create"]}`. Grant no wildcard dataset, query, organization, or other capabilities. Use an appropriate finite expiry and record the token ID and expiry, never its value, for rotation/revocation.
+
+Check private storage is writable before creation. Prefer the existing platform/CI secret store. For local development without one, create an app-specific credential file outside the repository in a private directory (`0700`), with file mode `0600`; preserve existing files. Capture the returned secret directly into that storage without printing the API response. Bind it only at application/Collector runtime; tracked configuration contains references or placeholders. When using a Collector, keep the token there. Verify through a real app operation and separate query access, not just a synthetic token probe.
+
+If permission is denied or no safe storage/binding is available, report the blocker and continue local checks with placeholders. Do not broaden permissions or switch organizations. If storage fails after creation, revoke the new token when possible and report any cleanup needed without creating more tokens.
 
 ## Link enabled signals
 

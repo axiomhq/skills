@@ -65,9 +65,9 @@ Use W3C `tracecontext,baggage` propagation. Do not put secrets, broad user data,
 
 Use framework auto-instrumentation as the baseline, then add only what the application needs:
 
-- Traces: HTTP/RPC, database, and messaging instrumentation. Add custom business-operation spans only when requested, after baseline verification. Record exceptions and set error status when an operation fails.
-- Logs: keep the existing logger and add the current OTel bridge/appender so active `trace_id` and `span_id` are top-level fields. Preserve standard severity fields.
-- Metrics: counters for state transitions, histograms for latency or sizes, and gauges only for point-in-time values.
+- Traces: HTTP/RPC, database, and messaging instrumentation. Add custom business-operation spans only when requested, after baseline verification. Record exceptions and set error status when an operation fails; distinguish expected validation rejection from internal or downstream failures.
+- Logs: keep the existing logger and add the current OTel bridge/appender so active `trace_id` and `span_id` are top-level fields. Preserve standard severity fields. For failures, retain safe error type, message, and stack details where supported, redacting sensitive content before export. Enrich existing error paths rather than adding a custom telemetry wrapper or duplicate exception records.
+- Metrics: when enabled, include useful supported runtime metrics alongside framework metrics, such as JVM memory/GC or Node memory/event-loop activity. Reuse existing runtime instrumentation and avoid duplicate streams. Choose counters for state transitions, histograms for latency or sizes, and gauges only for point-in-time values.
 
 Do not create wrapper APIs such as `sendAxiomSpan` or `recordAxiomMetric`. Application code uses native OpenTelemetry APIs so instrumentation stays portable.
 
@@ -76,3 +76,5 @@ Read [spans.md](spans.md) before adding or changing a span, span event, log attr
 ## Shutdown
 
 Install bounded lifecycle handling appropriate to the runtime. Short-lived CLIs, jobs, and tests must flush before normal exit and shut providers down once at process termination. For reusable serverless processes, force-flush at invocation boundaries only when the runtime requires it; do not shut down a provider after every invocation. Do not claim delivery guarantees for crashes, `SIGKILL`, or platform freezes.
+
+Coordinate with the framework's shutdown hooks so it cannot exit before the SDK finishes flushing. When adding or changing shutdown handling, emit telemetry immediately before graceful termination and verify it reaches the receiver or backend; note which was checked.

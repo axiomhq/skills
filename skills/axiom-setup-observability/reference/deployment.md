@@ -18,14 +18,16 @@ For browser and mobile telemetry, review fields emitted by third-party auto-inst
 
 ## Select the architecture
 
-Prefer direct OTLP/HTTP export for a small deployment, local proof, or platform where a Collector cannot run.
+Preserve an existing working Collector or export route. For new server-side setups, default to direct OTLP/HTTP export to Axiom with private runtime credential injection. Multiple services, production deployment, and routine SDK batching/retries alone do not require adding a Collector.
 
-Prefer SDK → OpenTelemetry Collector → Axiom when any of these apply:
+Add SDK → OpenTelemetry Collector → Axiom only for an identified requirement such as:
 
-- multiple services share routing or credentials;
-- production needs batching, buffering, retries, sampling, filtering, redaction, or fan-out;
-- Prometheus endpoints must be scraped;
-- backend credentials should stay out of application processes.
+- scraping Prometheus endpoints or collecting infrastructure/file logs;
+- centralized filtering/redaction, fan-out to multiple backends, or tail sampling;
+- shared durable queues or delivery controls beyond the SDK's supported capabilities;
+- keeping backend credentials out of application processes.
+
+State the requirement before adding the extra service. A temporary local Collector used to inspect telemetry does not require a permanent Collector deployment.
 
 Use an upstream Collector distribution with the required stable components. Do not require an Axiom-specific Collector.
 

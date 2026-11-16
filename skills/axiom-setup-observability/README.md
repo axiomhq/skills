@@ -50,7 +50,7 @@ Use separate correlated datasets for each enabled signal:
 
 ## Evaluation
 
-Twenty fixture-based cases in `.meta/` cover credential injection, safe error reasons, effective CLI environment overrides, auto-instrumentation privacy, supplied/partial destinations, first-time provisioning versus explicit/empty/unreadable config handling, API edge identifiers, scoped changes, existing SDK/vendor ownership, missing query access, public-client credentials, installed paths, safe repository URLs, and metric evidence. The existing changed-skill CI discovers `axiom-setup-observability.eval.ts`.
+Twenty-two fixture-based cases in `.meta/` cover direct-export defaults, runtime/error telemetry, private ingest-token provisioning, credential injection, safe error reasons, effective CLI environment overrides, auto-instrumentation privacy, supplied/partial destinations, first-time provisioning versus explicit/empty/unreadable config handling, API edge identifiers, scoped changes, existing SDK/vendor ownership, missing query access, public-client credentials, installed paths, safe repository URLs, and metric evidence. The existing changed-skill CI discovers `axiom-setup-observability.eval.ts`.
 
 From `eval-tooling`, run `pnpm exec axiom eval ../skills/axiom-setup-observability/.meta/axiom-setup-observability.eval.ts` with the repository's evaluation credentials. The shared harness proposes changes from fixture text; it does not edit/run customer applications or send telemetry. Its two semantic rubric scorers are exploratory and require human review/calibration before scores are trusted as a release gate. Runtime bootstrap/flush behavior and backend delivery still need representative application integration tests.
 
