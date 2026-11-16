@@ -55,6 +55,7 @@ skills/axiom-alerting/scripts/monitor-history prod <monitor-id> 2026-05-03T00:00
 - Email notifier uses `emails`, not `recipients`.
 - Monitor payload uses `notifierIds` to attach destinations.
 - For noisy alerts, prefer `triggerAfterNPositiveResults` with `triggerFromNRuns`.
+- Monitor `type` is `Threshold`, `MatchEvent`, `NewValues`, or `AnomalyDetection`. `SKILL.md` says when to use each and has a valid example of each.
 
 ## Script Index
 

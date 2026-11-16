@@ -105,11 +105,11 @@ Use `scripts/axiom-api` or `scripts/curl-auth axiom <deployment> <url>` with the
 | List monitors | `GET /v2/monitors` | List all configured monitors |
 | Get monitor | `GET /v2/monitors/{id}` | Get monitor configuration |
 | Get monitor history | `GET /v2/monitors/{id}/history` | Get alert history for a monitor |
-| Create monitor | `POST /v2/monitors` | Create new monitor (Threshold/MatchEvent/AnomalyDetection) |
+| Create monitor | `POST /v2/monitors` | Create new monitor (Threshold/MatchEvent/NewValues/AnomalyDetection) |
 | Update monitor | `PUT /v2/monitors/{id}` | Update monitor configuration |
 | Delete monitor | `DELETE /v2/monitors/{id}` | Delete monitor |
 
-**Monitor types:** `Threshold`, `MatchEvent`, `AnomalyDetection`  
+**Monitor types:** `Threshold`, `MatchEvent`, `NewValues`, `AnomalyDetection`  
 **Operators:** `Below`, `BelowOrEqual`, `Above`, `AboveOrEqual`, `AboveOrBelow`
 
 ---

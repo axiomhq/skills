@@ -104,11 +104,11 @@ Summary of all operations available via Axiom API with a personal access token (
 | List monitors | `GET /v1/monitors` | List all configured monitors |
 | Get monitor | `GET /v1/monitors/{id}` | Get monitor configuration |
 | Get monitor history | `GET /v1/monitors/{id}/history` | Get alert history for a monitor |
-| Create monitor | `POST /v1/monitors` | Create new monitor (Threshold/MatchEvent/AnomalyDetection) |
+| Create monitor | `POST /v1/monitors` | Create new monitor (Threshold/MatchEvent/NewValues/AnomalyDetection) |
 | Update monitor | `PUT /v1/monitors/{id}` | Update monitor configuration |
 | Delete monitor | `DELETE /v1/monitors/{id}` | Delete monitor |
 
-**Monitor types:** `Threshold`, `MatchEvent`, `AnomalyDetection`  
+**Monitor types:** `Threshold`, `MatchEvent`, `NewValues`, `AnomalyDetection`  
 **Operators:** `Below`, `BelowOrEqual`, `Above`, `AboveOrEqual`, `AboveOrBelow`
 
 ---
