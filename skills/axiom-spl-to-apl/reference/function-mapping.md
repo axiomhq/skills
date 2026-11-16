@@ -129,7 +129,7 @@
 | `trim(str, chars)` | `trim(str, chars)` | Both sides |
 | `substr(str, start, len)` | `substring(str, start, len)` | Substring (0-indexed in APL) |
 | `replace(str, old, new)` | `replace_string(str, old, new)` | String replace |
-| `replace(str, regex, new)` | `replace_regex(str, regex, new)` | Regex replace |
+| `replace(str, regex, new)` | `replace_regex(regex, new, str)` | Regex replace. Pattern and replacement come before the string |
 | `split(str, delim)` | `split(str, delim)` | Same |
 | `strcat(a, b, c)` | `strcat(a, b, c)` | Same |
 | `urldecode(str)` | `url_decode(str)` | URL decode |
@@ -143,7 +143,7 @@
 | eval domain = replace(email, "^.*@", "")
 
 # APL
-| extend domain = replace_regex(email, @"^.*@", "")
+| extend domain = replace_regex(@"^.*@", "", email)
 ```
 
 ```

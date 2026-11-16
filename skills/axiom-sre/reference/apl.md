@@ -210,12 +210,15 @@ Negations: `!has`, `!contains`, `!startswith`, `!in`
 ## Join Kinds
 | Kind | Description |
 |------|-------------|
-| `inner` | Only matching rows |
+| `inner` | Only matching rows (default) |
+| `innerunique` | Like `inner`, with duplicate left keys removed |
 | `leftouter` | All left + matching right (nulls for no match) |
-| `rightouter` | All right + matching left |
-| `fullouter` | All rows from both |
-| `leftanti` | Left rows with no match |
-| `leftsemi` | Left rows with match |
+
+Other kinds, such as `leftanti`, `leftsemi`, `rightouter`, and `fullouter`, fail. Each side of a join has a row limit. To stay within it:
+
+- Filter and aggregate each side before the join. Put the smaller side on the left.
+- Project only the fields that you need on each side. Fewer fields raise the row limit.
+- Look for a warning that a side "was truncated by a row limit". The join result can then miss matches.
 
 ```apl
 ['requests'] | where _time between (ago(1h) .. now()) | join kind=inner (['users'] | where _time between (ago(1h) .. now())) on user_id
@@ -416,10 +419,10 @@ bin(_time, 1h)         // Hourly bins
 | `strcat(s1, s2, ...)` | Concatenate |
 | `replace_string(s, old, new)` | Replace |
 | `extract(regex, group, s)` | Regex extract |
-| `extract_all(regex, s)` | All matches |
+| `extract_all(regex, captureGroups, s)` | All matches of the listed capture groups |
 | `parse_json(s)` | Parse JSON (expensive!) |
 | `parse_url(s)` | Parse URL components |
-| `countof(s, substr)` | Count occurrences |
+| `countof(substr, s)` | Count occurrences |
 
 ### Conditional
 ```apl
