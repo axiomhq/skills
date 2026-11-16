@@ -176,10 +176,10 @@ bin(_time, 1h)         // Hourly bins
 | `strcat(s1, s2, ...)` | Concatenate |
 | `replace_string(s, old, new)` | Replace |
 | `extract(regex, group, s)` | Regex extract |
-| `extract_all(regex, s)` | All matches |
+| `extract_all(regex, captureGroups, s)` | All matches of the listed capture groups |
 | `parse_json(s)` | Parse JSON (expensive!) |
 | `parse_url(s)` | Parse URL components |
-| `countof(s, substr)` | Count occurrences |
+| `countof(substr, s)` | Count occurrences |
 
 ### Conditional
 ```apl
