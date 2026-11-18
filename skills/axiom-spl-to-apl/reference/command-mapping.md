@@ -10,8 +10,9 @@
 | `head N` | `take N` / `limit N` | Get first N results |
 | `tail N` | `order by _time asc \| take N` | Reverse and take |
 | `sample N` | `extend _r = rand() \| top N by _r \| project-away _r` | APL `sample` takes fraction, not count |
-| `dedup field` | `summarize arg_max(_time, *) by field` | Keep latest row per field value |
-| `dedup field sortby _time` | `summarize arg_min(_time, *) by field` | Keep earliest row per group |
+| `dedup field` | `summarize arg_max(_time, <fields>) by field` | Keep latest row per field value. `*` fails here, so list the fields |
+| `dedup field sortby _time` | `summarize arg_min(_time, <fields>) by field` | Keep earliest row per group |
+| `dedup field` (any row) | `summarize take_any(*) by field` | Keep an arbitrary row per field value, with all fields. Not the latest |
 | `uniq` | `distinct *` | Unique rows (note: loses other columns) |
 
 ## Transformation Commands
