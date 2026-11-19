@@ -212,18 +212,11 @@ coalesce(v1, v2, ...)                                // First non-null
 ### IP Functions
 | Function | Description |
 |----------|-------------|
-| `geo_info_from_ip_address(ip)` | Geo lookup |
 | `ipv4_is_private(ip)` | Check if private IP |
 | `ipv4_is_in_range(ip, cidr)` | CIDR match |
 | `ipv4_is_match(ip, pattern)` | Pattern match |
 | `ipv4_compare(ip1, ip2)` | Compare IPs |
 | `parse_ipv4(s)` | Parse to long |
-
-```apl
-// Geo enrichment
-| extend geo = geo_info_from_ip_address(client_ip)
-| extend country = geo.country, city = geo.city
-```
 
 ### Array Functions
 | Function | Description |

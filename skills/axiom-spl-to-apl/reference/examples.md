@@ -489,12 +489,13 @@ index=logs
 | stats count by Country, City
 ```
 
+APL has no IP geolocation function. If the events already carry geo fields added before ingest, group by those:
+
 ```apl
 # APL
 ['logs']
 | where _time between (ago(1h) .. now())
-| extend geo = geo_info_from_ip_address(clientip)
-| summarize count() by Country = geo.country, City = geo.city
+| summarize count() by Country = ['geo.country'], City = ['geo.city']
 ```
 
 ### CIDR Matching

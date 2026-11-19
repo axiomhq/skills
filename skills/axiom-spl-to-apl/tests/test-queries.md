@@ -79,7 +79,7 @@ index=sample-http-logs | iplocation clientip | stats count by Country, City | so
 | take 20
 ```
 
-> **Note:** The sample-http-logs dataset already has pre-computed `geo.country` and `geo.city` fields. If your dataset has a raw IP field, use `geo_info_from_ip_address(clientip)` to look up the geo data.
+> **Note:** The sample-http-logs dataset already has pre-computed `geo.country` and `geo.city` fields. APL has no IP geolocation function, so a dataset with only a raw IP field needs geo fields added before ingest.
 
 ### 6. Unique users per endpoint
 **SPL:**

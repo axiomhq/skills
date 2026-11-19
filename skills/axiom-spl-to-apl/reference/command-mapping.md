@@ -212,7 +212,7 @@ let error_users = ['errors']
 | `cluster` | Manual grouping or external clustering |
 | `anomalydetection` | Use `spotlight()` for related analysis |
 | `predict` | External ML/forecasting |
-| `geostats` | Use `geo_info_from_ip_address()` + `summarize` |
-| `iplocation` | `extend geo = geo_info_from_ip_address(ip)` |
+| `geostats` | Add geo fields before ingest, then `summarize` by them |
+| `iplocation` | No IP geolocation function; add geo fields before ingest |
 | `inputlookup` | Use `datatable` for inline data |
 | `makeresults` | Use `datatable` or `print` |
