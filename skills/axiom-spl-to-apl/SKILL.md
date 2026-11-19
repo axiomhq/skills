@@ -33,7 +33,7 @@ description: Translates Splunk SPL queries to Axiom APL. Provides command mappin
 | `sort` / `sort -` | `order by ... asc/desc` | Sort |
 | `head N` | `take N` | Limit rows |
 | `top N field` | `summarize count() by field \| top N by count_` | Two-step |
-| `dedup field` | `summarize arg_max(_time, <fields>) by field` | Keep latest. `*` fails here, so list the fields |
+| `dedup field` | `where isnotnull(field) \| summarize arg_max(_time, *) by field` | Keep latest. Splunk drops events where `field` is null unless `keepempty=true` |
 | `rex` | `parse` or `extract()` | Regex extraction |
 | `join` | `join` | **Preview feature** |
 | `append` | `union` | Combine datasets |
