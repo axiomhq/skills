@@ -291,7 +291,7 @@
 | SPL Function | APL Function | Notes |
 |--------------|--------------|-------|
 | `cidrmatch(cidr, ip)` | `ipv4_is_in_range(ip, cidr)` | Args reversed! |
-| `iplocation(ip)` | `geo_info_from_ip_address(ip)` | Returns object |
+| `iplocation(ip)` | No equivalent | Add geo fields before ingest |
 
 ### IP Examples
 
@@ -301,17 +301,6 @@
 
 # APL
 | extend is_internal = ipv4_is_in_range(src_ip, "10.0.0.0/8")
-```
-
-```
-# SPL
-| iplocation clientip
-| table clientip, City, Country
-
-# APL
-| extend geo = geo_info_from_ip_address(clientip)
-| extend City = geo.city, Country = geo.country
-| project clientip, City, Country
 ```
 
 ---
