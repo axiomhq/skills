@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.4.0](https://github.com/axiomhq/skills/compare/v1.3.0...v1.4.0) (2026-11-21)
+
+
+### Features
+
+* **alerting:** cover new values monitors ([cf57ebc](https://github.com/axiomhq/skills/commit/cf57ebc5c137ba0a1fa195cbf5f47b37a173a3a9))
+* **alerting:** cover new values monitors ([aa6b992](https://github.com/axiomhq/skills/commit/aa6b992bd3d75d49ba9ec97024eea8f9c0f7c886))
+
+
+### Fixes
+
+* **axiom-spl-to-apl:** map dedup to arg_max(_time, *) ([#134](https://github.com/axiomhq/skills/issues/134)) ([6d6bda1](https://github.com/axiomhq/skills/commit/6d6bda1b7e6f8507eb21fb98910668952cb662ea))
+* **building-dashboards:** point to annotation-action v0.2.0 ([#113](https://github.com/axiomhq/skills/issues/113)) ([cdd7524](https://github.com/axiomhq/skills/commit/cdd7524c54e9502215d7351dc3292ce3100b599b))
+* clarify chart-add query errors ([c31e496](https://github.com/axiomhq/skills/commit/c31e496bcb7de91e1acae4bc9849f4864f321b66))
+* clarify chart-add query errors ([b0634e2](https://github.com/axiomhq/skills/commit/b0634e236ab47ed82f58002206af4f86b4725304))
+* correct APL references that fail in Axiom ([#130](https://github.com/axiomhq/skills/issues/130)) ([6cd2321](https://github.com/axiomhq/skills/commit/6cd2321634b63e6da115180336cf7a00949f02b1))
+* **costs:** stop when the monitor list cannot be read ([5e39ffd](https://github.com/axiomhq/skills/commit/5e39ffd77bcff0277d83ff6dbb8e186ed9263fb3))
+* **costs:** stop when the monitor list cannot be read ([119d18c](https://github.com/axiomhq/skills/commit/119d18c00e380c4abf219230eaae03dee03adb97))
+
+
+### Documentation
+
+* **build-dashboard:** remove stream fontSize setting ([bd3d648](https://github.com/axiomhq/skills/commit/bd3d648821b12ccbf7d0c74aecbf504cead1bfad))
+
 ## [1.3.0](https://github.com/axiomhq/skills/compare/v1.2.1...v1.3.0) (2026-11-10)
 
 
