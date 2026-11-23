@@ -14,7 +14,7 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 | [axiom-alerting](skills/axiom-alerting/) | Manage Axiom monitors and notifiers with the Axiom MCP server |
 | [axiom-control-costs](skills/axiom-control-costs/) | Analyze query patterns to find unused data and optimize Axiom costs |
 | [axiom-metrics-chart](skills/axiom-metrics-chart/) | Render saved metrics v2/v3 JSON as line charts; zero-dependency ASCII by default, optional gnuplot PNG/SVG/sixel |
-| [axiom-ingest](skills/axiom-ingest/) | Send data to a new or existing dataset, provisioning a temporary org when none is configured |
+| [axiom-ingest](skills/axiom-ingest/) | Send JSON, NDJSON, or CSV events to a new or existing Events dataset, provisioning a temporary org when none is configured |
 | [axiom-create-org](skills/axiom-create-org/) | Provision a temporary Axiom org via API, store its one-time token, and hand off the claim URL |
 | [otel-semantic-conventions](skills/otel-semantic-conventions/) | Select OpenTelemetry attributes and convention versions for Axiom |
 | [otel-instrumentation](skills/otel-instrumentation/) | Implement OpenTelemetry traces, metrics and logs for Axiom |
