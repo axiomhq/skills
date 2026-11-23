@@ -1,363 +1,92 @@
 ---
 name: axiom-alerting
-description: Create and manage Axiom monitors and notifiers via the v2 public API. Use when building alerting, routing notifications, validating monitor behavior, and maintaining alert configurations end-to-end.
+description: Design, create, tune, and troubleshoot Axiom monitors and notification routing using Axiom MCP. Use for alert setup, noisy or silent alerts, and requested changes to monitors or notifiers.
 ---
 
-# Axiom Alerting
-
-You manage alerting in Axiom end-to-end: notifiers for routing and monitors for detection.
+# Axiom alerting
 
-## API Overview
+Turn the user's detection goal into an actionable monitor with appropriate notification routing. Use Axiom MCP for discovery, queries, and resource changes.
 
-Base URL: `https://api.axiom.co/v2/` with Bearer token auth from `.axiom.toml` (project root or `~/.axiom.toml`).
+## Prerequisite: connect Axiom MCP
 
-### Monitors (`/v2/monitors`)
+Before starting the workflow, discover the Axiom tools available in the session. Look for the tools the request needs: for example, `checkMonitors` and `getMonitor` for an existing monitor, `createMonitor` for creation, or `listNotifiers` for routing. Tool names below are logical names; clients may add a server prefix. Read the connected tool's schema for current arguments and supported behavior.
 
-| Operation | Method | Path |
-|-----------|--------|------|
-| List | GET | `/v2/monitors` |
-| Get | GET | `/v2/monitors/{id}` |
-| History | GET | `/v2/monitors/{id}/history` |
-| Create | POST | `/v2/monitors` |
-| Update | PUT | `/v2/monitors/{id}` |
-| Delete | DELETE | `/v2/monitors/{id}` |
+- **No Axiom MCP tools:** ask the user to connect and authenticate [Axiom MCP](https://axiom.co/docs/console/intelligence/mcp-server), then stop until the tools are available. Do not install a server or change client configuration without a request to do so.
+- **Tools available:** make the first relevant read-only call, such as `checkMonitors` or `listNotifiers`. A tool being listed does not prove authentication works.
+- **Authentication fails:** ask the user to sign in or reconnect Axiom MCP, then stop until authentication works.
+- **A required tool is missing or access is denied:** identify the missing capability or permission and ask the user to enable it. Stop the blocked operation; do not describe a working connection as absent.
 
-### Notifiers (`/v2/notifiers`)
+For a missing connection, say: "This skill requires Axiom MCP. Please connect and sign in to Axiom using the setup guide, then I can continue with your alert."
 
-| Operation | Method | Path |
-|-----------|--------|------|
-| List | GET | `/v2/notifiers` |
-| Get | GET | `/v2/notifiers/{id}` |
-| Create | POST | `/v2/notifiers` |
-| Update | PUT | `/v2/notifiers/{id}` |
-| Delete | DELETE | `/v2/notifiers/{id}` |
+Use MCP for all Axiom operations in this skill. Do not fall back to shell scripts, direct HTTP requests, or a separate token configuration when MCP is missing or fails.
 
-## Prerequisites
+Keep all calls in the user's selected organization. Use `listOrganizations` when the target is unclear; otherwise use the established organization. Follow the requested mode: a proposal or review makes no changes; a creation or editing request authorizes its stated scope. Ask only for material unresolved choices or actions beyond that authorization.
 
-1. Run `scripts/setup`
-2. Ensure `.axiom.toml` has a deployment:
-
-```toml
-[deployments.prod]
-url = "https://api.axiom.co"
-token = "xaat-your-token"
-org_id = "your-org-id"
-```
-
-## Scripts
-
-Core:
-- `scripts/axiom-api <deploy> <method> <path> [body]`
-
-Monitor scripts:
-- `scripts/monitor-list <deployment> [--json]`
-- `scripts/monitor-get <deployment> <id>`
-- `scripts/monitor-history <deployment> <id> <startTime> <endTime>`
-- `scripts/monitor-create <deployment> <json-file>`
-- `scripts/monitor-update <deployment> <id> <json-file>`
-- `scripts/monitor-delete <deployment> <id>`
-
-Notifier scripts:
-- `scripts/notifier-list <deployment> [--json]`
-- `scripts/notifier-get <deployment> <id>`
-- `scripts/notifier-create <deployment> <json-file>`
-- `scripts/notifier-update <deployment> <id> <json-file>`
-- `scripts/notifier-delete <deployment> <id>`
-
-## Recommended Workflow
-
-1. Create notifier first.
-2. Create monitor and set `notifierIds`.
-3. Validate monitor behavior with `monitor-history`.
-4. Iterate monitor thresholds and schedule.
-
-## Workflow: End-To-End Alerting
-
-1. Run `scripts/setup`.
-2. List existing notifiers with `scripts/notifier-list <deployment>` and reuse one if appropriate.
-3. If no suitable notifier exists, create one with `scripts/notifier-create`.
-4. Create or update the monitor with `notifierIds` attached.
-5. Validate with `scripts/monitor-history <deployment> <id> <startTime> <endTime>`.
-6. If behavior is noisy or silent, tune `threshold`, `rangeMinutes`, `intervalMinutes`, and N-of-M trigger fields. For `MatchEvent` and `NewValues` monitors, tune the query instead: they have no threshold or trigger fields.
-7. Re-check history after each change.
-
-## Best Practices
-
-- Configure one channel per notifier.
-- Use `emails` (not `recipients`) for email notifier payloads.
-- Prefer `triggerAfterNPositiveResults`/`triggerFromNRuns` for noisy signals.
-- Use explicit `bin()` in monitor queries; avoid `bin_auto()` for alert logic.
-- For metrics-backed monitors, prefer `mplQuery` for definitions; API responses may include both `aplQuery` and `mplQuery`.
-
-## Monitor Types And Operators
-
-Choose the type by what should alert:
-
-- `Threshold`: an aggregated value crosses a fixed number. Good for error counts, latency percentiles, and queue depth.
-- `MatchEvent`: every event that matches a filter. Good for events that each need attention, such as a failed deploy, a panic, or a change to a production secret.
-- `NewValues`: a column of the query results holds a value it has not held recently. Good for first appearances. Without an aggregation, any first sighting: a new error message, host, or AWS API call. With an aggregation, a new value that passes a bar: a new API client that sends at least 200 requests in an hour.
-- `AnomalyDetection`: a time series moves away from its own recent behavior. Good for values with no obvious fixed limit, such as traffic or ingest volume that suddenly drops or spikes.
-
-Query rules:
-
-- `Threshold`: an APL query must aggregate (`summarize`). `mplQuery` is supported.
-- `MatchEvent`: APL only. The query cannot aggregate, and it can use only `where`, `project` (and `project-away`, `project-keep`, `project-rename`, `project-reorder`), `extend`, `extend-valid`, `parse`, `parse-kv`, `union`, `lookup`, and `redact`.
-- `NewValues`: APL only. The query can filter, project, and aggregate.
-- `AnomalyDetection`: the query must return a time series (`summarize ... by bin(_time, ...)`) with at least 11 points per group. `mplQuery` is supported.
-
-Operators:
-
-- `Threshold`: `Above`, `AboveOrEqual`, `Below`, or `BelowOrEqual`.
-- `AnomalyDetection`: `Above`, `Below`, or `AboveOrBelow`.
-- `MatchEvent` and `NewValues`: none. Do not set `operator` on a `NewValues` monitor.
-
-Alerting:
-
-- `Threshold` and `AnomalyDetection` open an alert on a breach and close it on the first run without one. Notifiers hear about both.
-- `MatchEvent` and `NewValues` have no alert to open or close. Each matching event or new value sends its own notification, at most 9 per run, and nothing is sent when it stops appearing.
-
-## Monitor Field Reference
-
-Core fields:
-- `name`: Human-readable monitor name.
-- `type`: `Threshold`, `MatchEvent`, `NewValues`, or `AnomalyDetection`.
-- `aplQuery` / `mplQuery`: Query evaluated by the monitor.
-- `notifierIds`: Array of notifier IDs to notify.
-- `disabled`: Whether monitor is disabled.
-- `disabledUntil`: Optional timestamp for temporary disable/snooze.
-- `description`: Optional monitor description.
-
-Schedule fields:
-- `intervalMinutes`: Evaluation cadence in minutes.
-- `rangeMinutes`: Query evaluation window in minutes. `MatchEvent` monitors always run every minute over the last minute: send 1 for both fields, because other values are ignored. On a `NewValues` monitor, `rangeMinutes` cannot be less than `intervalMinutes`.
-- `secondDelay`: Seconds to move the whole window into the past, so that late-arriving data is included.
-
-Threshold and anomaly fields (`Threshold` and `AnomalyDetection` only):
-- `operator`: Comparison operator.
-- `threshold`: Numeric threshold value (`Threshold`).
-- `tolerance`: Required for `AnomalyDetection`. The last point breaches when it is more than this many standard deviations from the mean of the earlier points. Above 0, usually 2 to 5; lower values alert more often.
-- `compareDays`: Optional for `AnomalyDetection`. First subtracts, point by point, the same window this many days earlier.
-- `alertOnNoData`: Whether no-data should trigger alerting.
-- `triggerAfterNPositiveResults`: Positive evaluations required before firing.
-- `triggerFromNRuns`: Total evaluation runs considered for N-of-M logic.
-
-Advanced behavior fields:
-- `resolvable`: Whether alerts can resolve automatically.
-- `notifyByGroup`: Notify per group key/value result.
-- `notifyEveryRun`: Notify on every positive evaluation.
-- `skipResolved`: Skip sending resolved notifications.
-
-New values fields (`NewValues` only):
-- `trackedValue`: Required. The name of the column of the query results to watch. It cannot be the result of an aggregation, such as `count()`.
-- `lookbackDays`: Required, at least 1. A value is new when the column has not held it for this many days.
-- `backfillDays`: Optional, 0 to `lookbackDays`. Records the values the query returns over this many previous days as already seen before the first run. With 0, the first run that returns values records them and does not alert. Use 0 when the query aggregates: the backfill runs the query once over the whole period, not once per `rangeMinutes`, so a bar such as `where requests >= 200` is applied to totals for the whole period.
-- Changing `aplQuery`, `trackedValue`, `intervalMinutes`, `rangeMinutes`, or `secondDelay` on an existing monitor clears the values it has recorded, and it learns again. Changes to `lookbackDays` keep them.
-- Limits: fewer than 50,000 distinct values in the column within `lookbackDays`, and at most 1,000 new values in one run. A monitor that exceeds a limit fails its runs.
-
-## Minimal Valid Monitor Examples
-
-Threshold:
-
-```json
-{
-  "name": "High Error Count",
-  "type": "Threshold",
-  "aplQuery": "['logs'] | where status >= 500 | summarize count()",
-  "operator": "Above",
-  "threshold": 100,
-  "rangeMinutes": 5,
-  "intervalMinutes": 5,
-  "notifierIds": ["notifier-id"],
-  "triggerAfterNPositiveResults": 2,
-  "triggerFromNRuns": 3,
-  "disabled": false
-}
-```
-
-MatchEvent:
-
-```json
-{
-  "name": "Error Event Match",
-  "type": "MatchEvent",
-  "aplQuery": "['logs'] | where level == 'error'",
-  "rangeMinutes": 1,
-  "intervalMinutes": 1,
-  "notifierIds": ["notifier-id"],
-  "disabled": false
-}
-```
-
-NewValues, any first sighting:
-
-```json
-{
-  "name": "New Error Message",
-  "type": "NewValues",
-  "aplQuery": "['logs'] | where level == 'error' | project message",
-  "trackedValue": "message",
-  "lookbackDays": 30,
-  "backfillDays": 7,
-  "rangeMinutes": 5,
-  "intervalMinutes": 5,
-  "notifierIds": ["notifier-id"],
-  "disabled": false
-}
-```
-
-NewValues with an aggregation, a new value that passes a bar. This one checks the last hour every 5 minutes:
-
-```json
-{
-  "name": "New API Client",
-  "type": "NewValues",
-  "aplQuery": "['http-logs'] | summarize requests = count() by client | where requests >= 200",
-  "trackedValue": "client",
-  "lookbackDays": 90,
-  "backfillDays": 0,
-  "rangeMinutes": 60,
-  "intervalMinutes": 5,
-  "notifierIds": ["notifier-id"],
-  "disabled": false
-}
-```
-
-AnomalyDetection:
-
-```json
-{
-  "name": "Request Volume Anomaly",
-  "type": "AnomalyDetection",
-  "aplQuery": "['http-logs'] | summarize count() by bin(_time, 5m)",
-  "operator": "AboveOrBelow",
-  "tolerance": 3,
-  "rangeMinutes": 120,
-  "intervalMinutes": 5,
-  "notifierIds": ["notifier-id"],
-  "disabled": false
-}
-```
-
-## Minimal Valid Notifier Examples
-
-Email:
-
-```json
-{
-  "name": "Oncall Email",
-  "properties": {
-    "email": {
-      "emails": ["oncall@example.com"]
-    }
-  }
-}
-```
-
-Slack:
-
-```json
-{
-  "name": "Oncall Slack",
-  "properties": {
-    "slack": {
-      "slackUrl": "https://hooks.slack.com/services/T.../B.../XXX"
-    }
-  }
-}
-```
-
-Custom webhook:
-
-```json
-{
-  "name": "Oncall Custom Webhook",
-  "properties": {
-    "customWebhook": {
-      "url": "https://api.example.com/alerts",
-      "body": "{\"action\":\"{{.Action}}\",\"monitorID\":\"{{.MonitorID}}\"}"
-    }
-  }
-}
-```
-
-## Troubleshooting
-
-`401 Unauthorized`:
-- Cause: invalid or expired token.
-- Fix:
-  - Verify token in `~/.axiom.toml`.
-  - Re-run `scripts/setup` and retry:
-    - `scripts/notifier-list <deployment>`
-
-`403 Forbidden`:
-- Cause: token lacks required permissions.
-- Fix:
-  - Create/assign token scopes for monitor/notifier management and dataset query access.
-  - Retry:
-    - `scripts/monitor-list <deployment>`
-
-`404 Not Found` on get/update/delete:
-- Cause: wrong monitor/notifier ID or wrong deployment/org.
-- Fix:
-  - Confirm deployment in `.axiom.toml`.
-  - Re-list objects and use exact IDs:
-    - `scripts/monitor-list <deployment> --json`
-    - `scripts/notifier-list <deployment> --json`
-
-`400 Bad Request` on notifier create/update:
-- Cause: invalid notifier payload shape.
-- Fix:
-  - Use one notifier channel inside `properties`.
-  - For email, use `emails` (not `recipients`).
-  - Validate against a known-good example and retry:
-    - `scripts/notifier-create <deployment> <json-file>`
-
-`400 Bad Request` on monitor create/update:
-- Cause: invalid monitor schema, operator/type mismatch, or invalid query fields.
-- Fix:
-  - Validate required fields: `name`, `type`, query field, schedule, and `notifierIds`.
-  - Confirm `operator` matches monitor type and threshold logic.
-  - `must set Tolerance`: an `AnomalyDetection` monitor needs `tolerance`.
-  - `must set NewValuesLookbackDays`: a `NewValues` monitor needs `lookbackDays`.
-  - `RangeMinutes must not be less than IntervalMinutes`: raise `rangeMinutes` on the `NewValues` monitor.
-  - `cannot set [Operator Tolerance CompareDays]`: remove those fields from the `NewValues` monitor.
-  - Retry:
-    - `scripts/monitor-create <deployment> <json-file>`
-    - `scripts/monitor-update <deployment> <id> <json-file>`
-
-Monitor created but never alerts:
-- Cause: threshold too strict, wrong query window, or not enough positive runs.
-- Fix:
-  - Inspect history over a known active period:
-    - `scripts/monitor-history <deployment> <id> <startTime> <endTime>`
-  - Reduce threshold or widen `rangeMinutes`.
-  - Tune `triggerAfterNPositiveResults`/`triggerFromNRuns`.
-
-Too many alerts (noisy monitor):
-- Cause: threshold too low or interval too short.
-- Fix:
-  - Increase threshold.
-  - Increase `triggerAfterNPositiveResults` and/or `triggerFromNRuns`.
-  - Increase `intervalMinutes` or narrow match conditions.
-
-`NewValues` monitor sends too many notifications or its runs fail:
-- Cause: the watched column holds too many distinct values, such as messages that contain IDs, timestamps, or numbers.
-- Fix:
-  - Watch a column with fewer distinct values, or strip the variable parts in the query before `trackedValue` reads it.
-  - Filter the query, or aggregate and keep only the values that pass a bar.
-  - Shorten `lookbackDays` if the column holds 50,000 or more distinct values within it.
-
-`NewValues` monitor misses a value:
-- Cause: the event arrived after every run that covers its `_time`, or the monitor had already recorded the value within `lookbackDays`.
-- Fix:
-  - For late data, set `secondDelay`, or set `rangeMinutes` longer than `intervalMinutes`.
-  - Remember that a value alerts once, then not again until `lookbackDays` pass without it.
-
-Notifier exists but no delivery:
-- Cause: destination config invalid (URL/key/channel/email list), or destination-side rejection.
-- Fix:
-  - Fetch notifier and verify destination fields:
-    - `scripts/notifier-get <deployment> <id>`
-  - Recreate/update notifier with corrected properties:
-    - `scripts/notifier-update <deployment> <id> <json-file>`
-  - Confirm monitor references correct notifier IDs.
+Choose the steps that fit the request. For listing or reviewing existing resources, read those resources and report. For notifier-only work, start at notification routing without creating a monitor. For a requested pause, resume, or deletion, inspect the target and apply that change without redesigning its query or thresholds.
+
+## 1. Understand the detection goal
+
+Identify the service/environment, condition worth acting on, notification destination, and any supplied threshold or response-time requirement. Reuse information already available in the request and existing monitor.
+
+For error rates, distinguish failed requests from error log volume. Check the denominator and traffic volume so a single failure during quiet traffic does not accidentally page the team. Keep ratios and percentages consistent with the threshold.
+
+Use `checkMonitors` to find existing monitors before creating another. Read a relevant monitor with `getMonitor`; the overview may truncate its query. Update a matching monitor when that fits the request, and clarify if multiple resources are plausible targets.
+
+## 2. Find and validate the signal
+
+Use `listDatasets` to identify the dataset and its kind.
+
+- Events or traces: inspect `getDatasetFields`, discover relevant values, then use `queryDataset` with APL.
+- Metrics: use `listMetrics` or `searchMetrics`, inspect the metric's type, temporality, and unit, and discover filtering dimensions with `listMetricTags` and `getMetricTagValues`, then use `queryMetrics` with MPL.
+
+Run the candidate query over a bounded, representative interval. Inspect normal behavior and a known failure interval when available. Derive proposed settings from the user's target and this evidence; state when no failure example or sufficient baseline is available. Use `getMetricsSpec`, `searchAxiomDocs`, or `readAxiomDoc` for unfamiliar semantics.
+
+## 3. Choose the monitor behavior
+
+| Detection goal | Monitor type |
+|---|---|
+| A measured value crosses a known limit | Threshold |
+| Each matching event deserves attention | MatchEvent |
+| A value appears that has not been seen recently | NewValues, when supported by the connected tool |
+| A time series deviates from its recent behavior | AnomalyDetection |
+
+Use the connected `createMonitor` or `updateMonitor` contract for supported fields and query constraints.
+
+- For APL threshold monitors, make the intended measurement the first aggregated column; verify that the threshold applies to that measurement, not a helper count. Use explicit time bins when needed, not `bin_auto`.
+- MatchEvent monitors evaluate every minute over the previous minute. Set both schedule values to 1 and use the tool's permitted non-aggregating APL operators.
+- Decide how quickly detection is needed, how much history each evaluation needs, and whether late data requires a delay. Explain the latency/noise tradeoff.
+- Use repeated breaches when supported and justified by transient noise. Decide whether missing data is itself a failure; a quiet service and a broken telemetry pipeline are different cases.
+- Group alerts only where the groups have distinct actions or owners. Consider notification volume before choosing per-event alerts or notifications on every run.
+- For NewValues or anomaly detection, check the tool's learning/history requirements. Explain any insufficient history or relearning caused by an edit.
+
+## 4. Resolve notification routing
+
+Use `listNotifiers` and reuse a suitable destination. Do not modify a shared notifier just to reroute one monitor; attach a different notifier when that fits the request.
+
+If a notifier must be created or edited, use `createNotifier` or `updateNotifier` according to the connected tool's contract. When the tool requires manual channel setup in Axiom, explain that handoff before calling it, wait for the user to finish and identify the saved notifier, then use `listNotifiers` to verify it and obtain its ID. Opening a setup page is not evidence that a notifier exists. Never request channel credentials in chat or pass them in tool arguments.
+
+## 5. Apply the requested change
+
+Summarize the condition, dataset/service scope, evaluation timing, missing-data behavior, and destination before applying the authorized change. Resolve any material ambiguity first.
+
+- Create with `createMonitor` using the validated query and verified notifier IDs.
+- Update from the full `getMonitor` definition: `updateMonitor` replaces configuration. Preserve unrelated settings. Omit `notifierIds` to preserve routing, or send `[]` only when removing routing is intended.
+- Pause or resume through `updateMonitor`, preserving the rest of the configuration and any requested pause deadline.
+- Delete with `deleteMonitor` or `deleteNotifier` only for the exact resource the user authorized. Before changing or deleting a shared notifier, inspect affected monitors and establish the intended scope.
+
+After an ambiguous write failure, read the current resources before retrying; the first call may have succeeded. Do not create a duplicate as a retry strategy.
+
+## 6. Verify and report
+
+For a created or updated monitor, read the saved definition with `getMonitor` and check that the query, timing, enabled state, and routing match the intended change. Use `getMonitorHistory` for a relevant interval when evaluating behavior. For notifier-only changes, verify the saved destination with `listNotifiers`. For deletion, verify that the resource is absent from `checkMonitors` or `listNotifiers`.
+
+Distinguish these outcomes:
+
+- Configuration saved and read back.
+- Query validated against observed data.
+- Monitor execution observed in history.
+- Notification delivery verified independently, if evidence is available.
+
+An empty or stale history does not prove that the monitor is healthy, and a successful create does not prove a notification was delivered. Do not deliberately trigger production alerts just to manufacture verification. If the next evaluation is still pending, say so instead of repeatedly polling or claiming success beyond the evidence.
+
+Return the resource link supplied by MCP when available, the condition and destination or notifier change, the verification observed, and any remaining blocker. When available and useful, `showMonitor` can display the saved monitor and recorded checks; it does not run or verify a new evaluation.
