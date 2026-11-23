@@ -33,12 +33,12 @@ Every label matcher in the PromQL `{…}` becomes a `where` clause on the MPL pi
 
 **Fetch the tag type before translating.** PromQL stores every label as a string; MPL has typed tags (string/int/float/bool) and the right operator depends on the dataset's type, not on what PromQL did:
 
-Use `queryMetrics` to probe `filter <tag> is <T>` for candidate types over the same bounded interval. Inspect which probes return series, rather than inferring from display strings returned by tag-value discovery. Consult `getMetricsSpec` if the type-test syntax is unfamiliar.
+Use `queryMetrics` to probe `where <tag> is <T>` for candidate types over the same bounded interval, placing the type check before transformations. Inspect which probes return series, rather than inferring from display strings returned by tag-value discovery. Consult `getMetricsSpec` if the type-test syntax is unfamiliar.
 
-If `type` comes back `"mixed"`, the tag carries multiple types across rows. Use the defensive form:
+If the probes find series with more than one type, the tag carries mixed types. Use the defensive form:
 
 ```mpl
-| filter (`tag` is int and `tag` == 200) or (`tag` is string and `tag` == "200")
+| where (`tag` is int and `tag` == 200) or (`tag` is string and `tag` == "200")
 ```
 
 ### Translation by tag type

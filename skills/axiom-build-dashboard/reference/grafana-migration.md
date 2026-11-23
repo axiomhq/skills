@@ -162,7 +162,7 @@ These metric-name rules are stable. **Label names are different.** The OTel→Pr
 
 1. **For metric names:** apply the rename rules (deterministic, free, first).
 2. **Validate through MCP:**
-   - `listMetrics` or `searchMetrics` for metric names and metadata.
+   - `listMetrics` to match candidate metric names and inspect their type, temporality, and unit. Use `searchMetrics` only when starting from a known entity/tag value, such as a service or host; it does not search metric names.
    - `listMetricTags` and `getMetricTagValues` for labels (start from the original Prom label; reverse-search if absent).
 3. **Surface the mismatch** only after both steps fail. Do not silently swap to a "looks similar" name.
 
