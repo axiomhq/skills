@@ -61,7 +61,9 @@ To update, run `claude plugin marketplace update axiom`, then `claude plugin upd
 
 ### Cursor
 
-On Teams or Enterprise, an admin must enable **Allow Local Plugin Imports**. Then clone into Cursor's local plugin directory:
+On Enterprise, ask an admin to enable **Allow Local Plugin Imports**.
+
+Clone into Cursor's local plugin directory:
 
 ```bash
 git clone https://github.com/axiomhq/skills.git ~/.cursor/plugins/local/axiom
