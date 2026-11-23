@@ -24,7 +24,9 @@ jobs:
           done
           bash skills/axiom-build-dashboard/scripts/test-toml-parsing
       - name: Test cost analysis
-        run: bash skills/axiom-control-costs/scripts/test-ast-parser
+        run: |
+          bash skills/axiom-control-costs/scripts/test-ast-parser
+          bash skills/axiom-control-costs/scripts/test-create-monitors
       - name: Test SRE
         run: |
           for test in skills/axiom-sre/scripts/test-*; do

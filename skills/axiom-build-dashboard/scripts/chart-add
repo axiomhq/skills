@@ -253,10 +253,9 @@ case "$TYPE" in
             --arg name "$NAME" \
             --argjson query "$QUERY_JSON" \
             --argjson unit "$UNIT_JSON" \
-            '{id: $id, name: $name, type: "Statistic", query: $query} + $unit')
-        if [[ -n "$SHOW_CHART" ]]; then
-            RESULT=$(jq '. + {showChart: true}' <<<"$RESULT")
-        fi
+            --arg showChart "$SHOW_CHART" \
+            '{id: $id, name: $name, type: "Statistic", query: $query} + $unit
+             + (if $showChart == "1" then {showChart: true} else {} end)')
         echo "$RESULT"
         ;;
     TimeSeries|Table|Pie|LogStream|Heatmap)

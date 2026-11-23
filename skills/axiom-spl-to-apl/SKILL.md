@@ -13,7 +13,7 @@ description: Translates Splunk SPL queries to Axiom APL. Provides command mappin
 
 1. **Time is explicit in APL:** SPL time pickers don't translate — add `where _time between (ago(1h) .. now())`
 2. **Structure:** SPL `index=... | command` → APL `['dataset'] | operator`
-3. **Join is preview:** limited to 50k rows, inner/innerunique/leftouter only
+3. **Join is preview:** it supports only `inner`, `innerunique` and `leftouter`. Each side has a row limit that grows when you project fewer fields.
 4. **cidrmatch args reversed:** SPL `cidrmatch(cidr, ip)` → APL `ipv4_is_in_range(ip, cidr)`
 
 ---
@@ -33,7 +33,7 @@ description: Translates Splunk SPL queries to Axiom APL. Provides command mappin
 | `sort` / `sort -` | `order by ... asc/desc` | Sort |
 | `head N` | `take N` | Limit rows |
 | `top N field` | `summarize count() by field \| top N by count_` | Two-step |
-| `dedup field` | `summarize arg_max(_time, *) by field` | Keep latest |
+| `dedup field` | `where isnotnull(field) \| summarize arg_max(_time, *) by field` | Keep latest. Splunk drops events where `field` is null unless `keepempty=true` |
 | `rex` | `parse` or `extract()` | Regex extraction |
 | `join` | `join` | **Preview feature** |
 | `append` | `union` | Combine datasets |

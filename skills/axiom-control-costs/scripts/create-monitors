@@ -129,28 +129,33 @@ echo ""
 
 # Check for existing monitors
 echo "Checking for existing Cost Control monitors..."
-EXISTING_IDS=$("$AXIOM_API" "$DEPLOYMENT" GET "/v2/monitors" 2>/dev/null | \
-    jq -r '.[] | select(.name | startswith("Cost Control:")) | .id' 2>/dev/null || true)
+if ! EXISTING_MONITORS=$("$AXIOM_API" "$DEPLOYMENT" GET "/v2/monitors" | jq -sce '
+    # The API returns one array, even when there are no monitors.
+    select(length == 1) | .[0] | arrays
+    | select(all(.[]; .id | type == "string" and length > 0))
+    | map(select(.name | startswith("Cost Control:")))
+'); then
+    echo "Error: Could not read a valid monitor list for $DEPLOYMENT. No monitors were changed." >&2
+    exit 1
+fi
 
-if [[ -n "$EXISTING_IDS" ]]; then
-    EXISTING_COUNT=$(echo "$EXISTING_IDS" | wc -l | tr -d ' ')
+if [[ "$EXISTING_MONITORS" != '[]' ]]; then
+    EXISTING_COUNT=$(jq 'length' <<< "$EXISTING_MONITORS")
     
     if [[ "$FORCE" == "true" ]]; then
         echo "Found $EXISTING_COUNT existing monitors. Deleting (--force)..."
-        echo "$EXISTING_IDS" | while read -r id; do
+        jq -r '.[].id | @uri' <<< "$EXISTING_MONITORS" | while IFS= read -r id; do
             echo "  Deleting $id..."
             "$AXIOM_API" "$DEPLOYMENT" DELETE "/v2/monitors/$id" >/dev/null 2>&1 || true
         done
         echo "Deleted. Proceeding with creation..."
         echo ""
     else
-        EXISTING_NAMES=$("$AXIOM_API" "$DEPLOYMENT" GET "/v2/monitors" 2>/dev/null | \
-            jq -r '.[] | select(.name | startswith("Cost Control:")) | .name' 2>/dev/null || true)
         echo ""
         echo "BLOCKER: MONITORS_ALREADY_EXIST"
         echo ""
         echo "Found $EXISTING_COUNT existing Cost Control monitors:"
-        echo "$EXISTING_NAMES" | sed 's/^/  - /'
+        jq -r '.[] | "  - \(.name)"' <<< "$EXISTING_MONITORS"
         echo ""
         echo "NEXT: scripts/create-monitors -d $DEPLOYMENT -a $AUDIT_DATASET -c $CONTRACT_BYTES --force"
         exit 1

@@ -366,6 +366,7 @@ index=logs
 # APL
 ['logs']
 | where _time between (ago(1h) .. now())
+| where isnotnull(user_id)
 | summarize arg_min(_time, *) by user_id
 ```
 
@@ -382,23 +383,8 @@ index=logs
 # APL
 ['logs']
 | where _time between (ago(1h) .. now())
+| where isnotnull(user_id)
 | summarize arg_max(_time, *) by user_id
-```
-
-### Keep Earliest
-
-```spl
-# SPL
-index=logs
-| sort _time
-| dedup user_id
-```
-
-```apl
-# APL
-['logs']
-| where _time between (ago(1h) .. now())
-| summarize arg_min(_time, *) by user_id
 ```
 
 ---

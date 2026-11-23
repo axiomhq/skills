@@ -122,17 +122,6 @@ Time-based trends with proper binning.
 ### Several Pipelines on One Chart
 When the series cannot come from one pipeline (p95 and p99 from separate histogram aggregations, or two different metrics), give the chart several queries instead of stretching one `summarize`. Each entry in `queries[]` is a full pipeline with its own legend `name`. Shape and `jq` recipe: [chart-config.md § Multiple Queries](./chart-config.md#timeseries--multiple-queries).
 
-### Rate of Change (Derivative)
-```apl
-['http-logs']
-| where _time between (ago(1h) .. now())
-| summarize requests = count() by bin(_time, 1m)
-| order by _time asc
-| extend prev = prev(requests)
-| extend rate_change = requests - prev
-| where isnotnull(prev)
-```
-
 ---
 
 ## Table
