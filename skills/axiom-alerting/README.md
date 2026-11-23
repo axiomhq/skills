@@ -2,6 +2,8 @@
 
 Unified Axiom alerting skill for managing monitors and notifiers via the Axiom v2 API.
 
+Use the connected Axiom MCP tools. The setup and commands below are for use without MCP.
+
 ## What This Skill Covers
 
 - Monitor lifecycle: list, get, history, create, update, delete

@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Generate a Console link to a dashboard or notifier.
+# dashboard-link: Generate a link to an Axiom dashboard
 #
 # Usage: dashboard-link <deployment> <dashboard-id>
-#        dashboard-link [deployment] --notifier <id|new> (default: prod)
 #
 # Examples:
 #   dashboard-link prod EHYTHcQmO0ZZCK0zdw
@@ -12,9 +11,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [[ "${1:-}" == --notifier ]]; then
-    set -- prod "$@"
-fi
 DEPLOYMENT="${1:-}"
 DASHBOARD_ID="${2:-}"
 
@@ -33,10 +29,7 @@ fi
 extract_value() {
     local key="$1"
     awk -v deployment="$DEPLOYMENT" -v key="$key" '
-        /^[[:space:]]*\[/ {
-            sub(/^[[:space:]]*/, "")
-            in_deployment = (index($0, "[deployments." deployment "]") == 1)
-        }
+        /^[[:space:]]*\[deployments\./ { in_deployment = ($0 ~ "\\[deployments\\." deployment "\\]") }
         in_deployment {
             gsub(/^[[:space:]]+/, "")
             if ($1 == key) {
@@ -53,28 +46,11 @@ extract_value() {
     ' "$CONFIG_FILE"
 }
 
-ORG_ID=$(extract_value "org_id")
-if [[ -z "$ORG_ID" ]]; then
-    echo "Error: Could not find deployment '$DEPLOYMENT' in $CONFIG_FILE" >&2
-    exit 1
-fi
-
-if [[ "$DASHBOARD_ID" == --notifier ]]; then
-    id="${3:?Usage: dashboard-link [deployment] --notifier <id|new>}"
-    case "$DEPLOYMENT" in
-        prod)    base=https://app.axiom.co ;;
-        *)       base=$(extract_value "console_url") ;;
-    esac
-    if [[ -z "$base" ]]; then
-        echo "Set console_url in [deployments.$DEPLOYMENT] or open Notifiers in your Console." >&2
-        exit 1
-    fi
-    exec jq -nr --arg base "$base" --arg org "$ORG_ID" --arg id "$id" \
-        '"\($base)/\($org | @uri)/notifiers?notifierId=\($id | @uri)"'
-fi
-
 URL=$(extract_value "url")
-if [[ -z "$URL" ]]; then
+ORG_ID=$(extract_value "org_id")
+
+
+if [[ -z "$URL" || -z "$ORG_ID" ]]; then
     echo "Error: Could not find deployment '$DEPLOYMENT' in $CONFIG_FILE" >&2
     exit 1
 fi
@@ -86,5 +62,8 @@ if [[ -z "$LINK_ID" ]]; then
     exit 1
 fi
 
+# Convert API URL to app URL
+# api.axiom.co -> app.axiom.co
 APP_URL="${URL/api./app.}"
+
 echo "${APP_URL}/${ORG_ID}/dashboards/${LINK_ID}"

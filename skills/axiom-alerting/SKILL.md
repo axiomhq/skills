@@ -7,6 +7,8 @@ description: Create and manage Axiom monitors and notifiers via the v2 public AP
 
 You manage alerting in Axiom end-to-end: notifiers for routing and monitors for detection.
 
+Use the connected Axiom MCP tools for the selected organization and deployment. The scripts below support use without MCP.
+
 ## API Overview
 
 The scripts use the `url`, `org_id`, and bearer token from the selected deployment in `~/.axiom.toml`. API requests use `<url>/v2/`.
@@ -32,7 +34,7 @@ The scripts use the `url`, `org_id`, and bearer token from the selected deployme
 | Update | PUT | `/v2/notifiers/{id}` |
 | Delete | DELETE | `/v2/notifiers/{id}` |
 
-## Prerequisites
+## Script Prerequisites
 
 1. Run `scripts/setup`
 2. Ensure `.axiom.toml` has a deployment:
@@ -68,22 +70,21 @@ Notifier scripts:
 
 1. Reuse a saved notifier when possible.
 2. Create monitor and set `notifierIds`.
-3. Validate monitor behavior with `monitor-history`.
+3. Validate monitor behavior with `getMonitorHistory`.
 4. Iterate monitor thresholds and schedule.
 
 ## Workflow: End-To-End Alerting
 
-1. Run `scripts/setup`.
-2. List existing notifiers with `scripts/notifier-list <deployment>` and reuse one if appropriate.
-3. If no saved notifier is suitable:
-   - For email, use `scripts/notifier-create` with the JSON format shown below.
-   - For other channels, ask the user to enter credentials in the Console. After they save the notifier, list notifiers again for its ID.
-     - With MCP connected to the selected deployment and org, call `createNotifier` with the name and an empty channel config, such as `"properties": {"slack": {}}`. If MCP opens **Notifiers**, choose **New notifier**. If it returns the list URL, append `?notifierId=new` and share it.
-     - With scripts, run `../axiom-build-dashboard/scripts/dashboard-link --notifier new` from this skill's directory for prod. For another deployment, put its name before `--notifier` and set `console_url` to its Console origin in the same `.axiom.toml` deployment table. If no link is available, direct the user to **Notifiers → New notifier** in their Console.
-4. Create or update the monitor with `notifierIds` attached.
-5. Validate with `scripts/monitor-history <deployment> <id> <startTime> <endTime>`.
-6. If behavior is noisy or silent, tune `threshold`, `rangeMinutes`, `intervalMinutes`, and N-of-M trigger fields.
-7. Re-check history after each change.
+1. Use `listNotifiers` and reuse a suitable saved notifier.
+2. If none is suitable, use `createNotifier`:
+   - For email, supply the JSON format shown below.
+   - For other channels, explain that the user must complete setup in the Console. Supply the name and an empty channel config, such as `"properties": {"slack": {}}`. The tool opens the Console or returns a link. The user enters credentials there. Wait for confirmation that they saved the notifier, then use `listNotifiers` to get its ID.
+3. Use `createMonitor` or `updateMonitor` with the selected `notifierIds`.
+4. Check the settings with `getMonitor` and behavior with `getMonitorHistory` over an explicit time range.
+5. If behavior is noisy or silent, tune `threshold`, `rangeMinutes`, `intervalMinutes`, and N-of-M trigger fields.
+6. Re-check history after each change.
+
+Without MCP, run `scripts/setup` and use the corresponding scripts above. Set up non-email channels under **Notifiers → New notifier** in the user's Console.
 
 ## Best Practices
 
@@ -258,6 +259,6 @@ Too many alerts (noisy monitor):
 Notifier exists but no delivery:
 - Cause: destination config invalid (URL/key/channel/email list), or destination-side rejection.
 - Fix:
-  - For email, check the addresses and use `scripts/notifier-update` to correct them.
-  - For other channels, use the saved notifier link from MCP or run the same `--notifier` command with the saved ID in place of `new`. If no link is available, direct the user to **Notifiers** in their Console.
+  - For email, check the addresses and use `updateNotifier` to correct them.
+  - For other channels, use `updateNotifier` with the saved ID and an empty channel config to open the Console. Without MCP, edit the notifier under **Notifiers** in the user's Console.
   - Confirm monitor references correct notifier IDs.
