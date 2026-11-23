@@ -1,8 +1,6 @@
 # axiom-ingest
 
-Sends JSON, NDJSON, or CSV events to a new or existing Axiom Events dataset.
-
-For OpenTelemetry instrumentation or OTLP ingestion, use [otel-instrumentation](../otel-instrumentation/SKILL.md).
+Sends data to a new or existing Axiom dataset.
 
 ## What This Skill Covers
 

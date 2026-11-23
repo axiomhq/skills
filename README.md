@@ -11,10 +11,10 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 | [axiom-sre](skills/axiom-sre/)                       | Hypothesis-driven SRE investigation with Axiom |
 | [axiom-spl-to-apl](skills/axiom-spl-to-apl/)               | Translate Splunk SPL queries to Axiom APL      |
 | [axiom-build-dashboard](skills/axiom-build-dashboard/) | Design and build Axiom dashboards from intent, templates, Splunk migrations, and metrics/MPL chart payloads |
-| [axiom-alerting](skills/axiom-alerting/) | Manage Axiom monitors and notifiers with the Axiom MCP server |
+| [axiom-alerting](skills/axiom-alerting/) | Unified monitor + notifier management for Axiom alerting via the v2 API |
 | [axiom-control-costs](skills/axiom-control-costs/) | Analyze query patterns to find unused data and optimize Axiom costs |
 | [axiom-metrics-chart](skills/axiom-metrics-chart/) | Render saved metrics v2/v3 JSON as line charts; zero-dependency ASCII by default, optional gnuplot PNG/SVG/sixel |
-| [axiom-ingest](skills/axiom-ingest/) | Send JSON, NDJSON, or CSV events to a new or existing Events dataset, provisioning a temporary org when none is configured |
+| [axiom-ingest](skills/axiom-ingest/) | Send data to a new or existing dataset, provisioning a temporary org when none is configured |
 | [axiom-create-org](skills/axiom-create-org/) | Provision a temporary Axiom org via API, store its one-time token, and hand off the claim URL |
 | [otel-semantic-conventions](skills/otel-semantic-conventions/) | Select OpenTelemetry attributes and convention versions for Axiom |
 | [otel-instrumentation](skills/otel-instrumentation/) | Implement OpenTelemetry traces, metrics and logs for Axiom |
@@ -123,7 +123,7 @@ This initializes SRE configuration and memory under `~/.config/axiom-sre/`. Edit
 
 Skills use your configured credentials to query Axiom and optional Grafana, Pyroscope, Sentry, Slack, and Kubernetes connections. They can update dashboards and alerts. SRE stores investigation memory locally and can sync it to a Git repository you configure.
 
-SRE uses `~/.config/axiom-sre/config.toml` with `[axiom.deployments.<name>]` sections. Dashboard and metrics scripts use the separate `~/.axiom.toml` format below. Alerting uses the connected Axiom MCP server. Cost-control workflows use SRE for queries and dashboard scripts for deployment, so configure both when using those workflows. MCP OAuth does not configure these script credentials.
+SRE uses `~/.config/axiom-sre/config.toml` with `[axiom.deployments.<name>]` sections. Dashboard, alerting, and metrics scripts use the separate `~/.axiom.toml` format below. Cost-control workflows use SRE for queries and dashboard scripts for deployment, so configure both when using those workflows. MCP OAuth does not configure these script credentials.
 
 For scripts that use `~/.axiom.toml`, add your deployment(s):
 

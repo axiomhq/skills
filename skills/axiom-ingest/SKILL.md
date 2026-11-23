@@ -1,13 +1,11 @@
 ---
 name: axiom-ingest
-description: Ingest JSON, NDJSON, or CSV events into Axiom. Use when uploading event files or sending structured events to a new or existing Events dataset.
+description: Send data to Axiom. Picks an org from ~/.axiom.toml, or provisions a temporary one when none is configured, creates the dataset, ingests JSON, NDJSON, or CSV, and confirms with a query. Use when asked to send, ingest, upload, or load data or events into Axiom or a new Axiom dataset.
 ---
 
 # axiom-ingest
 
-Send JSON, NDJSON, or CSV events to an Axiom Events dataset.
-
-For OpenTelemetry instrumentation or OTLP ingestion, use [otel-instrumentation](../otel-instrumentation/SKILL.md).
+Get data into an Axiom dataset with the fewest questions.
 
 ## 1. Choose an org
 
