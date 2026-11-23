@@ -8,7 +8,7 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 | ---------------------------------------------- | ---------------------------------------------- |
 | [axiom-sre](skills/axiom-sre/)                       | Hypothesis-driven SRE investigation with Axiom |
 | [axiom-spl-to-apl](skills/axiom-spl-to-apl/)               | Translate Splunk SPL queries to Axiom APL      |
-| [axiom-build-dashboard](skills/axiom-build-dashboard/) | Design and build Axiom dashboards from intent, templates, Splunk migrations, and metrics/MPL chart payloads |
+| [axiom-build-dashboard](skills/axiom-build-dashboard/) | Design, create, and edit dashboards through Axiom MCP, including APL/MPL charts and migrations |
 | [axiom-alerting](skills/axiom-alerting/) | Design, manage, and troubleshoot monitors and notification routing through Axiom MCP |
 | [axiom-control-costs](skills/axiom-control-costs/) | Analyze query patterns to find unused data and optimize Axiom costs |
 | [axiom-metrics-chart](skills/axiom-metrics-chart/) | Render saved metrics v2/v3 JSON as line charts; zero-dependency ASCII by default, optional gnuplot PNG/SVG/sixel |
@@ -121,9 +121,9 @@ This initializes SRE configuration and memory under `~/.config/axiom-sre/`. Edit
 
 Skills use your configured credentials to query Axiom and optional Grafana, Pyroscope, Sentry, Slack, and Kubernetes connections. They can update dashboards and alerts. SRE stores investigation memory locally and can sync it to a Git repository you configure.
 
-Alerting uses the connected Axiom MCP and asks you to connect or sign in if it is unavailable. It does not use a separate script credential file.
+Alerting and dashboard workflows use the connected Axiom MCP and ask you to connect or sign in if it is unavailable. They do not use a separate script credential file.
 
-SRE uses `~/.config/axiom-sre/config.toml` with `[axiom.deployments.<name>]` sections. Dashboard and metrics scripts use the separate `~/.axiom.toml` format below. Cost-control workflows use SRE for queries and dashboard scripts for deployment, so configure both when using those workflows. MCP OAuth does not configure these script credentials.
+SRE uses `~/.config/axiom-sre/config.toml` with `[axiom.deployments.<name>]` sections. The cost-control setup check uses the separate `~/.axiom.toml` format below. Cost-control workflows use SRE for queries and MCP for dashboards; keep both in the same organization. MCP OAuth does not configure these script credentials.
 
 For scripts that use `~/.axiom.toml`, add your deployment(s):
 

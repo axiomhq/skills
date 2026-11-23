@@ -22,11 +22,11 @@ jobs:
           for test in skills/axiom-build-dashboard/tests/*.sh; do
             bash "$test"
           done
-          bash skills/axiom-build-dashboard/scripts/test-toml-parsing
       - name: Test cost analysis
         run: |
           bash skills/axiom-control-costs/scripts/test-ast-parser
           bash skills/axiom-control-costs/scripts/test-create-monitors
+          bash skills/axiom-control-costs/scripts/test-build-dashboard
       - name: Test SRE
         run: |
           for test in skills/axiom-sre/scripts/test-*; do

@@ -5,15 +5,15 @@ Mechanical translation rules. The source PromQL carries the spec — translate, 
 **Two rules:**
 
 1. **Preserve structure.** Every `{label="x"}` selector → MPL `where`. Every `by(label1, label2)` → MPL `group by`. Never drop one because the metric "feels" scoped to it.
-2. **Reverse-tag discovery for missing labels.** Apply OTel rename rules first, then use `metrics-info` to find the equivalent tag. Discovery is a validator, not a generator.
+2. **Reverse-tag discovery for missing labels.** Apply OTel rename rules first, then use MCP metric/tag discovery to find the equivalent tag. Discovery is a validator, not a generator.
 
-Use the [Metrics/MPL chart contract](./metrics-mpl.md) for MCP discovery and validation. The `metrics-info` examples below are alternatives for separately configured deployments; with MCP, use `listMetrics`, `listMetricTags`, `getMetricTagValues`, and `queryMetrics` for the same checks.
+Use the [Metrics/MPL chart contract](./metrics-mpl.md) for MCP discovery and validation. Use `listMetrics`, `listMetricTags`, `getMetricTagValues`, and `queryMetrics` in the same organization; no shell fallback is used.
 
 ---
 
 ## Pre-translation: Name shape
 
-Before reaching for `metrics-info`, apply the deterministic Prometheus → OTel renaming rules. Most "missing metric" cases dissolve at this step.
+Before reaching for MCP metric/tag discovery, apply the deterministic Prometheus → OTel renaming rules. Most "missing metric" cases dissolve at this step.
 
 | PromQL form                                                    | OTel form                              |
 |:---------------------------------------------------------------|:---------------------------------------|
@@ -33,12 +33,7 @@ Every label matcher in the PromQL `{…}` becomes a `where` clause on the MPL pi
 
 **Fetch the tag type before translating.** PromQL stores every label as a string; MPL has typed tags (string/int/float/bool) and the right operator depends on the dataset's type, not on what PromQL did:
 
-```bash
-scripts/metrics/metrics-info <deploy> <dataset> metrics <metric> tags <tag> type
-# -> {"type": "int", "present_types": ["int"]}
-```
-
-Don't infer from tag values alone — Prometheus-imported tags often stringify numerics; quoted values in JSON are inconclusive. The helper probes `filter <tag> is <T>` for each candidate type and reports which return non-empty series; run these probes with `queryMetrics` when using MCP.
+Use `queryMetrics` to probe `filter <tag> is <T>` for candidate types over the same bounded interval. Inspect which probes return series, rather than inferring from display strings returned by tag-value discovery. Consult `getMetricsSpec` if the type-test syntax is unfamiliar.
 
 If `type` comes back `"mixed"`, the tag carries multiple types across rows. Use the defensive form:
 
@@ -84,11 +79,7 @@ http_request_duration_seconds_count{
 
 Probe each tag's type before authoring:
 
-```bash
-scripts/metrics/metrics-info test test http_request_duration_seconds_count tags code type
-scripts/metrics/metrics-info test test http_request_duration_seconds_count tags container type
-scripts/metrics/metrics-info test test http_request_duration_seconds_count tags path type
-```
+Run bounded `queryMetrics` probes on the discovered metric for `code`, `container`, and `path`, using the type tests above.
 
 If `code` comes back `"int"`, use the typed-comparison form below. If it comes back `"string"`, translate the regex instead (`| where code == #/[5-9]../`) — see the string-typed table above.
 
@@ -234,15 +225,8 @@ When a PromQL label name does not exist verbatim in the MPL dataset *after* appl
 
 ### Workflow
 
-1. **List all tags in the dataset.**
-   ```bash
-   scripts/metrics/metrics-info <deploy> <dataset> tags
-   ```
-2. **Inspect candidate values.** Pick the most likely candidate (often `service.name` for `job`, `k8s.pod.name` for `instance`, etc.) and confirm:
-   ```bash
-   scripts/metrics/metrics-info <deploy> <dataset> tags <candidate> values
-   ```
-   Look for the value the PromQL selector matched on.
+1. **List tags** with MCP `listMetricTags`, scoped to the dataset and relevant metric when known.
+2. **Inspect candidate values** with `getMetricTagValues`. Look for the value the PromQL selector matched on (for example, in `service.name` or `k8s.pod.name`).
 3. **Map the selector** to the equivalent tag.
    ```promql
    {job="ingest-worker"}
@@ -258,13 +242,13 @@ Cap reverse-search at **two candidates** before surfacing a question. If two rea
 
 ### What discovery does NOT do
 
-Discovery validates that the spec'd subset exists in the dataset. It **does not** invent a subset. If you find yourself running `metrics-info` to *decide* what the panel should filter on, stop — the source dashboard already wrote that down. (See also [grafana-migration.md § Common Migration Pitfalls](./grafana-migration.md#common-migration-pitfalls).)
+Discovery validates that the spec'd subset exists in the dataset. It **does not** invent a subset. If you find yourself running MCP metric/tag discovery to *decide* what the panel should filter on, stop — the source dashboard already wrote that down. (See also [grafana-migration.md § Common Migration Pitfalls](./grafana-migration.md#common-migration-pitfalls).)
 
 ---
 
 ## Selector Values Absent from the Dataset Are Aliases — Cite the Source
 
-When a PromQL selector value isn't in `metrics-info … tags <label> values`, the value is a recording-rule alias defined elsewhere, not a literal to translate. The alias expands to a subset of the dataset's values — but that subset is defined *outside* the dashboard JSON.
+When a PromQL selector value isn't in the MCP `getMetricTagValues` response, the value is a recording-rule alias defined elsewhere, not a literal to translate. The alias expands to a subset of the dataset's values — but that subset is defined *outside* the dashboard JSON.
 
 Resolve by citing a **written source**:
 
@@ -273,7 +257,7 @@ Resolve by citing a **written source**:
 
 **Memory is not a source.** Agents recall the *shape* of rule definitions more confidently than the exact contents, and rule libraries change over time. No citation → defer the panel with a Note.
 
-Detection trigger: the value isn't in `metrics-info … tags <label> values`. From that point on, no prior-knowledge expansion is allowed.
+Detection trigger: the value isn't in the MCP `getMetricTagValues` response. From that point on, no prior-knowledge expansion is allowed.
 
 ---
 

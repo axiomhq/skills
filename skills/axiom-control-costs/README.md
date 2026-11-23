@@ -18,7 +18,7 @@ npx skills add axiomhq/skills
 ## Prerequisites
 
 - `axiom-sre` skill (for API access)
-- `axiom-build-dashboard` skill (for dashboard deployment)
+- `axiom-build-dashboard` skill and authenticated Axiom MCP (for dashboard operations)
 - Access to `axiom-audit` and `axiom-history` datasets
 - Tools: `jq`, `bc`
 
@@ -28,7 +28,7 @@ The install command above includes both skills. Scripts find them automatically.
 
 Configure SRE for query/API access using its [setup instructions](../axiom-sre/README.md#setup). SRE uses `~/.config/axiom-sre/config.toml`.
 
-Dashboard helpers and the cost-control setup check also use `~/.axiom.toml`; add the same deployment name there:
+The cost-control setup check still uses `~/.axiom.toml`; add the same deployment name there. Dashboard operations use Axiom MCP, so select the same organization in that connection:
 
 ```toml
 [deployments.prod]
@@ -40,7 +40,7 @@ org_id = "your-org-id"
 - **`org_id`** - The organization ID. Get it from Settings → Organization.
 - **`token`** - Use an advanced API token with minimal privileges.
 
-To import an existing `~/.axiom.toml` during SRE's first initialization, run `scripts/init --migrate` from the SRE skill directory. Keep `~/.axiom.toml` for the dashboard helpers.
+To import an existing `~/.axiom.toml` during SRE's first initialization, run `scripts/init --migrate` from the SRE skill directory. Keep `~/.axiom.toml` for the cost-control setup check. It does not configure MCP; see [dashboard connection setup](../axiom-build-dashboard/README.md#prerequisite-axiom-mcp).
 
 ## Usage
 
@@ -51,8 +51,8 @@ scripts/analyze-query-coverage <deployment> <dataset>
 # Find unqueried values for a specific field
 scripts/analyze-query-coverage <deployment> <dataset> <field>
 
-# Deploy a shared cost control dashboard
-scripts/deploy-dashboard -d <deployment> -a <audit-dataset>
+# Prepare dashboard JSON locally, then validate and save through Axiom MCP
+scripts/build-dashboard -a <audit-dataset> > dashboard.json
 
 # List available notifiers
 scripts/list-notifiers -d <deployment>
@@ -66,7 +66,7 @@ scripts/create-monitors -d <deployment> -a <audit-dataset> -c <contract> [-n <no
 | Script | Purpose |
 |--------|---------|
 | `analyze-query-coverage` | Find unused columns and field values |
-| `deploy-dashboard` | Deploy cost control dashboard |
+| `build-dashboard` | Prepare cost dashboard JSON for the MCP workflow |
 | `list-notifiers` | List available notifiers for alerts |
 | `create-monitors` | Create 3 cost control monitors |
 | `baseline-stats` | Get 30-day usage statistics |

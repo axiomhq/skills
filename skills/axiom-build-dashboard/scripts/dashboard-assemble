@@ -43,13 +43,11 @@
 #   --refresh      One of:
 #                    oncall  → 60   (1 minute)
 #                    team    → 300  (5 minutes)
-#                    exec    → 900  (15 minutes)
-#                    <int>   → use directly. Must be ≥ 60 — the API
-#                             rejects shorter values on probed deployments.
+#                    <int>   → 15, 60, or 300, per the MCP contract.
 #                  Defaults to 60.
-#   --owner        Defaults to "X-AXIOM-EVERYONE" (the only value an API
-#                  token can use; private dashboards aren't supported via
-#                  token auth).
+#   --owner        Defaults to "X-AXIOM-EVERYONE" (shared). Use "me" for a
+#                  private dashboard with user authentication. Org API
+#                  tokens cannot own private dashboards.
 #   --section      Repeatable. Collapsible dashboard section. The title is
 #                  the text before the first colon; chart ids follow,
 #                  comma-separated, and must match chart `id`s. Section
@@ -71,7 +69,7 @@
 #   - No duplicate chart ids.
 #
 # Output: a single dashboard JSON object on stdout, ready for
-# `dashboard-validate` and `dashboard-create`.
+# local `dashboard-validate` and MCP `createDashboard`.
 #
 # Examples:
 #   chart-add --type Note --id intro --name Notice --text "..." \
@@ -166,17 +164,10 @@ normalise_refresh() {
     case "$r" in
         oncall) echo 60 ;;
         team)   echo 300 ;;
-        exec)   echo 900 ;;
-        ''|*[!0-9]*)
-            echo "Error: --refresh must be one of oncall|team|exec or a positive integer (got '$r')" >&2
-            return 1
-            ;;
+        15|60|300) echo "$r" ;;
         *)
-            if (( r < 60 )); then
-                echo "Error: --refresh must be ≥ 60 (the create API rejects shorter values; got $r)" >&2
-                return 1
-            fi
-            echo "$r"
+            echo "Error: --refresh must be oncall|team or 15, 60, 300 seconds (got '$r')" >&2
+            return 1
             ;;
     esac
 }

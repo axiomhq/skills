@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Prepare cost-control dashboard JSON locally. Save it through Axiom MCP.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+AUDIT_DATASET=""
+DASHBOARD_NAME="Org Usage & Cost Control"
+OWNER="X-AXIOM-EVERYONE"
+
+usage() {
+    cat <<'EOF'
+Usage: build-dashboard -a <audit-dataset> [-n <name>] [--owner <owner>]
+
+Emit dashboard JSON on stdout. No Axiom requests or credentials are used.
+Use the axiom-build-dashboard skill to validate and save it through MCP.
+
+  -a, --audit-dataset NAME  Audit dataset name (required)
+  -n, --name NAME           Dashboard name
+      --owner OWNER        X-AXIOM-EVERYONE (default) or me for private
+  -h, --help               Show this help
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -a|--audit-dataset|-n|--name|--owner)
+            [[ -n "${2:-}" ]] || { echo "Error: $1 requires a value" >&2; exit 1; }
+            case "$1" in
+                -a|--audit-dataset) AUDIT_DATASET="$2" ;;
+                -n|--name) DASHBOARD_NAME="$2" ;;
+                --owner) OWNER="$2" ;;
+            esac
+            shift 2 ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "Error: unknown option $1" >&2; usage >&2; exit 1 ;;
+    esac
+done
+[[ -n "$AUDIT_DATASET" ]] || { echo "Error: --audit-dataset is required" >&2; exit 1; }
+
+# Replace dataset references as APL string literals, including filter queries.
+# --arg keeps names and special characters out of shell/jq code.
+jq --arg dataset "$AUDIT_DATASET" --arg name "$DASHBOARD_NAME" --arg owner "$OWNER" \
+    --arg source_single "['axiom-audit']" --arg source_double '["axiom-audit"]' '
+    ("[" + ($dataset | tojson) + "]") as $source
+    | walk(if type == "string" then
+        split($source_single) | join($source) | split($source_double) | join($source)
+      else . end)
+    | .datasets = [.datasets[] | if . == "axiom-audit" then $dataset else . end]
+    | .name = $name
+    | .owner = $owner
+    | del(.id, .uid, .version, .createdAt, .updatedAt, .createdBy, .updatedBy)
+' "$SCRIPT_DIR/../templates/dashboard.json"
