@@ -7,7 +7,7 @@ description: Ingest JSON, NDJSON, or CSV events into Axiom. Use when uploading e
 
 Send JSON, NDJSON, or CSV events to an Axiom Events dataset.
 
-For OpenTelemetry instrumentation or OTLP ingestion, use `otel-instrumentation` when available and follow the [Axiom OpenTelemetry guide](https://axiom.co/docs/send-data/opentelemetry).
+For OpenTelemetry instrumentation or OTLP ingestion, use [otel-instrumentation](../otel-instrumentation/SKILL.md).
 
 ## 1. Choose an org
 

@@ -2,7 +2,7 @@
 
 Sends JSON, NDJSON, or CSV events to a new or existing Axiom Events dataset.
 
-For OpenTelemetry instrumentation or OTLP ingestion, use the `otel-instrumentation` skill when available and the [Axiom OpenTelemetry guide](https://axiom.co/docs/send-data/opentelemetry).
+For OpenTelemetry instrumentation or OTLP ingestion, use [otel-instrumentation](../otel-instrumentation/SKILL.md).
 
 ## What This Skill Covers
 
