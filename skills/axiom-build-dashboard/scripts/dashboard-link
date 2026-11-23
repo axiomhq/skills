@@ -2,7 +2,7 @@
 # Generate a Console link to a dashboard or notifier.
 #
 # Usage: dashboard-link <deployment> <dashboard-id>
-#        dashboard-link [prod|staging|dev] --notifier <id|new> (default: prod)
+#        dashboard-link [deployment] --notifier <id|new> (default: prod)
 #
 # Examples:
 #   dashboard-link prod EHYTHcQmO0ZZCK0zdw
@@ -60,13 +60,15 @@ if [[ -z "$ORG_ID" ]]; then
 fi
 
 if [[ "$DASHBOARD_ID" == --notifier ]]; then
-    id="${3:?Usage: dashboard-link [prod|staging|dev] --notifier <id|new>}"
+    id="${3:?Usage: dashboard-link [deployment] --notifier <id|new>}"
     case "$DEPLOYMENT" in
         prod)    base=https://app.axiom.co ;;
-        staging) base=https://app.staging.axiomtestlabs.co ;;
-        dev)     base=https://app.dev.axiomtestlabs.co ;;
-        *) echo "Open Notifiers in the Console for '$DEPLOYMENT'." >&2; exit 1 ;;
+        *)       base=$(extract_value "console_url") ;;
     esac
+    if [[ -z "$base" ]]; then
+        echo "Set console_url in [deployments.$DEPLOYMENT] or open Notifiers in your Console." >&2
+        exit 1
+    fi
     exec jq -nr --arg base "$base" --arg org "$ORG_ID" --arg id "$id" \
         '"\($base)/\($org | @uri)/notifiers?notifierId=\($id | @uri)"'
 fi

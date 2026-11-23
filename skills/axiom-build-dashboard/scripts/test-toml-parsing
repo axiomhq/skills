@@ -268,16 +268,23 @@ assert_eq "lists prod (indented)"     "prod"     "$(echo "$LISTED" | head -1)"
 assert_eq "lists staging (indented)"  "staging"  "$(echo "$LISTED" | tail -1)"
 
 cp "$TMPDIR_TEST/standard.toml" "$TMPDIR_TEST/.axiom.toml"
-printf '\n[deployments.dev]\norg_id = "org-dev-789"\n' >> "$TMPDIR_TEST/.axiom.toml"
+cat >> "$TMPDIR_TEST/.axiom.toml" <<'EOF'
+console_url = "https://console.example.test"
+
+[deployments.dev]
+org_id = "org-dev-789"
+EOF
 link="$(dirname "$0")/dashboard-link"
 assert_eq "new notifier defaults to prod" "https://app.axiom.co/org-prod-123/notifiers?notifierId=new" \
     "$(HOME="$TMPDIR_TEST" "$link" --notifier new)"
 assert_eq "explicit prod notifier" "https://app.axiom.co/org-prod-123/notifiers?notifierId=new" \
     "$(HOME="$TMPDIR_TEST" "$link" prod --notifier new)"
-assert_eq "saved notifier on staging" "https://app.staging.axiomtestlabs.co/org-staging-456/notifiers?notifierId=a%2Fb%26c" \
+assert_eq "saved notifier uses configured console" "https://console.example.test/org-staging-456/notifiers?notifierId=a%2Fb%26c" \
     "$(HOME="$TMPDIR_TEST" "$link" staging --notifier 'a/b&c')"
-assert_eq "new notifier on dev" "https://app.dev.axiomtestlabs.co/org-dev-789/notifiers?notifierId=new" \
-    "$(HOME="$TMPDIR_TEST" "$link" dev --notifier new)"
+result=0
+HOME="$TMPDIR_TEST" "$link" dev --notifier new > "$TMPDIR_TEST/link.out" 2>/dev/null || result=$?
+assert_eq "missing console_url fails" "1" "$result"
+assert_eq "missing console_url returns no link" "" "$(cat "$TMPDIR_TEST/link.out")"
 
 echo ""
 echo "==========================="
