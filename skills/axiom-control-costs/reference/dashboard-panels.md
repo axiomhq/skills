@@ -63,10 +63,10 @@ This ratio measures query activity relative to data volume:
 
 | Value | Meaning | Action |
 |-------|---------|--------|
-| 0 | Never queried | Consider dropping |
-| Low (<100) | Rarely queried | Review necessity |
-| Medium (100-1000) | Moderately used | Normal |
-| High (>1000) | Heavily queried | High value data |
+| 0 | Zero or rounded-low query cost in this window | Check raw cost, history completeness, and dependencies |
+| Low (<100) | Low query cost relative to ingestion | Review necessity |
+| Medium (100-1000) | More query work per ingested GB | Interpret with the workload |
+| High (>1000) | High query work per ingested GB | Investigate usage; not proof of business value |
 
 ## Dashboard Customization
 

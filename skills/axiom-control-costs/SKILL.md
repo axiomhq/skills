@@ -1,230 +1,103 @@
 ---
 name: axiom-control-costs
-description: Analyzes Axiom query patterns to find unused data, then builds dashboards and monitors for cost optimization. Use when asked to reduce Axiom costs, find unused columns or field values, identify data waste, or track ingest spend.
+description: Analyze Axiom usage and query history to find potential waste, and build cost dashboards and monitors using Axiom MCP. Use for reducing Axiom costs, reviewing rarely queried data, tracking ingest usage, or setting up cost controls.
 ---
 
-# Axiom Cost Control
+# Axiom cost control
 
-Dashboards, monitors, and waste identification for Axiom usage optimization.
+Use Axiom MCP to collect evidence and manage resources. Keep cost methodology in this skill and deterministic analysis in local helpers.
 
-## Before You Start
+## Prerequisite: connect Axiom MCP
 
-1. Load required skills:
-   ```
-   skill: axiom-sre
-   skill: axiom-build-dashboard
-   ```
-   
-   axiom-build-dashboard provides the MCP dashboard workflow. For dashboard phases, require a connected, authenticated Axiom MCP; if missing, ask the user to connect using its setup guidance and stop that phase. Keep MCP in the same organization as the selected script deployment.
+Discover the tools needed for the requested work. Names below are logical names; clients may add server prefixes. Read the connected schemas for current arguments and capabilities.
 
-2. Find the audit dataset. Try `axiom-audit` first:
-   ```apl
-   ['axiom-audit']
-   | where _time > ago(1h)
-   | summarize count() by action
-   | where action in ('usageCalculated', 'runAPLQueryCost')
-   ```
-   - If not found → ask user. Common names: `axiom-audit-logs-view`, `audit-logs`
-   - If found but no `usageCalculated` events → wrong dataset, ask user
+- **No Axiom MCP tools:** ask the user to connect and authenticate [Axiom MCP](https://axiom.co/docs/console/intelligence/mcp-server), then stop until the tools are available. Do not install or configure a connection unless requested.
+- **Tools listed:** use the first relevant read, such as `listDatasets` or `checkMonitors`, to verify access.
+- **Authentication fails:** ask the user to sign in or reconnect, then stop until authentication works.
+- **A capability is missing or access is denied:** identify that specific tool or permission and stop the blocked operation. A working connection with limited permissions is not a missing connection.
 
-3. Verify `axiom-history` access (required for Phase 4):
-   ```apl
-   ['axiom-history'] | where _time > ago(1h) | take 1
-   ```
-   If not found, Phase 4 optimization will not work.
+Suggested message: "This skill requires Axiom MCP. Please connect and sign in to Axiom using the setup guide, then I can continue with your cost analysis."
 
-4. Confirm with user:
-   - Deployment name?
-   - Audit dataset name?
-   - Contract limit in TB/day? (required for Phase 3 monitors)
+Use MCP for **all Axiom operations**, including discovery, queries, dashboards, monitors, notifiers, and cleanup. Do not fall back to shell HTTP calls, SRE wrappers, CLI access, or separate API-token configuration.
 
-5. Replace `<deployment>` and `<audit-dataset>` in all commands below.
+Keep all calls and exported results in the selected organization. Use `listOrganizations` if the target is unclear. An analysis or proposal request makes no resource changes; creating or updating cost controls is limited to the user's requested scope.
 
-**Tips:**
-- Run any script with `-h` for full usage
-- Do NOT pipe script output to `head` or `tail` — causes SIGPIPE errors
-- Requires `jq` for JSON parsing
-- Use axiom-sre's `axiom-query` for ad-hoc APL, not direct CLI
+## 1. Select the work and discover data
 
-## Which Phases to Run
+| Request | Workflow |
+|---|---|
+| Reduce costs / find waste | Discover → baseline → query coverage → report |
+| Set up cost control | Discover → baseline → dashboard → monitors |
+| Build a dashboard | Discover → dashboard |
+| Create or tune cost alerts | Discover → monitors |
+| Review existing setup | Read matching resources and compare; no writes |
 
-| User request | Run these phases |
-|--------------|------------------|
-| "reduce costs" / "find waste" | 0 → 1 → 4 |
-| "set up cost control" | 0 → 1 → 2 → 3 |
-| "deploy dashboard" | 0 → 2 |
-| "create monitors" | 0 → 3 |
-| "check for drift" | 0 only |
+Use `listDatasets` and `getDatasetFields` to discover real names, kinds, and fields. These queries use **APL on event datasets**, not MPL on metrics datasets.
 
----
+Find an audit dataset with `usageCalculated` events and ingestion/query-cost fields. `axiom-audit` is a candidate, not a guarantee. Probe a narrow recent interval before widening to the analysis window. An empty interval may mean delayed or missing usage data; it does not prove zero usage or the wrong dataset.
 
-## Phase 0: Check Existing Setup
+Query-history access (typically `axiom-history`) is required only for coverage analysis. Verify `kind`, `dataset`, and `query.apl` fields. If unavailable, report usage and continue supported phases without claiming unused data.
 
-Use MCP `listDashboards` to find existing cost dashboards in the selected organization.
+Reuse known inputs. Resolve only missing material choices: organization, ambiguous dataset, analysis interval, requested daily contract allowance, and alert destination. A contract is required for the total-ingest guard, not for read-only usage analysis.
 
-```bash
-# Existing monitors?
-axiom-api <deployment> GET "/v2/monitors" | jq -r '.[] | select(.name | startswith("Cost Control:")) | "\(.id)\t\(.name)"'
-```
+## 2. Establish the baseline
 
-If found, fetch with MCP `getDashboard` and compare to `templates/dashboard.json` for drift. Preserve unrelated settings and ownership when updating.
+Read [analysis workflow](reference/analysis-workflow.md) for query preparation, exact input formats, and local analysis commands.
 
----
+Use `queryDataset` with explicit `startTime`/`endTime` to collect daily usage statistics and per-dataset ingestion/query cost, normally over 30 days when available. Preserve the actual observation window and inspect completeness warnings.
 
-## Phase 1: Discovery
+Run `scripts/baseline-stats` on the exported results. It prioritizes datasets above 10 GB of ingest:
 
-```bash
-scripts/baseline-stats -d <deployment> -a <audit-dataset>
-```
+- **P0:** top three by ingestion or more than 10% of total ingestion.
+- **P1:** no observed query cost in the inspected interval.
+- **P2:** low query cost per ingested GB (Work/GB below 100).
+- **P3:** other top-ten ingest contributors.
 
-Captures daily ingest stats and produces the **Analysis Queue** (needed for Phase 4).
+Analyze all P0 and P1 candidates and the top five by ingestion for a full optimization request; report any blocked or unfinished candidates. Work/GB is an activity proxy, not a value judgment. A rounded zero does not establish no query activity.
 
----
+## 3. Build or update the dashboard
 
-## Phase 2: Dashboard
+Follow [axiom-build-dashboard](../axiom-build-dashboard/SKILL.md) for query validation, composition, writes, and verification. Use `listDashboards`/`getDashboard` to find an existing target before creating another.
 
 ```bash
 scripts/build-dashboard -a <audit-dataset> > dashboard.json
 ```
 
-This only prepares local JSON: ingest trends, burn rate, projections, waste candidates, and top users. Follow `axiom-build-dashboard` to validate queries and structure, then save through MCP `createDashboard` or update the previously identified dashboard with `replaceDashboard` using its full current document and version. The template defaults to shared visibility; pass `--owner me` only for a requested private dashboard. For updates, preserve the current owner. Read back and return the MCP dashboard link. See `reference/dashboard-panels.md` for panel details.
+This helper only prepares JSON. See [dashboard panels](reference/dashboard-panels.md) for the intended measurements. Validate the queries against the real audit schema, then save through `createDashboard` or update through the dashboard skill's MCP workflow. Preserve unrelated configuration and ownership; use the current version with `overwrite: false`. Read back and return the link supplied by MCP.
 
----
+The dashboard's contract input is GB/month; monitor input is a daily byte allowance. Resolve the user's actual billing period before converting between them. Do not present a rough 30-day conversion as their contract.
 
-## Phase 3: Monitors
+## 4. Create or tune cost monitors
 
-**Contract is required.** You must have the contract limit from preflight step 4.
+Follow [axiom-alerting](../axiom-alerting/SKILL.md). Use `checkMonitors` and `getMonitor` to identify existing targets, and `listNotifiers` to resolve the requested destination. Reuse established routing; ask when the intended destination is unclear.
 
-### Step 1: List available notifiers
-
-```bash
-scripts/list-notifiers -d <deployment>
-```
-
-Present the list to the user and ask which notifier they want for cost alerts.
-If they don't want notifications, proceed without `-n`.
-
-### Step 2: Create monitors
+Read [monitor strategy](reference/monitor-strategy.md). The local builder preserves the three cost-detection formulas and prepares their MCP payloads:
 
 ```bash
-scripts/create-monitors -d <deployment> -a <audit-dataset> -c <contract_tb> [-n <notifier_id>]
+scripts/build-monitors -a <audit-dataset> -c 167TB -n <notifier-id> > monitors.json
 ```
 
-Creates 3 monitors:
+Replace the example allowance with the user's **daily** allowance. Bare numbers are bytes; use explicit units such as `167TB`. Omit `-n` only when no destination is intended for new monitors.
 
-1. **Total Ingest Guard** — alerts when daily ingest >1.2x contract OR 7-day avg grows >15% vs baseline
-2. **Per-Dataset Spike** — robust z-score detection, alerts per dataset with attribution
-3. **Query Cost Spike** — hardened z-score with 30d baseline, 5d exclusion gap, persistence-based gating (median_z > 3, p25_z > 2.5)
+The definitions are Total Ingest Guard, Per-Dataset Spike, and Query Cost Spike. Validate each APL query and its first aggregated measurement through `queryDataset` over the complete evaluation window before saving. Distinguish insufficient history from a healthy baseline. Check the current tool's schedule, grouping, and repeat-breach semantics.
 
-If Axiom cannot return the monitor list, the script exits before changing anything. If any name starts with `Cost Control:`, the script lists the matches and stops. Use `--force` only to delete all matches and create the three monitors above.
+- Create only missing, requested monitors with `createMonitor`.
+- For updates, start from the full `getMonitor` definition and merge only intended changes before `updateMonitor`. Preserve unrelated settings and notifier IDs; do not copy a builder's empty `notifierIds` over existing routing.
+- A shared name prefix is only a discovery hint. Resolve ambiguous matches; never delete/recreate every matching monitor.
+- After an ambiguous write failure, read current state before retrying to avoid duplicates.
 
-The spike monitors use `notifyByGroup: true` so each dataset triggers a separate alert.
+Read back each saved definition and report the MCP resource link. Saved configuration, observed monitor execution, and confirmed notification delivery are separate verification levels.
 
-See `reference/monitor-strategy.md` for threshold derivation.
+## 5. Analyze coverage and report opportunities
 
----
+Use MCP to fetch deduplicated query history and its parsed APL, observed schema, and bounded samples for a chosen field. `scripts/analyze-query-coverage` reads those exports locally and retains the bundled APL AST parser. See [analysis workflow](reference/analysis-workflow.md) for sampling and completeness checks.
 
-## Phase 4: Optimization
+Start with column references, then inspect suggested fields such as `app`, `service`, or `kubernetes.labels.app`. For sampled empty field values above 5%, drill down using another meaningful dimension before recommending action.
 
-### Get the Analysis Queue
+Treat findings as **candidates for review**. Missing history, wildcard queries, broad predicates, joins, parser limits, and use outside the observed interval can hide genuine dependencies. No observed queries is not permission to drop a dataset. Sampling estimates event volume; byte or currency savings need additional evidence and the user's pricing terms.
 
-Run `scripts/baseline-stats` if not already done. It outputs a prioritized list:
+Use the [report template](reference/analysis-report-template.md). Include windows, coverage gaps, ranking, candidate actions, and evidence links returned by MCP. Do not change ingestion, delete fields, or remove datasets as part of an analysis request.
 
-| Priority | Meaning |
-|----------|---------|
-| P0⛔ | Top 3 by ingest OR >10% of total — MANDATORY |
-| P1 | Never queried — strong drop candidate |
-| P2 | Rarely queried (Work/GB < 100) — likely waste |
+## Requested cleanup
 
-**Work/GB** = query cost (GB·ms) / ingest (GB). Lower = less value from data.
-
-### Analyze datasets in order
-
-Work top-to-bottom. For each dataset:
-
-**Step 1: Column analysis**
-```bash
-scripts/analyze-query-coverage -d <deployment> -D <dataset> -a <audit-dataset>
-```
-
-If 0 queries → recommend DROP, move to next.
-
-**Step 2: Field value analysis**
-
-Pick a field from suggested list (usually `app`, `service`, or `kubernetes.labels.app`):
-```bash
-scripts/analyze-query-coverage -d <deployment> -D <dataset> -a <audit-dataset> -f <field>
-```
-
-Note values with high volume but never queried (⚠️ markers).
-
-**Step 3: Handle empty values**
-
-If `(empty)` has >5% volume, you MUST drill down with alternative field (e.g., `kubernetes.namespace_name`).
-
-**Step 4: Record recommendation**
-
-For each dataset, note: name, ingest volume, Work/GB, top unqueried values, action (DROP/SAMPLE/KEEP), estimated savings.
-
-### Done when
-
-All P0⛔ and P1 datasets analyzed. Then compile report using `reference/analysis-report-template.md`.
-
----
-
----
-
-## Cleanup
-
-```bash
-# Delete monitors
-axiom-api <deployment> GET "/v2/monitors" | jq -r '.[] | select(.name | startswith("Cost Control:")) | "\(.id)\t\(.name)"'
-axiom-api <deployment> DELETE "/v2/monitors/<id>"
-
-```
-
-For requested dashboard cleanup, find the exact UID with MCP `listDashboards`/`getDashboard`, delete only the authorized dashboard with `deleteDashboard`, and verify absence. Follow the dashboard skill's connection checks.
-
----
-
-## Reference
-
-### Audit Dataset Fields
-
-| Field | Description |
-|-------|-------------|
-| `action` | `usageCalculated` or `runAPLQueryCost` |
-| `properties.hourly_ingest_bytes` | Hourly ingest in bytes |
-| `properties.hourly_billable_query_gbms` | Hourly query cost |
-| `properties.dataset` | Dataset name |
-| `resource.id` | Org ID |
-| `actor.email` | User email |
-
-### Common Fields for Value Analysis
-
-| Dataset type | Primary field | Alternatives |
-|--------------|---------------|--------------|
-| Kubernetes logs | `kubernetes.labels.app` | `kubernetes.namespace_name`, `kubernetes.container_name` |
-| Application logs | `app` or `service` | `level`, `logger`, `component` |
-| Infrastructure | `host` | `region`, `instance` |
-| Traces | `service.name` | `span.kind`, `http.route` |
-
-### Units & Conversions
-
-- Scripts use **TB/day**
-- Dashboard filter uses **GB/month**
-
-| Contract | TB/day | GB/month |
-|----------|--------|----------|
-| 5 PB/month | 167 | 5,000,000 |
-| 10 PB/month | 333 | 10,000,000 |
-| 15 PB/month | 500 | 15,000,000 |
-
-### Optimization Actions
-
-| Signal | Action |
-|--------|--------|
-| Work/GB = 0 | Drop or stop ingesting |
-| High-volume unqueried values | Sample or reduce log level |
-| Empty values from system namespaces | Filter at ingest or accept |
-| WoW spike | Check recent deploys |
+Resolve exact resource IDs with MCP. Use `deleteMonitor` or `deleteDashboard` only for the resources the user requested, and verify absence with `checkMonitors` or `listDashboards`. Do not delete shared notifiers as part of cost-control cleanup.

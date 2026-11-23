@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+scripts=$(cd "$(dirname "$0")" && pwd)
+fixture=$(mktemp -d)
+trap 'rm -rf "$fixture"' EXIT
+
+"$scripts/build-monitors" -a audit -c 500GB -n ops > "$fixture/monitors.json"
+jq -e '
+    length == 3 and (map(.name) | unique | length) == 3
+    and all(.[]; .type == "Threshold" and .notifierIds == ["ops"] and .intervalMinutes == 60)
+    and .[0].threshold == 1 and .[0].operator == "AboveOrEqual"
+    and .[0].triggerFromNRuns == 3 and .[0].triggerAfterNPositiveResults == 2
+    and (.[0].aplQuery | contains("today > 600000000000"))
+    and .[1].rangeMinutes == 21600 and .[2].rangeMinutes == 43200
+    and all(.[1:][]; .notifyByGroup == true and .threshold == 0 and .operator == "Above")
+    and (.[1].aplQuery | endswith("| summarize excess_bytes = max(excess_bytes) by dataset"))
+    and (.[2].aplQuery | endswith("| summarize excess_gbms = max(excess_gbms) by dataset"))
+' "$fixture/monitors.json" > /dev/null
+
+dataset=$'audit/"quote"\\name&\x27'
+notifier=$'ops"\\routing'
+"$scripts/build-monitors" -a "$dataset" -c 1.5TB -n "$notifier" > "$fixture/quoted.json"
+jq -e --arg dataset "$dataset" --arg notifier "$notifier" '
+    all(.[]; .notifierIds == [$notifier] and (.aplQuery | startswith("[" + ($dataset | tojson) + "]")))
+    and (.[0].aplQuery | contains("today > 1800000000000"))
+' "$fixture/quoted.json" > /dev/null
+"$scripts/build-monitors" -a audit -c 1000 | jq -e 'all(.[]; .notifierIds == [])' > /dev/null
+for contract in 0 -1 NaN 1TBjunk 1.2.3TB TB1 1TB2; do
+    if "$scripts/build-monitors" -a audit -c "$contract" > "$fixture/invalid" 2>/dev/null; then
+        echo "FAIL: accepted invalid contract: $contract" >&2; exit 1
+    fi
+    [[ ! -s "$fixture/invalid" ]]
+done
+if "$scripts/build-monitors" -a > "$fixture/invalid" 2>/dev/null; then
+    echo "FAIL: missing argument accepted" >&2; exit 1
+fi
+"$scripts/build-monitors" --help > /dev/null
+echo "PASS: local monitor definitions, limits, grouping, routing, and input quoting"
