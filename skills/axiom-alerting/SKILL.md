@@ -1,77 +1,13 @@
 ---
 name: axiom-alerting
-description: Create and manage Axiom monitors and notifiers via the v2 public API. Use when building alerting, routing notifications, validating monitor behavior, and maintaining alert configurations end-to-end.
+description: Create and manage Axiom monitors and notifiers with the Axiom MCP server. Use when building alerting, routing notifications, validating monitor behavior, and maintaining alert configurations end-to-end.
 ---
 
 # Axiom Alerting
 
 You manage alerting in Axiom end-to-end: notifiers for routing and monitors for detection.
 
-Use the connected Axiom MCP tools for the selected organization and deployment. The scripts below support use without MCP.
-
-## API Overview
-
-The scripts use the `url`, `org_id`, and bearer token from the selected deployment in `~/.axiom.toml`. API requests use `<url>/v2/`.
-
-### Monitors (`/v2/monitors`)
-
-| Operation | Method | Path |
-|-----------|--------|------|
-| List | GET | `/v2/monitors` |
-| Get | GET | `/v2/monitors/{id}` |
-| History | GET | `/v2/monitors/{id}/history` |
-| Create | POST | `/v2/monitors` |
-| Update | PUT | `/v2/monitors/{id}` |
-| Delete | DELETE | `/v2/monitors/{id}` |
-
-### Notifiers (`/v2/notifiers`)
-
-| Operation | Method | Path |
-|-----------|--------|------|
-| List | GET | `/v2/notifiers` |
-| Get | GET | `/v2/notifiers/{id}` |
-| Create | POST | `/v2/notifiers` |
-| Update | PUT | `/v2/notifiers/{id}` |
-| Delete | DELETE | `/v2/notifiers/{id}` |
-
-## Script Prerequisites
-
-1. Run `scripts/setup`
-2. Ensure `.axiom.toml` has a deployment:
-
-```toml
-[deployments.prod]
-url = "https://api.axiom.co"
-token = "xaat-your-token"
-org_id = "your-org-id"
-```
-
-## Scripts
-
-Core:
-- `scripts/axiom-api <deploy> <method> <path> [body]`
-
-Monitor scripts:
-- `scripts/monitor-list <deployment> [--json]`
-- `scripts/monitor-get <deployment> <id>`
-- `scripts/monitor-history <deployment> <id> <startTime> <endTime>`
-- `scripts/monitor-create <deployment> <json-file>`
-- `scripts/monitor-update <deployment> <id> <json-file>`
-- `scripts/monitor-delete <deployment> <id>`
-
-Notifier scripts:
-- `scripts/notifier-list <deployment> [--json]`
-- `scripts/notifier-get <deployment> <id>`
-- `scripts/notifier-create <deployment> <json-file>`
-- `scripts/notifier-update <deployment> <id> <json-file>`
-- `scripts/notifier-delete <deployment> <id>`
-
-## Recommended Workflow
-
-1. Reuse a saved notifier when possible.
-2. Create monitor and set `notifierIds`.
-3. Validate monitor behavior with `getMonitorHistory`.
-4. Iterate monitor thresholds and schedule.
+Use the connected Axiom MCP tools for all Axiom access in the selected organization and deployment. If the tools are unavailable, ask the user to connect the Axiom MCP server before continuing.
 
 ## Workflow: End-To-End Alerting
 
@@ -83,8 +19,6 @@ Notifier scripts:
 4. Check the settings with `getMonitor` and behavior with `getMonitorHistory` over an explicit time range.
 5. If behavior is noisy or silent, tune `threshold`, `rangeMinutes`, `intervalMinutes`, and N-of-M trigger fields. For `MatchEvent` and `NewValues` monitors, tune the query instead: they have no threshold or trigger fields.
 6. Re-check history after each change.
-
-Without MCP, run `scripts/setup` and use the corresponding scripts above. Set up non-email channels under **Notifiers → New notifier** in the user's Console.
 
 ## Best Practices
 
@@ -160,6 +94,8 @@ New values fields (`NewValues` only):
 - Limits: fewer than 50,000 distinct values in the column within `lookbackDays`, and at most 1,000 new values in one run. A monitor that exceeds a limit fails its runs.
 
 ## Minimal Valid Monitor Examples
+
+Pass these objects as JSON strings in `monitorJson`.
 
 Threshold:
 
@@ -245,6 +181,8 @@ AnomalyDetection:
 
 ## Email Notifier Example
 
+Pass this object as a JSON string in `notifierJson`.
+
 ```json
 {
   "name": "Oncall Email",
@@ -259,26 +197,15 @@ AnomalyDetection:
 ## Troubleshooting
 
 `401 Unauthorized`:
-- Cause: invalid or expired token.
-- Fix:
-  - Verify token in `~/.axiom.toml`.
-  - Re-run `scripts/setup` and retry:
-    - `scripts/notifier-list <deployment>`
+- Ask the user to reconnect Axiom MCP, then retry `listNotifiers`.
 
 `403 Forbidden`:
-- Cause: token lacks required permissions.
-- Fix:
-  - Create/assign token scopes for monitor/notifier management and dataset query access.
-  - Retry:
-    - `scripts/monitor-list <deployment>`
+- Check that the connected account has permission to manage monitors and notifiers in the selected organization.
+- After access is granted, retry the failed tool call.
 
 `404 Not Found` on get/update/delete:
-- Cause: wrong monitor/notifier ID or wrong deployment/org.
-- Fix:
-  - Confirm deployment in `.axiom.toml`.
-  - Re-list objects and use exact IDs:
-    - `scripts/monitor-list <deployment> --json`
-    - `scripts/notifier-list <deployment>`
+- Confirm the connected organization and deployment.
+- Use `checkMonitors` or `listNotifiers` to find the current IDs, then retry.
 
 `400 Bad Request` on email notifier create/update:
 - Cause: invalid notifier payload shape.
@@ -296,15 +223,12 @@ AnomalyDetection:
   - `must set NewValuesLookbackDays`: a `NewValues` monitor needs `lookbackDays`.
   - `RangeMinutes must not be less than IntervalMinutes`: raise `rangeMinutes` on the `NewValues` monitor.
   - `cannot set [Operator Tolerance CompareDays]`: remove those fields from the `NewValues` monitor.
-  - Retry:
-    - `scripts/monitor-create <deployment> <json-file>`
-    - `scripts/monitor-update <deployment> <id> <json-file>`
+  - Retry `createMonitor` or `updateMonitor` with the corrected `monitorJson`.
 
 Monitor created but never alerts:
 - Cause: threshold too strict, wrong query window, or not enough positive runs.
 - Fix:
-  - Inspect history over a known active period:
-    - `scripts/monitor-history <deployment> <id> <startTime> <endTime>`
+  - Use `getMonitorHistory` over a known active period with explicit `startTime` and `endTime`.
   - Reduce threshold or widen `rangeMinutes`.
   - Tune `triggerAfterNPositiveResults`/`triggerFromNRuns`.
 
@@ -332,5 +256,5 @@ Notifier exists but no delivery:
 - Cause: destination config invalid (URL/key/channel/email list), or destination-side rejection.
 - Fix:
   - For email, check the addresses and use `updateNotifier` to correct them.
-  - For other channels, use `updateNotifier` with the saved ID and an empty channel config to open the Console. Without MCP, edit the notifier under **Notifiers** in the user's Console.
+  - For other channels, use `updateNotifier` with the saved ID and an empty channel config to open the Console.
   - Confirm monitor references correct notifier IDs.

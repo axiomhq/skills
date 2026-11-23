@@ -40,10 +40,10 @@ fi
 
 ## Use the org
 
-The org id is the deployment name, so the other Axiom skills work as-is:
+The org id is the deployment name. To list its datasets with the data API helper:
 
 ```bash
-skills/axiom-alerting/scripts/axiom-api <org-id> GET /datasets
+skills/axiom-build-dashboard/scripts/metrics/axiom-api <org-id> GET /v2/datasets
 ```
 
 For direct calls, send `Authorization: Bearer <token>` and `X-Axiom-Org-Id: <org-id>`. Read the token from `~/.axiom.toml` into a variable; do not paste it into commands or output. The org behaves like any Axiom org: create datasets, ingest, query, and build dashboards and monitors.

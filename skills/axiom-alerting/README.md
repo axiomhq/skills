@@ -1,56 +1,16 @@
 # axiom-alerting
 
-Unified Axiom alerting skill for managing monitors and notifiers via the Axiom v2 API.
+Manage Axiom monitors and notifiers with the Axiom MCP server.
 
-Use the connected Axiom MCP tools. The setup and commands below are for use without MCP.
+Requires a connected Axiom MCP server with access to the selected organization.
 
 ## What This Skill Covers
 
 - Monitor lifecycle: list, get, history, create, update, delete
-- Notifier lifecycle: list, get, create, update, delete
+- Notifier lifecycle: list, create, update, delete
 - End-to-end workflow: reuse a saved notifier, wire `notifierIds` into the monitor, validate behavior
 
-## Requirements
-
-- `curl`
-- `jq`
-- `~/.axiom.toml` with at least one deployment
-
-Example config:
-
-```toml
-[deployments.prod]
-url = "https://api.axiom.co"
-token = "xaat-your-token"
-org_id = "your-org-id"
-```
-
-## Setup
-
-```bash
-skills/axiom-alerting/scripts/setup
-```
-
-## Quick Start
-
-```bash
-# List notifiers and monitors
-skills/axiom-alerting/scripts/notifier-list prod
-skills/axiom-alerting/scripts/monitor-list prod
-```
-
-## Common Commands
-
-```bash
-# Create an email notifier from JSON. Set up other channels in the Axiom Console.
-skills/axiom-alerting/scripts/notifier-create prod ./notifier.json
-
-# Create monitor from JSON
-skills/axiom-alerting/scripts/monitor-create prod ./monitor.json
-
-# Check monitor history in a time range
-skills/axiom-alerting/scripts/monitor-history prod <monitor-id> 2026-05-03T00:00:00Z 2026-05-04T00:00:00Z
-```
+Use [SKILL.md](SKILL.md) for the MCP workflow, monitor types, and configuration examples. For channels that need credentials, the MCP tools guide the user to the Axiom Console.
 
 ## JSON Notes
 
@@ -58,18 +18,3 @@ skills/axiom-alerting/scripts/monitor-history prod <monitor-id> 2026-05-03T00:00
 - Monitor payload uses `notifierIds` to attach destinations.
 - For noisy alerts, prefer `triggerAfterNPositiveResults` with `triggerFromNRuns`.
 - Monitor `type` is `Threshold`, `MatchEvent`, `NewValues`, or `AnomalyDetection`. `SKILL.md` says when to use each and has a valid example of each.
-
-## Script Index
-
-- `scripts/axiom-api <deploy> <method> <path> [body]`
-- `scripts/monitor-list <deployment> [--json]`
-- `scripts/monitor-get <deployment> <id>`
-- `scripts/monitor-history <deployment> <id> <startTime> <endTime>`
-- `scripts/monitor-create <deployment> <json-file>`
-- `scripts/monitor-update <deployment> <id> <json-file>`
-- `scripts/monitor-delete <deployment> <id>`
-- `scripts/notifier-list <deployment> [--json]`
-- `scripts/notifier-get <deployment> <id>`
-- `scripts/notifier-create <deployment> <json-file>`
-- `scripts/notifier-update <deployment> <id> <json-file>`
-- `scripts/notifier-delete <deployment> <id>`
