@@ -1,79 +1,54 @@
 ---
 name: axiom-ingest
-description: Send data to Axiom. Picks an org from ~/.axiom.toml, or provisions a temporary one when none is configured, creates the dataset, ingests JSON, NDJSON, or CSV, and confirms with a query. Use when asked to send, ingest, upload, or load data or events into Axiom or a new Axiom dataset.
+description: Send logs and events to Axiom through APIs, SDKs, or integrations. Use when importing event files or configuring ongoing event delivery.
 ---
 
-# axiom-ingest
+# Axiom ingest
 
-Get data into an Axiom dataset with the fewest questions.
+Use this skill to send logs and events to Axiom through its APIs, SDKs, or integrations.
+Follow current Axiom docs for the selected source and delivery method.
 
-## 1. Choose an org
+When connected, use Axiom MCP tools for discovery, dataset setup, and queries.
 
-List configured deployments:
+1. Identify the source, event format, existing sender, and requested destination. Establish whether this is a file import or ongoing delivery.
 
-```bash
-grep -o '^\[deployments\.[^]]*\]' ~/.axiom.toml 2>/dev/null
-```
+2. Read the matching source guide from Methods below. Reuse an existing sender when it supports the requested delivery.
 
-| Found | Do |
-|-------|----|
-| None, and no Axiom MCP connection | Follow the `axiom-create-org` skill to provision a temporary org, then continue here with its org id as the deployment. |
-| None, but Axiom MCP is connected | Ask once: create an API token in that org and add it to `~/.axiom.toml`, or use a new temporary org. For a new dataset the token needs dataset create, ingest, and query permissions. MCP alone cannot ingest. |
-| One | Use it. Say which org you are writing to before you write. |
-| Several | Ask once: which deployment, or a new temporary org. |
+3. Resolve the organization and dataset. Compare existing dataset kind, schema, retention, and edge deployment with the source. Reuse a suitable Events dataset, or create one within the requested scope.
 
-If the user named an org or deployment, use it and skip the table.
+4. Configure the sender using its guide. Preserve event boundaries and field meanings. Reuse configured credential references. Follow the token guide when ingestion access is missing. Apply documented timestamp mapping, batching, buffering, retry, and flush behavior.
 
-Load the deployment without printing the token:
+5. Test delivery with a bounded batch or one application action. Inspect failures and warnings. Query those records by event time and identifiers. Compare their timestamps and expected fields with the source. Report the destination, observed result, and any remaining gaps.
 
-```bash
-cfg() { awk -F'"' -v d="[deployments.$1]" -v k="$2" '$0==d{f=1;next} /^\[/{f=0} f&&$1~"^"k" *= *$"{print $2}' ~/.axiom.toml; }
-d=<deployment>; url=$(cfg "$d" url); token=$(cfg "$d" token); org=$(cfg "$d" org_id)
-H=(-sS -H "Authorization: Bearer $token" -H "X-Axiom-Org-Id: $org")
-```
+## References
 
-## 2. Create the dataset
+| Reference | Read when |
+| --- | --- |
+| [Methods](https://axiom.co/docs/send-data/methods) | Selecting a delivery method or finding the matching source guide. |
+| [Datasets](https://axiom.co/docs/reference/datasets) | Selecting a destination, setting retention, or inspecting schema restrictions. |
+| [Edge deployments](https://axiom.co/docs/reference/edge-deployments) | Selecting the sender’s ingest destination. |
+| [API tokens](https://axiom.co/docs/reference/tokens#api-tokens) | Configuring ingestion access. |
+| [Ingest guide](https://axiom.co/docs/restapi/ingest) and [API reference](https://axiom.co/docs/restapi/endpoints/ingestToDataset) | Selecting event formats, mapping timestamps, or interpreting ingest responses. |
+| [Limits](https://axiom.co/docs/reference/limits) | Applying batch and field limits, timestamp requirements, reserved names, or log level support. |
+| [Map fields](https://axiom.co/docs/apl/data-types/map-fields) | Handling objects with many or changing keys. |
+| [Performance](https://axiom.co/docs/reference/performance) | Planning historical imports or organizing data for efficient queries. |
+| [MCP tools](https://axiom.co/docs/console/intelligence/mcp-server/tools) | Discovering data, managing datasets, or querying results. |
 
-Names use letters, digits, `-`, `_`, and `.`. Pick a name from the task if the user gave none.
+## Example
 
-```bash
-edge=$(curl "${H[@]}" -H 'Content-Type: application/json' -X POST "$url/v2/datasets" \
-  -d '{"name": "<dataset>", "description": "<why>"}' | jq -r '.edgeDeploymentUrl // .message')
-```
+Acme’s checkout service exports order events to `orders.ndjson`.
+The team wants to import them into its existing `orders` dataset.
 
-- `dataset license limit exceeded` (HTTP 400) means the org has no dataset slots left. Ask whether to reuse an existing dataset or use another org.
-- `entity exists` (HTTP 409) means the name is taken. For a "new dataset" request, pick another name.
-- `token does not have access to resource: datasets with action: create` (HTTP 403) means the token can't create datasets. Ask the user to create the dataset or use a token that can, or send to an existing dataset.
+| Step | Checkout example |
+| --- | --- |
+| 1. Identify | Find events with `created_at`, `order_id`, and a numeric `amount`. |
+| 2. Read | Select the NDJSON API guide for this file import. |
+| 3. Resolve | Inspect the `orders` dataset’s fields, schema restrictions, retention, and edge deployment. |
+| 4. Configure | Map `created_at` to event time using the documented timestamp options. Use the configured ingestion credential. |
+| 5. Verify | Send a bounded batch and inspect counts and warnings. Query the imported order IDs in their original time window. Compare `_time` and `amount` with the source. |
 
-To send to an existing dataset, skip the create call and read its edge URL instead:
+## Related
 
-```bash
-edge=$(curl "${H[@]}" "$url/v2/datasets/<dataset>" | jq -r .edgeDeploymentUrl)
-```
+For OpenTelemetry instrumentation or OTLP delivery, use [otel-instrumentation](../otel-instrumentation/SKILL.md).
 
-## 3. Ingest
-
-Send to the dataset's edge URL. Set `Content-Type` to match the data:
-
-| Data | Content-Type |
-|------|--------------|
-| JSON array of objects | `application/json` |
-| One JSON object per line | `application/x-ndjson` |
-| CSV with a header row | `text/csv` |
-
-```bash
-curl "${H[@]}" -H 'Content-Type: application/x-ndjson' -X POST "$edge/v1/ingest/<dataset>" \
-  --data-binary @events.ndjson | jq '{ingested, failed, failures}'
-```
-
-- `_time` sets each event's timestamp. Without it, Axiom uses the ingest time.
-- Any `failed` count above 0 needs fixing; `failures` says why.
-
-## 4. Confirm
-
-```bash
-curl "${H[@]}" -H 'Content-Type: application/json' -X POST "$edge/v1/query/_apl?format=tabular" \
-  -d "{\"apl\": \"['<dataset>'] | count\"}" | jq '.tables[0].columns'
-```
-
-New events can take a few seconds to show up. If the query returns HTTP 403, the token can't query; report the `ingested` count from step 3 instead. Report the org, dataset, and event count. If the org is temporary, also give the claim URL and expiry as `axiom-create-org` describes.
+If a new organization is needed, use [axiom-create-org](../axiom-create-org/SKILL.md).

@@ -1,16 +1,10 @@
 # axiom-ingest
 
-Sends data to a new or existing Axiom dataset.
+<!-- Scope and workflow from SKILL.md. -->
 
-## What This Skill Covers
+Send logs and events to Axiom through its APIs, SDKs, or integrations.
+The skill guides source discovery, destination selection, delivery configuration, and verification using current Axiom docs.
 
-- Picking an org from `~/.axiom.toml`, or provisioning a temporary one with `axiom-create-org` when none is configured
-- Creating the dataset and ingesting JSON, NDJSON, or CSV through the dataset's edge endpoint
-- Confirming the event count with an APL query
+Follow [SKILL.md](SKILL.md) for the workflow, references, and a checkout example.
 
-## Requirements
-
-- `curl`
-- `jq`
-
-See [Send data to Axiom](https://axiom.co/docs/restapi/ingest).
+For OpenTelemetry instrumentation or OTLP delivery, use [otel-instrumentation](../otel-instrumentation/SKILL.md).
