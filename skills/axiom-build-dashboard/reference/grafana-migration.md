@@ -204,7 +204,7 @@ Symptom: `http_requests_total` not found → tries `http_requests`, `http_reques
 Symptom: a panel with `total` + `errors` targets becomes a single MPL pipeline. **Fix:** iterate `targets[]`; translate every entry into its own `queries[]` entry on the chart, `name` from `legendFormat` ([chart-config.md § Multiple Queries](./chart-config.md#timeseries--multiple-queries)). Only when Grafana combined the targets in a transform, compute the derived value in one MPL pipeline, or defer with a `Note`.
 
 ### Substituting a different quantity when blocked
-Symptom: ratio can't be computed → agent ships a related quantity Y labelled "Y replaces X". Never acceptable. **Fix:** defer the panel with a Note documenting the blocker. See [SKILL.md § Compute or Defer](../SKILL.md#compute-or-defer).
+Symptom: ratio can't be computed → agent ships a related quantity Y labelled "Y replaces X". Never acceptable. **Fix:** defer the panel with a Note documenting the blocker. See [Unavailable measurements](../references/design.md#unavailable-measurements).
 
 ### Translating from the live Grafana UI instead of the export
 Symptom: agent screen-scrapes the rendered chart. **Fix:** always work from the exported JSON — UI text is generated from `title` + `legendFormat` and obscures parts of the spec.
@@ -219,7 +219,7 @@ Symptom: agent screen-scrapes the rendered chart. **Fix:** always work from the 
 - [ ] Mapped visualization types per the table above.
 - [ ] For every metric/label name in `expr`: applied OTel renaming rules first, validated through discovery, escalated only if both failed.
 - [ ] For every PromQL `{...}` selector: a corresponding MPL `where` clause.
-- [ ] **For every PromQL selector value absent from the discovered tag values: cited a written source for the expansion** (panel `description`, or upstream rule library file + line). Memory-as-source is forbidden; no citation → defer the panel. See [promql-to-mpl.md § Selector Values Not in the Dataset Are Aliases](./promql-to-mpl.md#selector-values-not-in-the-dataset-are-aliases--cite-the-source).
+- [ ] **For every PromQL selector value absent from the discovered tag values: cited a written source for the expansion** (panel `description`, or upstream rule library file + line). Memory-as-source is forbidden; no citation → defer the panel. See [promql-to-mpl.md § Selector Values Not in the Dataset Are Aliases](./promql-to-mpl.md#selector-values-absent-from-the-dataset-are-aliases--cite-the-source).
 - [ ] For every PromQL `by(...)`: a corresponding MPL `group by` with all dimensions preserved.
 - [ ] Tested every query following the [Metrics/MPL chart contract](./metrics-mpl.md), preserving `$__interval`.
 - [ ] Built Axiom dashboard JSON without inline time ranges in chart queries.

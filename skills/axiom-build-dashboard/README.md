@@ -1,6 +1,6 @@
 # axiom-build-dashboard
 
-Designs and builds Axiom dashboards via API. Covers chart types, APL patterns, SmartFilters, layout, and configuration options.
+Design and migrate Axiom dashboards with connected Axiom MCP tools. Follow [SKILL.md](SKILL.md) for the workflow and [Dashboard design](references/design.md) for measurement and chart guidance.
 
 ## What It Does
 
@@ -8,7 +8,7 @@ Designs and builds Axiom dashboards via API. Covers chart types, APL patterns, S
 - **Chart Types** - Statistic, TimeSeries, Table, Pie, LogStream, Heatmap, SmartFilter, Note
 - **APL + Metrics/MPL Patterns** - Golden signals, percentiles, error rates, and metrics chart queries via `query.apl`, plus several queries on one TimeSeries via `queries`
 - **Layout Composition** - Grid-based layouts, plus collapsible sections via `dashboard-assemble --section`
-- **Deployment** - Scripts to validate, create, update, and manage dashboards
+- **Dashboard Changes** - Connected MCP tools to create and update dashboards
 
 ## Installation
 
@@ -18,13 +18,12 @@ npx skills add axiomhq/skills
 
 ## Prerequisites
 
-- `axiom-sre` skill (for API access and schema discovery)
-- Axiom MCP for metrics discovery and queries
-- Tools: `jq`, `curl`
+- Connected Axiom MCP tools with access to the required datasets and dashboards
 
-The install command above includes all skill dependencies.
+The bundled shell helpers remain available for separately configured deployments.
+These helpers require `jq` and `curl`.
 
-## Configuration
+## Optional Helper Configuration
 
 Create `~/.axiom.toml` with your Axiom deployment(s):
 
@@ -38,14 +37,12 @@ org_id = "your-org-id"
 - **`org_id`** - The organization ID. Get it from Settings → Organization.
 - **`token`** - Use an advanced API token with minimal privileges.
 
-**Tip:** This skill uses `~/.axiom.toml`. The SRE skill has a separate [initializer and configuration](../axiom-sre/README.md#setup).
-
 The bundled `scripts/metrics/` helpers support separately configured deployments.
 Requests must stay on the configured HTTP(S) origin, except for routing between
 hosted Axiom API/app/regional edge origins. This also applies to `AXIOM_URL_OVERRIDE`;
 existing curl configuration remains trusted.
 
-## Usage
+## Optional Helpers
 
 ```bash
 # Setup and check requirements
