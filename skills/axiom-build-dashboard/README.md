@@ -1,14 +1,6 @@
 # axiom-build-dashboard
 
-Designs and builds Axiom dashboards via API. Covers chart types, APL patterns, SmartFilters, layout, and configuration options.
-
-## What It Does
-
-- **Dashboard Design** - Blueprint structure: at-a-glance stats, trends, breakdowns, evidence
-- **Chart Types** - Statistic, TimeSeries, Table, Pie, LogStream, Heatmap, SmartFilter, Note
-- **APL + Metrics/MPL Patterns** - Golden signals, percentiles, error rates, and metrics chart queries via `query.apl`, plus several queries on one TimeSeries via `queries`
-- **Layout Composition** - Grid-based layouts, plus collapsible sections via `dashboard-assemble --section`
-- **Deployment** - Scripts to validate, create, update, and manage dashboards
+Design, create, and edit Axiom dashboards using Axiom MCP. Covers APL and metrics/MPL charts, SmartFilters, layout, sections, and migrations from Grafana or Splunk.
 
 ## Installation
 
@@ -16,80 +8,40 @@ Designs and builds Axiom dashboards via API. Covers chart types, APL patterns, S
 npx skills add axiomhq/skills
 ```
 
-## Prerequisites
+## Prerequisite: Axiom MCP
 
-- `axiom-sre` skill (for API access and schema discovery)
-- Axiom MCP for metrics discovery and queries
-- Tools: `jq`, `curl`
+Connect and authenticate [Axiom MCP](https://axiom.co/docs/console/intelligence/mcp-server) in your agent client. On clients that load MCP configuration from the Axiom plugin, sign in to the included connection. Otherwise, including skills-only installations, connect the server separately.
 
-The install command above includes all skill dependencies.
+The skill checks the available tools and makes a relevant read-only call before proceeding. If MCP is missing, it asks you to connect. If authentication fails, it asks you to sign in again. Missing capabilities or permissions are reported separately. It does not fall back to HTTP scripts or `~/.axiom.toml` credentials.
 
-## Configuration
-
-Create `~/.axiom.toml` with your Axiom deployment(s):
-
-```toml
-[deployments.prod]
-url = "https://api.axiom.co"
-token = "xaat-your-api-token"
-org_id = "your-org-id"
-```
-
-- **`org_id`** - The organization ID. Get it from Settings → Organization.
-- **`token`** - Use an advanced API token with minimal privileges.
-
-**Tip:** This skill uses `~/.axiom.toml`. The SRE skill has a separate [initializer and configuration](../axiom-sre/README.md#setup).
-
-The bundled `scripts/metrics/` helpers support separately configured deployments.
-Requests must stay on the configured HTTP(S) origin, except for routing between
-hosted Axiom API/app/regional edge origins. This also applies to `AXIOM_URL_OVERRIDE`;
-existing curl configuration remains trusted.
+MCP handles dataset discovery, query validation, and dashboard creation, updates, and deletion. Small chart edits use `updateDashboardChart`; layout and dashboard settings use `replaceDashboard`. Updates use the current version to avoid overwriting concurrent changes.
 
 ## Usage
 
-```bash
-# Setup and check requirements
-scripts/setup
+Ask your agent to:
 
-# Create dashboard from template
-scripts/dashboard-from-template service-overview "my-service" "my-dataset" ./dashboard.json
+- “Build an API health dashboard for production.”
+- “Change the latency panel on this dashboard to p99.”
+- “Migrate this Grafana dashboard to Axiom.”
 
-# Validate dashboard JSON
-scripts/dashboard-validate ./dashboard.json
+The agent validates queries against your data, applies the requested change, reads it back, and returns the dashboard link from MCP.
 
-# Deploy dashboard
-scripts/dashboard-create <deployment> ./dashboard.json
+## Local helpers
 
-# List, update, delete
-scripts/dashboard-list <deployment>
-scripts/dashboard-update <deployment> <id> <file>
-scripts/dashboard-chart-patch <deployment> <id> <chart-id> <patch-file> --version <version>
-scripts/dashboard-delete <deployment> <id>
-```
+These helpers only generate or validate JSON; they do not connect to Axiom. Bash and `jq` are needed to run them; section ID generation also uses `openssl` and `xxd`.
 
-## Scripts
+| Helper | Purpose |
+|---|---|
+| `chart-add` | Generate an APL or MPL chart with appropriate unit handling |
+| `layout-pack` | Arrange charts on a 12-column grid |
+| `dashboard-assemble` | Compose chart files, layout, settings, and sections |
+| `dashboard-validate` | Check local structure and chart constraints |
+| `dashboard-normalize.jq` | Fill missing layout defaults without replacing existing values |
+| `dashboard-from-template`, `dashboard-new` | Prepare JSON from bundled templates |
+| `metrics/unit-for` | Map chart units to display suffixes |
 
-| Script | Purpose |
-|--------|---------|
-| `dashboard-create` | Deploy new dashboard |
-| `dashboard-validate` | Validate JSON structure |
-| `dashboard-list` | List all dashboards |
-| `dashboard-get` | Fetch dashboard JSON |
-| `dashboard-update` | Update existing dashboard |
-| `dashboard-chart-patch` | Patch one chart in an existing dashboard |
-| `dashboard-copy` | Clone a dashboard |
-| `dashboard-delete` | Delete with confirmation |
-| `dashboard-from-template` | Generate from template |
+See [local composition](reference/local-composition.md) for examples. The previous dashboard and metrics HTTP wrappers have been removed; use MCP for those operations.
 
-## Templates
+## References
 
-Pre-built templates in `reference/templates/`:
-- `service-overview.json` - Single service oncall dashboard
-- `service-overview-with-filters.json` - With SmartFilter dropdowns
-- `api-health.json` - HTTP API health dashboard
-- `blank.json` - Minimal skeleton
-
-## Related Skills
-
-- `axiom-sre` - Schema discovery and query exploration
-- `axiom-spl-to-apl` - Translate Splunk dashboards to Axiom
+Start with [SKILL.md](SKILL.md). Detailed chart configuration, query patterns, migrations, and templates live in `reference/`. [SPEC.md](SPEC.md) defines the maintenance contract, scope, and acceptance expectations. [Manual scenarios](tests/manual-tests.md) cover connection handling and the MCP workflow.

@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Verify local dashboard preparation without credentials or remote helpers.
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+TEST_DIR=$(mktemp -d)
+trap 'rm -rf "$TEST_DIR"' EXIT
+
+"$SCRIPT_DIR/build-dashboard" -a audit-logs > "$TEST_DIR/dashboard.json"
+jq -e '
+  .name == "Org Usage & Cost Control" and .owner == "X-AXIOM-EVERYONE"
+  and .datasets == ["audit-logs"]
+  and ([.charts[].id] | sort) == ([.layout[].i] | sort)
+  and (has("createdAt") | not) and (has("updatedBy") | not)
+  and ([.. | objects | .apl? | select(type == "string") | select(length > 0)] | length > 0)
+  and ([.. | objects | .apl? | select(type == "string") | select(length > 0)] | all(contains("[\"audit-logs\"]")))
+' "$TEST_DIR/dashboard.json" > /dev/null
+
+# Check that JSON and APL quoting survive shell-sensitive characters.
+dataset=$'audit/"quoted"\\name&\x27'
+name=$'Costs: "A&B" / $() `literal`\nSecond line'
+"$SCRIPT_DIR/build-dashboard" -a "$dataset" -n "$name" --owner me > "$TEST_DIR/special.json"
+jq -e --arg dataset "$dataset" --arg name "$name" '
+  ("[" + ($dataset | tojson) + "]") as $source
+  | .name == $name and .owner == "me" and .datasets == [$dataset]
+  and ([.. | objects | .apl? | select(type == "string") | select(length > 0)] | all(contains($source)))
+' "$TEST_DIR/special.json" > /dev/null
+
+if "$SCRIPT_DIR/build-dashboard" -a > "$TEST_DIR/invalid.json" 2>/dev/null; then
+    echo "FAIL: missing dataset value accepted" >&2; exit 1
+fi
+[[ ! -s "$TEST_DIR/invalid.json" ]]
+"$SCRIPT_DIR/build-dashboard" --help > /dev/null
+echo "PASS: cost dashboard JSON, dataset substitution, ownership, and invalid input"

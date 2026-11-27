@@ -5,7 +5,7 @@
 # This script:
 #   1. Checks for required tools (curl, jq, bc)
 #   2. Checks for ~/.axiom.toml configuration
-#   3. Checks for dependent skills (axiom-sre, axiom-build-dashboard)
+#   3. Checks for axiom-sre and explains the dashboard MCP prerequisite
 #   4. Makes scripts executable
 
 set -euo pipefail
@@ -53,7 +53,6 @@ echo ""
 echo "[3/4] Checking dependent skills..."
 
 AXIOM_QUERY="$(resolve_skill_script sre axiom-query "${AXIOM_QUERY:-}")"
-DASHBOARD_CREATE="$(resolve_skill_script axiom-build-dashboard dashboard-create "${DASHBOARD_CREATE:-}")"
 
 if [[ -x "$AXIOM_QUERY" ]]; then
     echo "✓ axiom-sre skill found"
@@ -63,12 +62,8 @@ else
     exit 1
 fi
 
-if [[ -x "$DASHBOARD_CREATE" ]]; then
-    echo "✓ axiom-build-dashboard skill found"
-else
-    echo "⚠ dashboard-create not found at $DASHBOARD_CREATE (optional, needed for deploy-dashboard)"
-    echo "  Install: amp skill install axiom-build-dashboard"
-fi
+echo "Dashboard operations require the axiom-build-dashboard skill and authenticated Axiom MCP."
+echo "Check that connection in your agent client; this script cannot verify MCP."
 
 # --- Check Axiom config ---
 echo ""
@@ -103,8 +98,8 @@ echo "Workflow:"
 echo "  1. Discover baseline usage:"
 echo "     scripts/baseline-stats <deployment>"
 echo ""
-echo "  2. Deploy cost control dashboard:"
-echo "     scripts/deploy-dashboard -d <deployment> -a <audit-dataset>"
+echo "  2. Prepare the dashboard, then save it through Axiom MCP:"
+echo "     scripts/build-dashboard -a <audit-dataset> > dashboard.json"
 echo ""
 echo "  3. Create monitors (adjust contract_tb for your usage):"
 echo "     scripts/create-monitors <deployment> [notifier_id] [contract_tb] [glidepath_tb]"

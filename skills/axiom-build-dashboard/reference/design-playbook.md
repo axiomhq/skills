@@ -37,21 +37,21 @@ Visual flow: glance overview ("errors are up") → scan drilldown ("on `/checkou
 
 ### Oncall Dashboard
 - **Time window:** 15m–1h
-- **Refresh:** 30s–1m
+- **Refresh:** 60s by default; 15s when incident response needs it
 - **Focus:** Errors, latency spikes, recent changes
 - **Stats:** Current error rate, p95, traffic
 - **Priority:** Speed over completeness
 
 ### Team Health Dashboard
 - **Time window:** 24h–7d
-- **Refresh:** 5m–15m
+- **Refresh:** 5m
 - **Focus:** SLO tracking, trends, regression detection
 - **Stats:** SLO budget remaining, weekly error rate
 - **Priority:** Context over immediacy
 
 ### Executive Dashboard
 - **Time window:** 7d–30d
-- **Refresh:** 1h
+- **Refresh:** 5m (the slowest value currently documented by MCP)
 - **Focus:** Business metrics, availability, cost
 - **Stats:** Uptime %, request volume, top customers
 - **Priority:** Clarity over detail
@@ -86,7 +86,7 @@ Visual flow: glance overview ("errors are up") → scan drilldown ("on `/checkou
 **Fix:** Always include breakdown tables that show top contributors.
 
 ### Stale Data with Fast Refresh
-**Problem:** Dashboard refreshes every 30s but queries 7 days.
+**Problem:** Dashboard refreshes every 15s but queries 7 days.
 **Fix:** Match refresh to time window. Fast refresh = short window.
 
 ### Generic Panel Names
@@ -142,14 +142,16 @@ If you can't show all four, prioritize: Errors > Latency > Traffic > Saturation.
 
 ## Refresh Rate Guidelines
 
+The current MCP dashboard contract documents `refreshTime` values of **15, 60, or 300 seconds**. Choose one of those values; check the connected tool's schema if support changes. If the user requests an unavailable cadence, explain the limitation before choosing a supported alternative.
+
 | Dashboard type | Refresh |
 |----------------|---------|
-| Oncall/incident | 30s–1m |
-| Operational | 1m–5m |
-| Daily health | 5m–15m |
-| Reporting | Manual or 1h |
+| Oncall/incident | 60s by default; 15s when needed |
+| Operational | 60s or 300s |
+| Daily health | 300s |
+| Reporting | 300s (slowest documented value) |
 
-Fast refresh on long time windows wastes resources. Match them.
+Fast refresh on long time windows wastes resources. Prefer the slowest supported refresh that meets the user's needs.
 
 ---
 

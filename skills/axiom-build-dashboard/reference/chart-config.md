@@ -67,18 +67,18 @@ The Console added this for metrics charts in March 2026 and for structured, APL,
   "type": "TimeSeries",
   "query": {
     "name": "p95",
-    "apl": "set custom_unit = \"s\"; `otel-metrics`:http_request_duration_seconds | where `service.name` == \"api\" | bucket by region to $__interval using interpolate_cumulative_histogram(rate, 0.95)",
+    "mpl": "set custom_unit = \"s\"; `otel-metrics`:http_request_duration_seconds | where `service.name` == \"api\" | bucket by region to $__interval using interpolate_cumulative_histogram(rate, 0.95)",
     "metricsDataset": "otel-metrics"
   },
   "queries": [
     {
       "name": "p95",
-      "apl": "set custom_unit = \"s\"; `otel-metrics`:http_request_duration_seconds | where `service.name` == \"api\" | bucket by region to $__interval using interpolate_cumulative_histogram(rate, 0.95)",
+      "mpl": "set custom_unit = \"s\"; `otel-metrics`:http_request_duration_seconds | where `service.name` == \"api\" | bucket by region to $__interval using interpolate_cumulative_histogram(rate, 0.95)",
       "metricsDataset": "otel-metrics"
     },
     {
       "name": "p99",
-      "apl": "set custom_unit = \"s\"; `otel-metrics`:http_request_duration_seconds | where `service.name` == \"api\" | bucket by region to $__interval using interpolate_cumulative_histogram(rate, 0.99)",
+      "mpl": "set custom_unit = \"s\"; `otel-metrics`:http_request_duration_seconds | where `service.name` == \"api\" | bucket by region to $__interval using interpolate_cumulative_histogram(rate, 0.99)",
       "metricsDataset": "otel-metrics"
     }
   ]
@@ -89,8 +89,8 @@ The Console added this for metrics charts in March 2026 and for structured, APL,
 |---|---|
 | `queries[]` | One entry per query, in display order. Charts read back from the API carry 2–8 entries. |
 | `queries[].name` | Legend label for that query's series. Every entry read back has one; the Console names a new query row `A` by default. Give each entry a distinct, meaningful name. |
-| `queries[].apl` | The pipeline, APL or MPL, exactly as for a single `query.apl`. The dashboard time picker and `$__interval` apply; no inline time range. Dashboard parameters (`param $region: Option<string>;`) go at the top of each entry, as in a single query. |
-| `queries[].metricsDataset` | Present on MPL entries, absent on APL entries, the same discriminator rule as `query.metricsDataset`. |
+| `queries[].apl` / `queries[].mpl` | Use `apl` for events and `mpl` for metrics, as for a single query. The dashboard picker and `$__interval` apply; no inline range. Declare dashboard parameters in each entry. |
+| `queries[].metricsDataset` | Present on MPL entries, absent on APL entries, identifying the metrics dataset as in `query.metricsDataset`. |
 | `queries[].queryOptions` | Per-entry options. Seen in the wild: `timeSeriesView`. |
 | `query` | Present on every chart read back, and always equal to `queries[0]` including `name`. Keep it a copy of the first entry so a reader of `query` alone sees the first series. |
 | Chart-level `datasetId`, `query.queryOptions` | Not written on multi-query charts read back from the API. |
@@ -116,7 +116,7 @@ jq -s '
 ' p95.json p99.json > latency-p95-p99.json
 ```
 
-Then feed `latency-p95-p99.json` to `layout-pack` and `dashboard-assemble` like any other chart file. Validate each MPL pipeline on its own with `scripts/metrics/mpl-validate-chart <deployment> '<MPL>'` before the merge; it takes one pipeline string, not a chart file. `dashboard-validate` accepts `queries` and has no entry-level checks.
+Then feed `latency-p95-p99.json` to `layout-pack` and `dashboard-assemble` like any other chart file. Validate each MPL pipeline on its own with MCP `queryMetrics` before the merge, supplying the dataset and a bounded time interval. `dashboard-validate` accepts `queries` and has no entry-level checks.
 
 ### Rules
 
@@ -127,7 +127,7 @@ Then feed `latency-p95-p99.json` to `layout-pack` and `dashboard-assemble` like 
 
 ### Secondary Y-axis
 
-The Console lets each query sit on the primary or secondary Y-axis, so request count and p99 latency can share a chart. None of the multi-query charts read back from the API for this section used it, so its JSON field is not documented here. Do not guess a key: the create API has a closed field list ([Fields Rejected on Create](#fields-rejected-on-create)). To use the secondary axis, deploy the chart, set the axis on the query row in the Console, then `dashboard-get` the dashboard and copy the field the Console wrote. Add it to this section when you find it.
+The Console lets each query sit on the primary or secondary Y-axis, so request count and p99 latency can share a chart. None of the multi-query charts read back from the API for this section used it, so its JSON field is not documented here. Do not guess a key: the create API has a closed field list ([Fields Rejected on Create](#fields-rejected-on-create)). To use the secondary axis, deploy the chart, set the axis on the query row in the Console, then read the dashboard with MCP `getDashboard` and copy the field the Console wrote. Add it to this section when you find it.
 
 ### Migration mapping
 
@@ -136,7 +136,7 @@ The Console lets each query sit on the primary or secondary Y-axis, so request c
 
 ### Verification status
 
-Verified by reading live dashboards back through `dashboard-get` (November 2026): the shape above, `query` equal to `queries[0]`, `name` on every entry, 2–8 entries per chart, per-entry `queryOptions.timeSeriesView`, dashboard parameters inside entries. Not exercised through the create API: `queries` without `query`, mixed APL and MPL entries, entries on different datasets, `queries` on chart kinds other than `TimeSeries`, the secondary-axis field, and `aggChartOpts` keys on a multi-query chart. Treat those as open until a chart with that feature has been deployed and read back.
+Previous API readback checks (November 2026) verified `query` equal to `queries[0]`, `name` on every entry, 2–8 entries per chart, per-entry `queryOptions.timeSeriesView`, dashboard parameters inside entries. Not exercised through the create API: `queries` without `query`, mixed APL and MPL entries, entries on different datasets, `queries` on chart kinds other than `TimeSeries`, the secondary-axis field, and `aggChartOpts` keys on a multi-query chart. Treat those as open until a chart with that feature has been deployed and read back. The MPL examples above now use `mpl` to match the MCP contract; this migration has not itself verified live rendering.
 
 ## LogStream / Table — `tableSettings`
 
@@ -194,20 +194,7 @@ On `TimeSeries`, `Heatmap`, `Pie`, `Table`, and `LogStream`, the Console does no
 
 ## Annotations
 
-Annotations (deployment markers, incidents) are managed via `/v2/annotations`, not via chart JSON:
-
-```bash
-scripts/axiom-api prod POST /annotations '{
-    "time": "2024-03-18T08:39:28.382Z",
-    "type": "deploy",
-    "datasets": ["http-logs"],
-    "title": "Production deployment",
-    "description": "Deploy v2.1.0",
-    "url": "https://github.com/org/repo/releases/tag/v2.1.0"
-  }'
-```
-
-Or via GitHub Actions: `axiomhq/annotation-action@v0.2.0`.
+Annotations are separate resources, not chart JSON. If the connected MCP exposes annotation tools, use their contract for a requested annotation. Otherwise explain the limitation and direct the user to the Console; do not use a dashboard HTTP wrapper.
 
 ## Comparison Period
 

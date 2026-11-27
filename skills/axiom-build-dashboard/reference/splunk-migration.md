@@ -13,7 +13,7 @@ Guide for converting Splunk dashboards to Axiom dashboards.
 5. **Test queries** with explicit time filters in Query tab (dashboards inherit time from UI picker)
 6. **Adjust binning** for Axiom visualization
 7. **Build Axiom dashboard** using templates (remove time filters from panel queries)
-8. **Validate and deploy** with `dashboard-validate` and `dashboard-create`
+8. **Validate and deploy** with `dashboard-validate` and MCP `createDashboard`
 
 ---
 
@@ -237,5 +237,5 @@ Splunk and Axiom may have different field names for the same data.
 - [ ] Test each query individually in Axiom
 - [ ] Build dashboard JSON (remove time filters from panel queries)
 - [ ] Validate with `dashboard-validate`
-- [ ] Deploy with `dashboard-create`
+- [ ] Deploy with MCP `createDashboard`
 - [ ] Compare visually to original Splunk dashboard

@@ -8,9 +8,8 @@
 #   flags reflect that:
 #     --apl APL                     → events/logs query (no dataset arg)
 #     --mpl MPL --dataset DATASET   → metrics query
-#   Internally both land in `query.apl` (the API field is shared); MPL
-#   additionally gets `query.metricsDataset`, which is what tells the
-#   backend to interpret the string as MPL.
+#   APL uses `query.apl`; MPL uses `query.mpl` and `query.metricsDataset`,
+#   matching the Axiom MCP dashboard document contract.
 #
 # - MPL-specific validation:
 #     • Inline time ranges (`[1h..]`, `[30d..]`, etc.) are rejected at
@@ -42,7 +41,7 @@
 #   field is not reachable through the create API on the deployments
 #   probed so far — anything we tried (`thresholdValue`, `errorValue`,
 #   numeric `errorThreshold`, etc.) is rejected as `Unrecognized keys`.
-#   Once the value field is documented or returned by `dashboard-get`
+#   Once the value field is documented or returned by MCP `getDashboard`
 #   on a UI-authored chart, add `--warn-when` / `--error-when` flags
 #   here. Until then, set thresholds via the UI.
 #
@@ -217,11 +216,10 @@ format_pipeline() {
         '$apl | gsub("(?<s>\"[^\"]*\"|'\''[^'\'']*'\'')|(?<p> \\| )"; if .s then .s else "\n| " end)'
 }
 
-# Build the query object. Both APL and MPL land in `query.apl` (shared API
-# field); MPL also gets `query.metricsDataset`.
+# Build the query object using the MCP language-specific field.
 build_query() {
     if [[ -n "$MPL" ]]; then
-        jq -n --arg apl "$(format_pipeline "$MPL")" --arg ds "$DATASET" '{apl: $apl, metricsDataset: $ds}'
+        jq -n --arg mpl "$(format_pipeline "$MPL")" --arg ds "$DATASET" '{mpl: $mpl, metricsDataset: $ds}'
     else
         jq -n --arg apl "$(format_pipeline "$APL")" '{apl: $apl}'
     fi

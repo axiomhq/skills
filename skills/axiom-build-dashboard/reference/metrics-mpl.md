@@ -1,6 +1,6 @@
 # Metrics/MPL Chart Contract
 
-Reference for metrics-backed chart queries. Authoring through `chart-add --mpl '<MPL>' --dataset <name>` handles the JSON-shape rules (sets both `query.apl` and `query.metricsDataset`); the rest of this file covers the **MPL pipeline** and **unit handling** that the agent still owns.
+Reference for metrics-backed chart queries. Authoring through `chart-add --mpl '<MPL>' --dataset <name>` handles the JSON-shape rules (sets both `query.mpl` and `query.metricsDataset`); the rest of this file covers the **MPL pipeline** and **unit handling** that the agent still owns.
 
 ## JSON Shape
 
@@ -8,7 +8,7 @@ Reference for metrics-backed chart queries. Authoring through `chart-add --mpl '
 {
   "type": "TimeSeries",
   "query": {
-    "apl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| align to $__interval using avg\n| group by `service.name` using avg",
+    "mpl": "`otel-metrics`:`http.server.duration`\n| where `service.name` == \"api\"\n| align to $__interval using avg\n| group by `service.name` using avg",
     "metricsDataset": "otel-metrics"
   }
 }
@@ -16,23 +16,23 @@ Reference for metrics-backed chart queries. Authoring through `chart-add --mpl '
 
 | Field | Required | Notes |
 |---|---|---|
-| `query.apl` | Yes | The MPL pipeline. Same field name as APL queries. |
-| `query.metricsDataset` | Yes | The discriminator that flags MPL. Without it the backend treats `apl` as APL. |
-| `query.mpl` | — | Rejected on create. GET returns it on existing UI-authored charts; ignore. |
+| `query.mpl` | Yes | The MPL pipeline in the MCP dashboard document. |
+| `query.metricsDataset` | Yes | The discovered metrics dataset name. |
+| `query.apl` | — | Reserved for events/APL. Do not put MPL here. |
 | `query.metricsMetric`, `metricsFilter`, `metricsTransformations` | — | UI/editor metadata. Not needed for hand-authored or `chart-add` output. |
 
-Several MPL pipelines on one `TimeSeries` go in `queries[]`, one entry per pipeline with the same `apl` + `metricsDataset` shape plus a legend `name`; `query` stays a copy of the first entry. Shape and `jq` recipe: [chart-config.md § Multiple Queries](./chart-config.md#timeseries--multiple-queries).
+Several MPL pipelines on one `TimeSeries` go in `queries[]`, one entry per pipeline with the same `mpl` + `metricsDataset` shape plus a legend `name`; `query` stays a copy of the first entry. Shape and `jq` recipe: [chart-config.md § Multiple Queries](./chart-config.md#timeseries--multiple-queries).
 
 ## Authoring Checklist
 
-Use Axiom MCP for discovery and queries. For separately configured deployments, the bundled `scripts/metrics/` helpers provide discovery and `mpl-validate-chart`; keep discovery, validation, and dashboard creation in the same organization.
+Use Axiom MCP for discovery, query validation, and dashboard writes in the same organization. If the connection is missing, follow the prerequisite in [SKILL.md](../SKILL.md#prerequisite-connect-axiom-mcp); there is no shell fallback.
 
 1. Confirm the metrics dataset with `listDatasets` (`otel:metrics:v1` or `otel-metrics-v1`).
 2. Use `getMetricsSpec` for unfamiliar MPL syntax.
 3. Discover metrics and filters with `listMetrics`, `listMetricTags`, and `getMetricTagValues`.
 4. Use each metric's `{type, temporality, unit}` from `listMetrics` to choose the query shape and units below.
-5. Use `align to $__interval using …`, never a fixed window. The server declares and fills `$__interval`. Do not declare it in the chart string.
-6. Validate with `queryMetrics`, supplying `startTime` and `endTime` instead of an inline time range.
+5. Use `align to $__interval using …`. For sparse metrics needing a fixed wider interval, document why. The server declares and fills `$__interval`. Do not declare it in the chart string.
+6. Validate each pipeline with `queryMetrics`, supplying `datasetName`, `mpl`, `startTime`, and `endTime` instead of an inline time range. Keep `$__interval`; use the tool's chart dimensions or interval parameters when needed. For dashboard filters, provide representative `params` according to the connected schema (bare parameter names, MPL-literal values). Test both default and selected filter values.
 7. Pass to `chart-add --mpl '<query>' --dataset <name>`.
 
 ## Choosing a Query Shape

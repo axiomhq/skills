@@ -15,7 +15,7 @@ Dashboards, monitors, and waste identification for Axiom usage optimization.
    skill: axiom-build-dashboard
    ```
    
-   axiom-build-dashboard provides: `dashboard-list`, `dashboard-get`, `dashboard-create`, `dashboard-update`, `dashboard-delete`
+   axiom-build-dashboard provides the MCP dashboard workflow. For dashboard phases, require a connected, authenticated Axiom MCP; if missing, ask the user to connect using its setup guidance and stop that phase. Keep MCP in the same organization as the selected script deployment.
 
 2. Find the audit dataset. Try `axiom-audit` first:
    ```apl
@@ -60,15 +60,14 @@ Dashboards, monitors, and waste identification for Axiom usage optimization.
 
 ## Phase 0: Check Existing Setup
 
-```bash
-# Existing dashboard?
-dashboard-list <deployment> | grep -i cost
+Use MCP `listDashboards` to find existing cost dashboards in the selected organization.
 
+```bash
 # Existing monitors?
 axiom-api <deployment> GET "/v2/monitors" | jq -r '.[] | select(.name | startswith("Cost Control:")) | "\(.id)\t\(.name)"'
 ```
 
-If found, fetch with `dashboard-get` and compare to `templates/dashboard.json` for drift.
+If found, fetch with MCP `getDashboard` and compare to `templates/dashboard.json` for drift. Preserve unrelated settings and ownership when updating.
 
 ---
 
@@ -85,10 +84,10 @@ Captures daily ingest stats and produces the **Analysis Queue** (needed for Phas
 ## Phase 2: Dashboard
 
 ```bash
-scripts/deploy-dashboard -d <deployment> -a <audit-dataset>
+scripts/build-dashboard -a <audit-dataset> > dashboard.json
 ```
 
-Creates dashboard with: ingest trends, burn rate, projections, waste candidates, top users. See `reference/dashboard-panels.md` for details.
+This only prepares local JSON: ingest trends, burn rate, projections, waste candidates, and top users. Follow `axiom-build-dashboard` to validate queries and structure, then save through MCP `createDashboard` or update the previously identified dashboard with `replaceDashboard` using its full current document and version. The template defaults to shared visibility; pass `--owner me` only for a requested private dashboard. For updates, preserve the current owner. Read back and return the MCP dashboard link. See `reference/dashboard-panels.md` for panel details.
 
 ---
 
@@ -182,10 +181,9 @@ All P0⛔ and P1 datasets analyzed. Then compile report using `reference/analysi
 axiom-api <deployment> GET "/v2/monitors" | jq -r '.[] | select(.name | startswith("Cost Control:")) | "\(.id)\t\(.name)"'
 axiom-api <deployment> DELETE "/v2/monitors/<id>"
 
-# Delete dashboard
-dashboard-list <deployment> | grep -i cost
-dashboard-delete <deployment> <id>
 ```
+
+For requested dashboard cleanup, find the exact UID with MCP `listDashboards`/`getDashboard`, delete only the authorized dashboard with `deleteDashboard`, and verify absence. Follow the dashboard skill's connection checks.
 
 ---
 
