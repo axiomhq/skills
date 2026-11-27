@@ -147,18 +147,8 @@ bin(_time, 1h)         // Hourly bins
 | `dayofweek/month/year(dt)` | Day number |
 | `getyear(dt)` / `getmonth(dt)` | Year/month number |
 | `hourofday(dt)` | Hour (0-23) |
+| `format_datetime(dt, fmt)` | Format to string: `format_datetime(_time, "yyyy-MM-dd HH:mm")` |
 | `unixtime_seconds_todatetime(n)` | Unix epoch → datetime |
-
-> **Note:** `format_datetime` does not exist in Axiom APL. To format a datetime as a string, use `datetime_part` + `strcat`:
-> ```kusto
-> extend pretty = strcat(
->   datetime_part("year", dt), "-",
->   iff(datetime_part("month", dt) < 10, strcat("0", tostring(datetime_part("month", dt))), tostring(datetime_part("month", dt))), "-",
->   iff(datetime_part("day", dt) < 10, strcat("0", tostring(datetime_part("day", dt))), tostring(datetime_part("day", dt))), " ",
->   iff(datetime_part("hour", dt) < 10, strcat("0", tostring(datetime_part("hour", dt))), tostring(datetime_part("hour", dt))), ":",
->   iff(datetime_part("minute", dt) < 10, strcat("0", tostring(datetime_part("minute", dt))), tostring(datetime_part("minute", dt)))
-> )
-> ```
 
 ### Time Literals
 | Literal | Duration |
@@ -170,11 +160,12 @@ bin(_time, 1h)         // Hourly bins
 |----------|-------------|
 | `strlen(s)` | Length |
 | `tolower(s)` / `toupper(s)` | Case conversion |
-| `trim(s)` / `trim_start(s)` / `trim_end(s)` | Whitespace |
+| `trim_space(s)` | Remove leading and trailing whitespace |
+| `trim(cutset, s)` / `trim_start(cutset, s)` / `trim_end(cutset, s)` | Remove the characters in `cutset`. The cutset comes first |
 | `substring(s, start, len)` | Extract substring |
 | `split(s, delim)` | Split to array |
 | `strcat(s1, s2, ...)` | Concatenate |
-| `replace_string(s, old, new)` | Replace |
+| `replace_string(old, new, s)` | Replace. The string comes last |
 | `extract(regex, group, s)` | Regex extract |
 | `extract_all(regex, captureGroups, s)` | All matches of the listed capture groups |
 | `parse_json(s)` | Parse JSON (expensive!) |

@@ -124,11 +124,11 @@
 | `len(str)` | `strlen(str)` | String length |
 | `lower(str)` | `tolower(str)` | Lowercase |
 | `upper(str)` | `toupper(str)` | Uppercase |
-| `ltrim(str, chars)` | `trim_start(str, chars)` | Left trim |
-| `rtrim(str, chars)` | `trim_end(str, chars)` | Right trim |
-| `trim(str, chars)` | `trim(str, chars)` | Both sides |
+| `ltrim(str, chars)` | `trim_start(chars, str)` | Left trim. The characters come first |
+| `rtrim(str, chars)` | `trim_end(chars, str)` | Right trim. The characters come first |
+| `trim(str, chars)` | `trim(chars, str)` | Both sides. The characters come first. For whitespace, use `trim_space(str)` |
 | `substr(str, start, len)` | `substring(str, start, len)` | Substring (0-indexed in APL) |
-| `replace(str, old, new)` | `replace_string(str, old, new)` | String replace |
+| `replace(str, old, new)` | `replace_string(old, new, str)` | String replace. The string comes last |
 | `replace(str, regex, new)` | `replace_regex(regex, new, str)` | Regex replace. Pattern and replacement come before the string |
 | `split(str, delim)` | `split(str, delim)` | Same |
 | `strcat(a, b, c)` | `strcat(a, b, c)` | Same |
@@ -188,22 +188,22 @@
 |--------------|--------------|-------|
 | `now()` | `now()` | Same |
 | `time()` | `now()` | Current time |
-| `strftime(_time, format)` | Use `datetime_part()` + `strcat()` | No direct equivalent |
+| `strftime(_time, format)` | `format_datetime(_time, format)` | .NET-style format, such as `"yyyy-MM-dd"` instead of `"%Y-%m-%d"` |
 | `strptime(str, format)` | `todatetime(str)` | Parse datetime |
 | `relative_time(time, mod)` | Use `datetime_add()` | Manual calculation |
 
 ### Time Format Conversion
 
-**Note:** APL has no `format_datetime`. Use these alternatives:
+Use `format_datetime` with .NET-style specifiers. Month and day names are not supported.
 
 | SPL Pattern | APL Alternative |
 |-------------|-----------------|
+| `strftime(_time, "%Y-%m-%d")` | `format_datetime(_time, "yyyy-MM-dd")` |
+| `strftime(_time, "%Y-%m-%d %H:%M:%S")` | `format_datetime(_time, "yyyy-MM-dd HH:mm:ss")` |
+| `strftime(_time, "%H")` | `format_datetime(_time, "HH")`, or `hourofday(_time)` for a number |
 | `strftime(_time, "%Y")` | `getyear(_time)` |
 | `strftime(_time, "%m")` | `getmonth(_time)` |
 | `strftime(_time, "%d")` | `dayofmonth(_time)` |
-| `strftime(_time, "%H")` | `hourofday(_time)` |
-| `strftime(_time, "%Y-%m-%d")` | `tostring(_time)` then parse, or use `startofday()` |
-| Full datetime string | `tostring(_time)` returns ISO format |
 
 ### Time Examples
 
@@ -212,9 +212,9 @@
 | eval date_str = strftime(_time, "%Y-%m-%d")
 | eval hour = strftime(_time, "%H")
 
-# APL (no format_datetime - use tostring or datetime_part)
-| extend date_str = tostring(_time)  // Returns ISO format
-| extend hour = hourofday(_time)
+# APL
+| extend date_str = format_datetime(_time, "yyyy-MM-dd")
+| extend hour = format_datetime(_time, "HH")
 ```
 
 ```
