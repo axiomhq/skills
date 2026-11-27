@@ -17,3 +17,7 @@ Read the relevant references in the order listed.
 | [Versioning](references/versioning.md) | Selecting convention versions or migrating telemetry. |
 | [Attributes](references/attributes.md) | Selecting or reviewing attributes. |
 | [Axiom](references/axiom.md) | Applying Axiom feature requirements or interpreting stored telemetry. |
+
+## Related
+
+For implementation, use [otel-instrumentation](../otel-instrumentation/SKILL.md).
