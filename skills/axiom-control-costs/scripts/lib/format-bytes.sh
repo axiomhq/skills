@@ -42,22 +42,14 @@ parse_bytes() {
     # Remove spaces and convert to uppercase
     input=$(echo "$input" | tr -d ' ' | tr '[:lower:]' '[:upper:]')
     
-    # Extract number and unit
+    # Validate the complete input before splitting number and unit.
     local num unit
-    num=$(echo "$input" | sed 's/[^0-9.]//g')
-    unit=$(echo "$input" | sed 's/[0-9.]//g')
-    
-    # Handle empty input or number
-    if [[ -z "$input" || -z "$num" ]]; then
+    if ! [[ "$input" =~ ^([0-9]+([.][0-9]+)?)(PB|TB|GB|MB|KB|B|BYTES)?$ ]]; then
         echo "0"
         return 1
     fi
-    
-    # Validate number format (must be valid decimal, no multiple dots)
-    if ! [[ "$num" =~ ^[0-9]+\.?[0-9]*$ ]]; then
-        echo "0"
-        return 1
-    fi
+    num="${BASH_REMATCH[1]}"
+    unit="${BASH_REMATCH[3]}"
     
     # Convert based on unit (reject unknown units)
     case "$unit" in

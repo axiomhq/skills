@@ -10,18 +10,18 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 | [axiom-spl-to-apl](skills/axiom-spl-to-apl/)               | Translate Splunk SPL queries to Axiom APL      |
 | [axiom-build-dashboard](skills/axiom-build-dashboard/) | Design, create, and edit dashboards through Axiom MCP, including APL/MPL charts and migrations |
 | [axiom-alerting](skills/axiom-alerting/) | Design, manage, and troubleshoot monitors and notification routing through Axiom MCP |
-| [axiom-control-costs](skills/axiom-control-costs/) | Analyze query patterns to find unused data and optimize Axiom costs |
+| [axiom-control-costs](skills/axiom-control-costs/) | Analyze usage and potential waste, and manage cost controls through Axiom MCP |
 | [axiom-metrics-chart](skills/axiom-metrics-chart/) | Render saved metrics v2/v3 JSON as line charts; zero-dependency ASCII by default, optional gnuplot PNG/SVG/sixel |
 | [axiom-ingest](skills/axiom-ingest/) | Send data to a new or existing dataset, provisioning a temporary org when none is configured |
 | [axiom-create-org](skills/axiom-create-org/) | Provision a temporary Axiom org via API, store its one-time token, and hand off the claim URL |
 
 ## Requirements
 
-Alerting requires a connected, authenticated [Axiom MCP Server](https://axiom.co/docs/console/intelligence/mcp-server). The shell dependencies below apply to skills that use scripts.
+Alerting, dashboards, and cost control require a connected, authenticated [Axiom MCP Server](https://axiom.co/docs/console/intelligence/mcp-server). The dependencies below apply to skills that use local scripts.
 
 - **jq** - JSON processor (`brew install jq` or `apt install jq`)
 - **curl** - HTTP client (usually pre-installed)
-- **bc** - Calculator, needed by axiom-control-costs (`brew install bc` or `apt install bc`)
+- **Python 3.10+** - Local cost-analysis helpers
 - **timeout** or **gtimeout** - Required by SRE scripts (`brew install coreutils` on macOS)
 
 ## MCP Server
@@ -107,7 +107,7 @@ To update, run `gemini extensions update axiom`, then restart Gemini CLI. See th
 npx skills add axiomhq/skills
 ```
 
-This installs all skills. Skills have dependencies on each other (e.g., `axiom-control-costs` depends on `axiom-sre` and `axiom-build-dashboard`), so installing all is recommended.
+This installs all skills. Skills have dependencies on each other (e.g., `axiom-control-costs` uses `axiom-alerting` and `axiom-build-dashboard`), so installing all is recommended.
 
 For SRE, run `scripts/init` from the installed skill directory; its location depends on your agent or plugin installer. From a checkout of this repository:
 
@@ -121,9 +121,9 @@ This initializes SRE configuration and memory under `~/.config/axiom-sre/`. Edit
 
 Skills use your configured credentials to query Axiom and optional Grafana, Pyroscope, Sentry, Slack, and Kubernetes connections. They can update dashboards and alerts. SRE stores investigation memory locally and can sync it to a Git repository you configure.
 
-Alerting and dashboard workflows use the connected Axiom MCP and ask you to connect or sign in if it is unavailable. They do not use a separate script credential file.
+Alerting, dashboard, and cost-control workflows use the connected Axiom MCP and ask you to connect or sign in if it is unavailable. They do not use a separate script credential file. Cost-analysis helpers process exported results locally.
 
-SRE uses `~/.config/axiom-sre/config.toml` with `[axiom.deployments.<name>]` sections. The cost-control setup check uses the separate `~/.axiom.toml` format below. Cost-control workflows use SRE for queries and MCP for dashboards; keep both in the same organization. MCP OAuth does not configure these script credentials.
+SRE uses `~/.config/axiom-sre/config.toml` with `[axiom.deployments.<name>]` sections. MCP OAuth does not configure credentials for other skills that still use scripts.
 
 For scripts that use `~/.axiom.toml`, add your deployment(s):
 

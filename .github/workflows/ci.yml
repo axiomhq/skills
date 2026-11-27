@@ -25,7 +25,8 @@ jobs:
       - name: Test cost analysis
         run: |
           bash skills/axiom-control-costs/scripts/test-ast-parser
-          bash skills/axiom-control-costs/scripts/test-create-monitors
+          python3 skills/axiom-control-costs/scripts/test-analysis
+          bash skills/axiom-control-costs/scripts/test-build-monitors
           bash skills/axiom-control-costs/scripts/test-build-dashboard
       - name: Test SRE
         run: |

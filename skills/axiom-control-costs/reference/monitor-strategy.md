@@ -1,5 +1,7 @@
 # Monitor Strategy
 
+Prepare definitions with `scripts/build-monitors`; validate and save them through Axiom MCP following `axiom-alerting`. The local builder performs no Axiom operations. The connected MCP contract governs supported fields and execution behavior.
+
 ## Why Hybrid Monitoring?
 
 **Problem:** Pure anomaly detection learns from historical patterns. If you're already 3x over contract, that overspend becomes your "normal" baseline. Static thresholds (like "40% of hourly budget") are meaningless if that's the steady state.
@@ -13,8 +15,8 @@
 
 | # | Monitor | Type | Reactivity | Purpose |
 |---|---------|------|------------|---------|
-| 1 | Total Ingest Guard | Threshold + Trend | 2 hours | Catches overspend (>1.2x contract) OR gradual growth (>15% week-over-week) |
-| 2 | Per-Dataset Spike | Robust Z-Score | 2+ hours | Attribution: "which dataset's ingest changed" |
+| 1 | Total Ingest Guard | Threshold + Trend | 2 positive results in 3 hourly runs | Catches overspend (>1.2x contract) OR gradual growth (>15% week-over-week) |
+| 2 | Per-Dataset Spike | Robust Z-Score | Hourly, with at least 2 current buckets | Attribution: "which dataset's ingest changed" |
 | 3 | Query Cost Spike | Hardened Z-Score (30d baseline, 5d gap) | 4+ hours | Attribution: "which dataset's query cost changed" |
 
 ## Monitor Details
@@ -26,7 +28,7 @@
 - **Threshold:** 1 (alert if either condition is true)
 - **Frequency:** Hourly
 - **Range:** 30 days (43200 minutes)
-- **Trigger after:** 2 consecutive runs
+- **Trigger after:** 2 positive results in 3 runs (`triggerFromNRuns: 3`, `triggerAfterNPositiveResults: 2`). These need not be consecutive. The current MCP contract says `triggerFromNRuns` below 3 behaves as 1; setting it to 2 alone does not implement two-run persistence.
 
 **Purpose:** Catches two scenarios in one monitor:
 1. **Overspend:** Today's ingest > 1.2x contract (absolute ceiling)
@@ -59,16 +61,16 @@
 | Growth threshold | 15% | Catches meaningful growth, not noise |
 | Baseline requirement | 14+ days | Ensures stable baseline for growth calculation |
 | Division guard | `isfinite() and > 0` | Prevents division by zero on new orgs |
-| Sustained condition | `triggerFromNRuns: 2` | Reduces transient false positives |
+| Repeated breaches | `triggerFromNRuns: 3`, `triggerAfterNPositiveResults: 2` | Requires two positive results within three runs |
 
 ### 2. Per-Dataset Spike Detection (Robust Z-Score)
 
 - **Type:** Threshold (on robust z-score output)
-- **Query:** Log-transform + IQR-based sigma, dual gate (z>3 AND >p99), sustained 2+ hours
-- **Threshold:** 1 (any dataset with sustained spikes)
+- **Query:** Log-transform + IQR-based sigma, dual gate (z>3 AND >p99), at least 2 current hourly buckets
+- **Threshold:** Above 0 on aggregated `excess_bytes`, grouped by dataset
 - **Frequency:** Hourly
-- **Range:** 7 days (10080 minutes)
-- **Trigger after:** 1 run (persistence built into query)
+- **Range:** 15 days (21600 minutes), matching the query's baseline
+- **Trigger after:** 1 run; two available current buckets are a coverage check, not two breaching hours
 
 Purpose: Statistical attribution - identifies *which* dataset's ingest pattern changed significantly. Uses robust statistics to avoid false positives on high-variance datasets.
 
@@ -76,7 +78,7 @@ Purpose: Statistical attribution - identifies *which* dataset's ingest pattern c
 - Log-transforming bytes to tame heavy tails
 - Using IQR-based sigma (resistant to outliers) instead of stdev
 - Requiring dual gate: z > 3 AND bytes > p99
-- Requiring 2+ sustained hours (filters transient noise)
+- Requiring at least 2 current hourly buckets. The query uses their maximum and can still respond to a single-hour spike.
 
 **Query:** See "Robust Z-Score Spike Detection" section below for full query and rationale.
 
@@ -84,7 +86,7 @@ Purpose: Statistical attribution - identifies *which* dataset's ingest pattern c
 
 - **Type:** Threshold (on robust z-score output)
 - **Query:** 30d baseline with 5d exclusion gap, persistence-based gating (median_z > 3, p25_z > 2.5)
-- **Threshold:** 1 (any dataset with sustained spikes)
+- **Threshold:** Above 0 on aggregated `excess_gbms`, grouped by dataset
 - **Frequency:** Hourly
 - **Range:** 30 days (43200 minutes)
 - **Trigger after:** 1 run (persistence built into query)
@@ -127,8 +129,7 @@ Purpose: Detect changes in query cost patterns (different cost driver than inges
 | extend p25_z = (current_p25_y - baseline_y_p50) / sigma_y
 | extend excess_gbms = current_p50_gbms - baseline_gbms_p50
 | where median_z > 3 and p25_z > 2.5 and excess_gbms > 0 and current_p50_gbms > 100000000
-| project dataset, median_z, p25_z, current_p50_gbms, baseline_gbms_p50, excess_gbms
-| order by median_z desc
+| summarize excess_gbms = max(excess_gbms) by dataset
 ```
 
 **Why the 5d exclusion gap?** If an automated service starts hammering queries without time filters (e.g., scanning 156B rows per query, 255K queries/day), that sustained spike poisons a 15d baseline within 2-3 days — the "new normal" absorbs the anomaly. The 5d gap ensures the baseline never includes recent sustained anomalies.
@@ -157,7 +158,7 @@ All thresholds are specified in **bytes**. Human-readable output auto-formats to
 1. **Log transform**: Tames heavy tails (10x spike becomes ~2.3 in log-space)
 2. **IQR-based sigma**: Resistant to outlier contamination (unlike stdev)
 3. **Dual gate**: Requires BOTH statistical anomaly AND material size
-4. **Sustained condition**: Requires 2+ spike hours to filter transient noise
+4. **Coverage check**: Requires 2+ current buckets; maximum-based detection can still react to a transient spike
 
 ### The Query (Ingest Spike Detection)
 
@@ -190,8 +191,7 @@ All thresholds are specified in **bytes**. Human-readable output auto-formats to
 | where max_z > 3 and current_max_bytes > baseline_bytes_p99
 | extend excess_bytes = current_max_bytes - baseline_bytes_p50
 | where excess_bytes > 0
-| top 10 by excess_bytes desc
-| summarize spike_count = count()
+| summarize excess_bytes = max(excess_bytes) by dataset
 ```
 
 The **ingest** spike detection uses the query above. The **query cost** spike detection uses a hardened variant — see "Query Cost Spike (Hardened)" section above for the full query with 30d baseline, 5d exclusion gap, and persistence-based gating.
@@ -214,8 +214,8 @@ The **ingest** spike detection uses the query above. The **query cost** spike de
 | Z-score threshold | `> 3` | Standard anomaly threshold (~0.1% false positive rate for normal data) |
 | Relative gate | `> p99_bytes` | Spike must exceed dataset's own p99 (relative materiality) |
 | Excess gate | `excess_bytes > 0` | Spike must be above baseline median |
-| Persistence filter | `spike_hours >= 2` | Filters transient noise; catches sustained anomalies |
-| Rank-based filter | `top 10 by max_excess_bytes` | Only alert on top 10 datasets by cost impact (scale-free) |
+| Current coverage | `current_hours >= 2` | Requires two current buckets, not two breaches |
+| Grouped output | `summarize excess_bytes = max(excess_bytes) by dataset` | Makes the alert measurement explicit and preserves per-dataset attribution |
 | isfinite guard | `isfinite(bytes)` | Filters invalid/null values before log transform |
 
 ### Why This Works Better Than Spotlight
@@ -225,17 +225,17 @@ The **ingest** spike detection uses the query above. The **query cost** spike de
 | High-variance dataset (k8s-events) | False positive (low p-value, high delta) | Correctly filtered (z=2.48 < 3) |
 | Genuine 10x spike | True positive | True positive (z=8.06 > 3) |
 | Gradual increase over weeks | May miss (adapts baseline) | May miss (same limitation) |
-| Transient 1-hour spike | False positive possible | Filtered (requires 2+ hours) |
+| Transient 1-hour spike | False positive possible | May still alert if the maximum breaches; two buckets do not prove persistence |
 
 ### Monitor Configuration
 
 When using this query as a threshold monitor:
 
-- **Threshold:** 1 (alert if any dataset has sustained spikes)
-- **Operator:** AboveOrEqual on `| summarize count()`
-- **Range:** 7 days (10080 minutes)
+- **Threshold:** 0
+- **Operator:** Above on aggregated `excess_bytes`, with `notifyByGroup: true`
+- **Range:** 15 days (21600 minutes)
 - **Frequency:** Hourly
-- **Trigger after:** 1 run (persistence is built into the query)
+- **Trigger after:** 1 run; explain the transient-spike limitation when choosing this detector
 
 ### Seasonality Handling
 
@@ -251,7 +251,6 @@ Recommended routing:
 
 | Monitor | Severity | Channel |
 |---------|----------|---------|
-| Budget Guardrail | Critical | PagerDuty + Slack |
+| Total Ingest Guard | Critical | PagerDuty + Slack |
 | Per-Dataset Spike | Warning | Slack |
 | Query Cost Spike | Warning | Slack |
-| Reduction Glidepath | Info | Slack (ops channel) |

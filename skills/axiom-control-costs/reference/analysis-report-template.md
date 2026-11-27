@@ -4,12 +4,16 @@ Use this template when presenting findings from the axiom-control-costs workflow
 
 ---
 
-## Cost Analysis Report: [Deployment Name]
+## Cost Analysis Report: [Organization]
 
 **Date:** [YYYY-MM-DD]  
 **Analyst:** [Name]  
 **Audit Dataset:** [dataset name]  
 **Analysis Period:** [e.g., Last 30 days]
+
+**Evidence coverage:** [Audit/history availability, effective windows, partial days, parser limits, and sampling gaps]
+
+Fill monetary estimates only when pricing and billable-volume evidence are available; otherwise mark them unavailable. Event-count shares do not establish byte savings. Findings are review candidates, not authorization to delete or stop ingesting data.
 
 ---
 
@@ -37,9 +41,9 @@ Use this template when presenting findings from the axiom-control-costs workflow
 | 3 | dataset-c | X | X% | X | [Recommendation] |
 
 **Work/GB Key:**
-- 0 = Never queried (🔴 drop candidate)
-- <100 = Rarely queried (🟡 sample candidate)
-- >1000 = Actively used (🟢 keep)
+- Raw query cost = 0: no query cost observed in this interval; inspect history and dependencies.
+- Work/GB <100: low query cost relative to ingest; review candidate, not proof of low value.
+- High Work/GB: more query work relative to ingest, not a guarantee that all data is needed.
 
 ---
 
@@ -57,28 +61,28 @@ Datasets with high ingest but low query activity:
 
 ### Field-Level Analysis: [Dataset Name]
 
-#### Unused Columns
+#### Columns Without Observed References
 
-Found **X unused columns** out of Y total (X% waste potential).
+Found **X unreferenced columns** out of Y observed schema columns. This is a reference-count share, not a waste or byte-saving estimate. State whether wildcard or broad queries prevent exclusion claims.
 
-Top unused columns by estimated size:
+Columns to review (rank by measured size only if available):
 1. `field.name.a` - never referenced
 2. `field.name.b` - never referenced
 3. `field.name.c` - never referenced
 
-**Recommendation:** Consider dropping at ingest or restructuring schema.
+**Recommendation:** Review dependencies and required retention before considering ingest filtering or schema changes.
 
-#### High-Volume Unqueried Values
+#### High-Volume Values Without Explicit Literal Targeting
 
 For field `[field_name]`:
 
-| Value | Est. Events/Day | Queried? | Recommendation |
+| Value | Est. Events/Day | Explicitly targeted? | Recommendation |
 |-------|-----------------|----------|----------------|
-| value-a | X M | ❌ No | Drop or sample |
+| value-a | X M | ❌ No | Review as sampling candidate |
 | value-b | X M | ❌ No | Reduce log level |
 | value-c | X M | ✅ Yes | Keep |
 
-**Estimated Savings:** X GB/day by excluding unqueried values.
+**Potential reduction:** X% of sampled events are candidates for review. Report GB/day only with supporting byte measurements; other query predicates may still access these values.
 
 ---
 
@@ -125,12 +129,12 @@ For field `[field_name]`:
 ```apl
 ['audit-dataset'] | where action == 'usageCalculated' ...
 ```
-[View in Axiom](link)
+Evidence: <MCP-returned query link>
 
 **Waste candidates:**
 ```apl
 ...
 ```
-[View in Axiom](link)
+Evidence: <MCP-returned query link>
 
 </details>

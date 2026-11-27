@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+"""Exercise the offline input boundary and analysis with complete MCP-style CSV."""
+import csv
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+
+SCRIPTS = Path(__file__).resolve().parent
+
+
+def query_ast(value="api,\"checkout\"\nworker"):
+    return {"body": {"source": {"kind": "Dataset", "name": {"kind": "Entity", "name": "logs"}},
+                     "operations": [
+                         {"kind": "Where", "predicate": {"kind": "BinaryExpr", "op": "==",
+                          "left": {"kind": "Entity", "name": "service"}, "right": {"kind": "Literal", "value": value}}},
+                         {"kind": "Project", "fields": [{"kind": "Entity", "name": "service"}]}]}}
+
+
+class AnalysisTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def csv(self, name, fields, rows):
+        path = self.root / name
+        with path.open("w", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fields)
+            writer.writeheader()
+            writer.writerows(rows)
+        return path
+
+    def run_script(self, name, *args, ok=True):
+        result = subprocess.run([sys.executable, str(SCRIPTS / name), *map(str, args)], capture_output=True, text=True)
+        if ok:
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return json.loads(result.stdout)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "")
+        return result.stderr
+
+    def history(self):
+        history = self.csv("history.csv", ["parsed", "count"], [{"parsed": json.dumps(query_ast()), "count": 7}])
+        counts = self.csv("history-count.csv", ["unique_queries", "total_executions"], [{"unique_queries": 1, "total_executions": 7}])
+        return ["--queries", history, "--counts", counts]
+
+    def test_baseline_global_share_and_nonzero_activity(self):
+        rows = [{"dataset": str(i), "ingest_bytes": b, "query_gbms": q} for i, (b, q) in enumerate(
+            [(200e9, 200e9), (100e9, 100e9), (90e9, 90e9), (50e9, 1), (40e9, 0), (5e9, 0)])]
+        usage = self.csv("usage.csv", list(rows[0]), rows)
+        result = self.run_script("baseline-stats", "--usage", usage)
+        by_name = {r["dataset"]: r for r in result["queue"]}
+        self.assertEqual(result["total_ingest_bytes"], 485e9)
+        self.assertAlmostEqual(by_name["0"]["share_pct"], 200 / 485 * 100)
+        self.assertEqual(by_name["4"]["priority"], 1)
+        self.assertNotIn("no_observed_query_cost", by_name["3"]["reasons"])
+        self.assertEqual(len(by_name), 5)
+
+    def test_csv_ast_and_schema(self):
+        schema = self.csv("schema.csv", ["ColumnName"], [{"ColumnName": "service"}, {"ColumnName": "debug"}])
+        result = self.run_script("analyze-query-coverage", *self.history(), "--schema", schema, "--field", "service")
+        self.assertEqual(result["unreferenced_columns"], ["debug"])
+        self.assertEqual(result["schema_column_count"], 2)
+        self.assertEqual(result["unreferenced_column_count"], 1)
+        self.assertEqual(result["total_executions"], 7)
+        self.assertEqual(result["column_usage"][0]["coverage_pct"], 100)
+        self.assertEqual(result["field"]["explicit_literal_values"], ['api,"checkout"\nworker'])
+        self.assertEqual(result["field"]["queries_with_filter"], 1)
+
+    def test_incomplete_or_failed_history_is_rejected(self):
+        args = self.history()
+        self.csv("history-count.csv", ["unique_queries", "total_executions"], [{"unique_queries": 2, "total_executions": 8}])
+        self.assertIn("incomplete", self.run_script("analyze-query-coverage", *args, ok=False))
+        self.csv("history-count.csv", ["unique_queries", "total_executions"], [{"unique_queries": 1, "total_executions": 7}])
+        self.csv("history.csv", ["parsed", "count"], [{"parsed": "null", "count": 7}])
+        self.assertIn("malformed", self.run_script("analyze-query-coverage", *args, ok=False))
+
+    def test_input_errors_and_verified_empty_result(self):
+        path = self.root / "usage.json"
+        for body in ('{"error":"access denied"}', '', '[{"dataset":"x","ingest_bytes":null,"query_gbms":1}]', '[{"dataset":"x","ingest_bytes":1,"query_gbms":"NaN"}]'):
+            path.write_text(body)
+            self.run_script("baseline-stats", "--usage", path, ok=False)
+        path.write_text("[]")
+        self.assertEqual(self.run_script("baseline-stats", "--usage", path)["queue"], [])
+        history = self.csv("empty.csv", ["parsed", "count"], [])
+        counts = self.csv("count.csv", ["unique_queries", "total_executions"], [{"unique_queries": 0, "total_executions": 0}])
+        result = self.run_script("analyze-query-coverage", "--queries", history, "--counts", counts)
+        self.assertEqual(result["column_usage"], [])
+
+    def test_query_plans_escape_identifiers_and_bound_time(self):
+        dataset = 'a\"b\\c\'d'
+        plan = self.run_script("prepare-queries", "coverage", "-D", dataset, "--end", "2026-11-24T00:00:00Z")
+        self.assertEqual(plan["calls"][0]["arguments"]["startTime"], "2026-10-25T00:00:00+00:00")
+        self.assertIn(json.dumps(dataset), plan["calls"][0]["arguments"]["apl"])
+        self.assertTrue(all(call["arguments"]["truncate"] is False for call in plan["calls"]))
+        self.run_script("prepare-queries", "baseline", "-a", "audit", "--end", "2026-11-24", ok=False)
+        self.run_script("prepare-queries", "samples", "-D", "logs", "-f", "service", "--gb-per-day", "nan", "--end", "2026-11-24T00:00:00Z", ok=False)
+
+    def samples(self):
+        plan = self.run_script("prepare-queries", "samples", "-D", "logs", "-f", "service", "--end", "2026-11-24T00:00:00Z")
+        path = self.root / "samples-plan.json"
+        path.write_text(json.dumps(plan))
+        for call in plan["calls"]:
+            self.csv(call["output"], ["value", "count"], [{"value": 'api,"checkout"\nworker', "count": 9}, {"value": "", "count": 1}])
+        return plan, [*self.history(), "--field", "service", "--sample-plan", path, "--samples-dir", self.root]
+
+    def test_sample_extrapolation_and_empty_attribution(self):
+        plan, args = self.samples()
+        result = self.run_script("analyze-query-coverage", *args)["volume"]
+        self.assertEqual(result["sampled_minutes"], len(plan["calls"]))
+        self.assertEqual(result["est_events_per_day"], 14400)
+        self.assertEqual(result["not_explicitly_targeted_pct"], 10)
+        self.assertTrue(result["empty_value_needs_drilldown"])
+        self.assertEqual(result["rows"][0]["cumulative_pct"], 90)
+
+    def test_missing_and_cardinality_capped_samples_fail(self):
+        plan, args = self.samples()
+        first = self.root / plan["calls"][0]["output"]
+        first.unlink()
+        self.run_script("analyze-query-coverage", *args, ok=False)
+        self.csv(first.name, ["value", "count"], [{"value": str(i), "count": 1} for i in range(501)])
+        self.assertIn("cardinality", self.run_script("analyze-query-coverage", *args, ok=False))
+
+    def test_empty_samples_do_not_divide_by_zero(self):
+        plan, args = self.samples()
+        for call in plan["calls"]:
+            self.csv(call["output"], ["value", "count"], [])
+        volume = self.run_script("analyze-query-coverage", *args)["volume"]
+        self.assertEqual(volume["est_events_per_day"], 0)
+        self.assertEqual(volume["rows"], [])
+
+    def test_overlapping_samples_are_rejected(self):
+        plan, args = self.samples()
+        plan["calls"][1]["arguments"] = dict(plan["calls"][0]["arguments"])
+        (self.root / "samples-plan.json").write_text(json.dumps(plan))
+        self.assertIn("overlap", self.run_script("analyze-query-coverage", *args, ok=False))
+
+
+if __name__ == "__main__":
+    unittest.main()
