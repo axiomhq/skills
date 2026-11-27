@@ -5,7 +5,7 @@ Lets an agent provision a temporary Axiom organization with `POST https://api.ax
 ## What This Skill Covers
 
 - Provisioning an org and storing its one-time token in `~/.axiom.toml` without printing it
-- Using the org through the other Axiom skills (the org id is the deployment name)
+- Using the org through API-based workflows (the org id is the deployment name), or through MCP once the connection can access it
 - Handing the claim URL to the user, with the 24-hour expiry and unclaimed-org limits
 
 ## Requirements

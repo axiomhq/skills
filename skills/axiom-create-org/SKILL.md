@@ -40,13 +40,13 @@ fi
 
 ## Use the org
 
-The org id is the deployment name, so the other Axiom skills work as-is:
+The org id is the deployment name for API-based workflows. Until the org is accessible through an MCP connection, use this skill's API helper (resolve the path from this skill's directory):
 
 ```bash
-skills/axiom-alerting/scripts/axiom-api <org-id> GET /datasets
+scripts/axiom-api <org-id> GET /datasets
 ```
 
-For direct calls, send `Authorization: Bearer <token>` and `X-Axiom-Org-Id: <org-id>`. Read the token from `~/.axiom.toml` into a variable; do not paste it into commands or output. The org behaves like any Axiom org: create datasets, ingest, query, and build dashboards and monitors.
+For direct calls, send `Authorization: Bearer <token>` and `X-Axiom-Org-Id: <org-id>`. Read the token from `~/.axiom.toml` into a variable; do not paste it into commands or output. The org behaves like any Axiom org: create datasets, ingest, query, and build dashboards and monitors. The `axiom-alerting` skill requires a connected Axiom MCP with access to this org; saving the provisioning token does not configure that connection.
 
 ## Hand off the claim URL
 
