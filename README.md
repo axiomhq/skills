@@ -4,6 +4,8 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 
 ## Available Skills
 
+<!-- Available skill directories under skills/, with summaries from their SKILL.md files. -->
+
 | Skill                                          | Description                                    |
 | ---------------------------------------------- | ---------------------------------------------- |
 | [axiom-sre](skills/axiom-sre/)                       | Hypothesis-driven SRE investigation with Axiom |
@@ -14,6 +16,7 @@ Agent skills for working with [Axiom](https://axiom.co). Skills are folders of i
 | [axiom-metrics-chart](skills/axiom-metrics-chart/) | Render saved metrics v2/v3 JSON as line charts; zero-dependency ASCII by default, optional gnuplot PNG/SVG/sixel |
 | [axiom-ingest](skills/axiom-ingest/) | Send data to a new or existing dataset, provisioning a temporary org when none is configured |
 | [axiom-create-org](skills/axiom-create-org/) | Provision a temporary Axiom org via API, store its one-time token, and hand off the claim URL |
+| [otel-semantic-conventions](skills/otel-semantic-conventions/) | Select OpenTelemetry attributes and convention versions for Axiom |
 
 ## Requirements
 
